@@ -1,0 +1,23 @@
+# Render.com Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: connect repo → New Blueprint → select this file
+
+services:
+  - type: web
+    name: ocpp-central-system
+    runtime: python
+    plan: free           # upgrade to 'starter' for always-on (no sleep)
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+
+    envVars:
+      # SQLite persists in /tmp on free tier (not durable).
+      # For persistent storage, create a Render PostgreSQL database and set:
+      #   DATABASE_URL = <your-postgres-internal-url>
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./ocpp16.db
+
+    # Render free tier has auto-sleep after 15 min inactivity.
+    # This will kill active OCPP WebSocket connections.
+    # Use 'starter' plan or Railway for always-on WebSocket support.

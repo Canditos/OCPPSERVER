@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.env
+*.db
+*.sqlite
+*.sqlite3
+
+# Node
+node_modules/
+.npm/
+.pnpm-store/
+
+# Vite / build output
+frontend/dist/
+frontend/.vite/
+
+# Env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

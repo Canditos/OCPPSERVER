@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0f1117; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+/* ── body ────────────────────────────────────────────────── */
+body {
+  background-color: #080c14;
+  background-image:
+    radial-gradient(ellipse 80% 40% at 20% -10%, rgba(37,99,235,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 30% at 80% 110%, rgba(16,185,129,0.07) 0%, transparent 50%);
+  min-height: 100vh;
+}
+
+/* ── grid bg ─────────────────────────────────────────────── */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── glass card ──────────────────────────────────────────── */
+.card {
+  @apply relative rounded-2xl p-5 overflow-hidden;
+  background: rgba(15,18,28,0.75);
+  border: 1px solid rgba(255,255,255,0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.card-glow-blue {
+  border-color: rgba(59,130,246,0.4);
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.15), inset 0 0 40px rgba(59,130,246,0.04);
+}
+.card-glow-emerald {
+  border-color: rgba(16,185,129,0.4);
+  box-shadow: 0 0 0 1px rgba(16,185,129,0.15), inset 0 0 40px rgba(16,185,129,0.04);
+}
+.card-glow-red {
+  border-color: rgba(239,68,68,0.4);
+  box-shadow: 0 0 0 1px rgba(239,68,68,0.15), inset 0 0 40px rgba(239,68,68,0.04);
+}
+.card-glow-amber {
+  border-color: rgba(245,158,11,0.4);
+  box-shadow: 0 0 0 1px rgba(245,158,11,0.15), inset 0 0 40px rgba(245,158,11,0.04);
+}
+
+/* ── shimmer gradient text ───────────────────────────────── */
+.text-shimmer {
+  background: linear-gradient(90deg, #60a5fa, #a78bfa, #34d399, #60a5fa);
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s linear infinite;
+}
+
+/* ── gradient text static ────────────────────────────────── */
+.text-gradient-blue  { @apply bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent; }
+.text-gradient-green { @apply bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent; }
+.text-gradient-red   { @apply bg-gradient-to-r from-red-400 to-rose-400 bg-clip-text text-transparent; }
+.text-gradient-amber { @apply bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent; }
+
+/* ── badge ───────────────────────────────────────────────── */
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+/* ── buttons ─────────────────────────────────────────────── */
+.btn {
+  @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed;
+}
+.btn-primary {
+  @apply btn text-white;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.3), 0 4px 12px rgba(37,99,235,0.35);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.5), 0 4px 20px rgba(37,99,235,0.5);
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  @apply btn text-gray-300;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.18);
+}
+.btn-danger {
+  @apply btn text-white;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 0 0 1px rgba(239,68,68,0.3), 0 4px 12px rgba(220,38,38,0.35);
+}
+.btn-danger:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-ghost { @apply btn text-gray-400 hover:text-gray-200 hover:bg-white/5; }
+.btn-success {
+  @apply btn text-white;
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 0 0 1px rgba(16,185,129,0.3), 0 4px 12px rgba(5,150,105,0.3);
+}
+
+/* ── form ────────────────────────────────────────────────── */
+.input, .select {
+  @apply w-full rounded-xl px-3.5 py-2.5 text-sm text-gray-200 outline-none transition-all duration-150;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.input:focus, .select:focus {
+  border-color: rgba(59,130,246,0.5);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  background: rgba(255,255,255,0.06);
+}
+.select option { background: #111827; }
+.label { @apply block text-xs font-medium text-gray-500 mb-1.5; }
+
+/* ── kpi card ────────────────────────────────────────────── */
+.kpi-card {
+  @apply card flex flex-col gap-3 transition-all duration-300;
+}
+.kpi-card:hover { transform: translateY(-2px); }
+
+/* ── status dot ──────────────────────────────────────────── */
+.status-dot {
+  @apply relative inline-flex h-2.5 w-2.5;
+}
+.status-dot-inner {
+  @apply relative inline-flex rounded-full h-2.5 w-2.5;
+}
+.status-dot-ping {
+  @apply animate-ping absolute inline-flex h-full w-full rounded-full opacity-75;
+}
+
+/* ── charger card hover ───────────────────────────────────── */
+.charger-card {
+  @apply card transition-all duration-300 cursor-pointer;
+}
+.charger-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(59,130,246,0.3);
+}
+
+/* ── live pill ───────────────────────────────────────────── */
+.live-pill {
+  @apply flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  background: rgba(16,185,129,0.15);
+  border: 1px solid rgba(16,185,129,0.3);
+  color: #34d399;
+}
+
+/* ── connector ring ──────────────────────────────────────── */
+.connector-ring {
+  @apply relative flex items-center justify-center;
+}
+.connector-ring::before {
+  content: '';
+  @apply absolute rounded-full;
+  animation: ring-ping 1.4s cubic-bezier(0,0,0.2,1) infinite;
+}
