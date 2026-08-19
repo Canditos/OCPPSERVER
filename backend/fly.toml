@@ -1,0 +1,30 @@
+# Fly.io configuration — https://fly.io/docs/reference/configuration/
+# Deploy: fly launch (primeira vez) ou fly deploy (actualizações)
+# Cria conta gratuita em https://fly.io — não precisa cartão de crédito
+
+app = "ocpp-central-system"   # muda para um nome único (ex: ocpp-canditos)
+primary_region = "mad"        # Madrid — mais perto de Portugal
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  DATABASE_URL = "sqlite+aiosqlite:///./ocpp16.db"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false   # NUNCA dorme — essencial para WebSocket OCPP
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
