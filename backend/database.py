@@ -12,6 +12,11 @@ elif _raw_url.startswith("postgresql://") and "+asyncpg" not in _raw_url:
 else:
     DATABASE_URL = _raw_url
 
+if "sqlite" in DATABASE_URL:
+    db_file = DATABASE_URL.split(":///")[-1]
+    if db_file and os.path.dirname(db_file):
+        os.makedirs(os.path.dirname(db_file), exist_ok=True)
+
 _connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 
 engine = create_async_engine(DATABASE_URL, echo=False, connect_args=_connect_args)
