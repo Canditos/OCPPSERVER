@@ -21,12 +21,7 @@ services:
     networks:
       - default
       - coolify
-    labels:
-      - "caddy_0=https://ocpp.gatoescondido.com"
-      - "caddy_0.handle_path=/*"
-      - "caddy_0.handle_path.0_reverse_proxy={{upstreams 80}}"
-      - "caddy_ingress_network=coolify"
-    restart: unless-stopped
+    restart: always
 
 volumes:
   ocpp_db:
