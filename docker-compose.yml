@@ -14,6 +14,7 @@ services:
       - coolify
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.ocpp-backend.entryPoints=http,https"
       - "traefik.http.routers.ocpp-backend.rule=Host(`ocpp.gatoescondido.com`) && (PathPrefix(`/api`) || PathPrefix(`/ocpp`))"
       - "traefik.http.routers.ocpp-backend.tls=true"
@@ -32,6 +33,7 @@ services:
       - coolify
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.ocpp-frontend.entryPoints=http,https"
       - "traefik.http.routers.ocpp-frontend.rule=Host(`ocpp.gatoescondido.com`) && PathPrefix(`/`)"
       - "traefik.http.routers.ocpp-frontend.tls=true"
