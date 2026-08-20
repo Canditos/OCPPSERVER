@@ -3,6 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: ocpp_backend
     environment:
       DATABASE_URL: sqlite+aiosqlite:///./data/ocpp16.db
     volumes:
@@ -16,6 +17,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: ocpp_frontend
     depends_on:
       - backend
     networks:
