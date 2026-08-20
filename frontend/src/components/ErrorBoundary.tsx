@@ -36,9 +36,14 @@ export class ErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="w-10 h-10 text-red-400" />
           </div>
           <h2 className="text-xl font-bold text-gray-100 mb-2">Ocorreu um erro temporário no ecrã</h2>
-          <p className="text-sm text-gray-400 max-w-md mb-6">
+          <p className="text-sm text-gray-400 max-w-md mb-3">
             A aplicação detetou uma falha e recuperou a sessão em segurança sem desligar o servidor.
           </p>
+          {this.state.error?.message && (
+            <div className="mb-6 p-3 rounded-xl bg-gray-900 border border-red-500/30 text-xs font-mono text-red-300 max-w-lg truncate">
+              {this.state.error.message}
+            </div>
+          )}
           <button
             onClick={this.handleReset}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg transition-all"
@@ -52,4 +57,5 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return this.props.children
   }
+
 }

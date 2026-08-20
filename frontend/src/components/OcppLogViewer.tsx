@@ -25,25 +25,32 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
 
   // Get unique actions for filter dropdown
   const uniqueActions = useMemo(() => {
-    const actions = new Set(messages.map((m) => m.action))
+    if (!Array.isArray(messages)) return []
+    const actions = new Set(messages.map((m) => m?.action).filter(Boolean))
     return Array.from(actions).sort()
   }, [messages])
 
   // Filter messages
   const filteredMessages = useMemo(() => {
+    if (!Array.isArray(messages)) return []
     return messages.filter((m) => {
-      if (directionFilter !== 'ALL' && m.direction !== directionFilter) return false
-      if (actionFilter !== 'ALL' && m.action !== actionFilter) return false
+      if (!m) return false
+      const dir = m.direction || ''
+      const act = m.action || ''
+
+      if (directionFilter !== 'ALL' && dir !== directionFilter) return false
+      if (actionFilter !== 'ALL' && act !== actionFilter) return false
       if (searchTerm.trim() !== '') {
         const q = searchTerm.toLowerCase()
-        const payloadStr = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)
-        const matchAction = m.action.toLowerCase().includes(q)
-        const matchPayload = payloadStr.toLowerCase().includes(q)
+        const payloadStr = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload || '')
+        const matchAction = act.toLowerCase().includes(q)
+        const matchPayload = (payloadStr || '').toLowerCase().includes(q)
         if (!matchAction && !matchPayload) return false
       }
       return true
     })
   }, [messages, directionFilter, actionFilter, searchTerm])
+
 
   // Auto scroll when not paused
   useEffect(() => {
