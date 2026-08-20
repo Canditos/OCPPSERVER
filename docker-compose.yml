@@ -17,14 +17,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    ports:
-      - "8090:80"
     depends_on:
       - backend
     networks:
       - default
       - coolify
     restart: always
+
 
 
 volumes:
