@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format, formatDuration, intervalToDuration } from 'date-fns'
 import { ChevronDown, ChevronRight, Zap } from 'lucide-react'
+import { safeFormatDate } from '../utils/date'
 import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
 import type { Charger, Transaction } from '../types'
@@ -76,8 +77,8 @@ export function Transactions() {
                     <p className="text-gray-600">Conector {tx.connector_id}</p>
                   </div>
                   <div>
-                    <p className="text-gray-300">{format(new Date(tx.start_time), 'dd/MM HH:mm')}</p>
-                    {tx.stop_time && <p className="text-gray-600">{format(new Date(tx.stop_time), 'dd/MM HH:mm')}</p>}
+                    <p className="text-gray-300">{safeFormatDate(tx.start_time, 'dd/MM HH:mm')}</p>
+                    {tx.stop_time && <p className="text-gray-600">{safeFormatDate(tx.stop_time, 'dd/MM HH:mm')}</p>}
                   </div>
                   <div className="flex items-center gap-1">
                     {tx.energy_kwh !== null && tx.energy_kwh !== undefined && (
@@ -95,14 +96,15 @@ export function Transactions() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 text-xs">
                     <div>
                       <p className="text-gray-500 mb-0.5">Início</p>
-                      <p className="text-gray-200 font-mono">{format(new Date(tx.start_time), 'dd/MM/yyyy HH:mm:ss')}</p>
+                      <p className="text-gray-200 font-mono">{safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm:ss')}</p>
                     </div>
                     {tx.stop_time && (
                       <div>
                         <p className="text-gray-500 mb-0.5">Fim</p>
-                        <p className="text-gray-200 font-mono">{format(new Date(tx.stop_time), 'dd/MM/yyyy HH:mm:ss')}</p>
+                        <p className="text-gray-200 font-mono">{safeFormatDate(tx.stop_time, 'dd/MM/yyyy HH:mm:ss')}</p>
                       </div>
                     )}
+
                     {duration && (
                       <div>
                         <p className="text-gray-500 mb-0.5">Duração</p>

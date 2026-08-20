@@ -1,10 +1,18 @@
 import { format, formatDistanceToNow } from 'date-fns'
 
-export function safeFormatDistance(dateStr?: string | null): string | null {
-  if (!dateStr) return null
+export function safeFormatDistance(dateInput?: string | number | Date | null): string | null {
+  if (!dateInput) return null
   try {
-    const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`
-    const d = new Date(normalized)
+    let d: Date
+    if (typeof dateInput === 'number') {
+      d = new Date(dateInput)
+    } else if (typeof dateInput === 'string') {
+      const normalized = dateInput.endsWith('Z') || dateInput.includes('+') ? dateInput : `${dateInput}Z`
+      d = new Date(normalized)
+      if (isNaN(d.getTime())) d = new Date(dateInput)
+    } else {
+      d = dateInput
+    }
     if (isNaN(d.getTime())) return null
     return formatDistanceToNow(d, { addSuffix: true })
   } catch {
@@ -12,14 +20,42 @@ export function safeFormatDistance(dateStr?: string | null): string | null {
   }
 }
 
-export function safeFormatDate(dateStr?: string | null, fmtString: string = 'dd/MM/yyyy HH:mm'): string | undefined {
-  if (!dateStr) return undefined
+export function safeFormatDate(dateInput?: string | number | Date | null, fmtString: string = 'dd/MM/yyyy HH:mm'): string {
+  if (!dateInput) return ''
   try {
-    const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`
-    const d = new Date(normalized)
-    if (isNaN(d.getTime())) return undefined
+    let d: Date
+    if (typeof dateInput === 'number') {
+      d = new Date(dateInput)
+    } else if (typeof dateInput === 'string') {
+      const normalized = dateInput.endsWith('Z') || dateInput.includes('+') ? dateInput : `${dateInput}Z`
+      d = new Date(normalized)
+      if (isNaN(d.getTime())) d = new Date(dateInput)
+    } else {
+      d = dateInput
+    }
+    if (isNaN(d.getTime())) return ''
     return format(d, fmtString)
   } catch {
-    return undefined
+    return ''
+  }
+}
+
+export function safeFormatTime(dateInput?: string | number | Date | null, fmtString: string = 'HH:mm:ss'): string {
+  if (!dateInput) return ''
+  try {
+    let d: Date
+    if (typeof dateInput === 'number') {
+      d = new Date(dateInput)
+    } else if (typeof dateInput === 'string') {
+      const normalized = dateInput.endsWith('Z') || dateInput.includes('+') ? dateInput : `${dateInput}Z`
+      d = new Date(normalized)
+      if (isNaN(d.getTime())) d = new Date(dateInput)
+    } else {
+      d = dateInput
+    }
+    if (isNaN(d.getTime())) return ''
+    return format(d, fmtString)
+  } catch {
+    return ''
   }
 }

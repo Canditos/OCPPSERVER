@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
-import { format } from 'date-fns'
+import { safeFormatTime } from '../utils/date'
 import { Zap, Wifi, WifiOff, Activity, ToggleLeft, CreditCard, AlertTriangle, Info } from 'lucide-react'
 import { useChargerStore } from '../store/chargerStore'
 import type { OcppEvent } from '../types'
+
 
 interface Props {
   cpId?: string
@@ -48,9 +48,10 @@ function EventRow({ event, idx }: { event: OcppEvent; idx: number }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
-          <span className="text-[10px] text-gray-700 font-mono shrink-0">
-            {format(new Date(event.ts), 'HH:mm:ss')}
+          <span className="text-[10px] text-gray-400 font-mono shrink-0">
+            {safeFormatTime(event.ts)}
           </span>
+
         </div>
         {cpId && <p className="text-[11px] text-gray-600 truncate mt-0.5 font-mono">{cpId}</p>}
 

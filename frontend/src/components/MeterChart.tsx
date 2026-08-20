@@ -7,6 +7,7 @@ import {
 import { Activity, Zap } from 'lucide-react'
 import { api } from '../api'
 import type { MeterValue } from '../types'
+import { safeFormatTime } from '../utils/date'
 
 interface Props {
   cpId: string
@@ -84,10 +85,11 @@ export function MeterChart({ cpId, connectorId = 1, transactionId }: Props) {
   const byTs: Record<string, Record<string, number>> = {}
 
   for (const mv of raw) {
-    const key = format(new Date(mv.timestamp), 'HH:mm:ss')
+    const key = safeFormatTime(mv.timestamp) || '00:00:00'
     byTs[key] = byTs[key] ?? {}
     byTs[key][mv.measurand ?? 'Energy.Active.Import.Register'] = Number(mv.value)
   }
+
 
   const chartData = Object.entries(byTs)
     .sort(([a], [b]) => a.localeCompare(b))
