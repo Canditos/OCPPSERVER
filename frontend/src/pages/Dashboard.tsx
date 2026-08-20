@@ -1,10 +1,12 @@
+import React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Zap, Wifi, AlertTriangle, Server, Activity, TrendingUp } from 'lucide-react'
+import { Zap, Wifi, AlertTriangle, Server, Activity, TrendingUp, Terminal } from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
 import { EventLog } from '../components/EventLog'
+import { OcppLogViewer } from '../components/OcppLogViewer'
 import { useChargerStore } from '../store/chargerStore'
-import type { Charger } from '../types'
+import type { Charger, OcppMessage } from '../types'
 
 interface KpiProps {
   label: string
@@ -45,8 +47,8 @@ function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0 }: Kp
       </div>
       <div>
         <p className={`text-3xl font-bold tabular-nums ${c.val}`}>{value}</p>
-        {sub && <p className="text-xs text-gray-600 mt-0.5">{sub}</p>}
-        <p className="text-xs text-gray-500 mt-1 font-medium uppercase tracking-wide">{label}</p>
+        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+        <p className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">{label}</p>
       </div>
     </div>
   )
@@ -57,6 +59,15 @@ export function Dashboard() {
     queryKey: ['chargers'],
     queryFn: api.getChargers,
     refetchInterval: 5000,
+  })
+
+  // Fetch all messages for the first charger (or all chargers)
+  const firstCpId = chargers[0]?.charge_point_id
+  const { data: messages = [] } = useQuery<OcppMessage[]>({
+    queryKey: ['messages', firstCpId],
+    queryFn: () => api.getMessages(firstCpId!, 100),
+    enabled: !!firstCpId,
+    refetchInterval: 3000,
   })
 
   const liveState = useChargerStore((s) => s.liveState)
@@ -97,18 +108,17 @@ export function Dashboard() {
 
   const totalKwh = (liveEnergyWh / 1000).toFixed(1)
 
-
   return (
     <div className="space-y-8 animate-fade-up">
       {/* page header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-shimmer">Central System</h1>
-          <p className="text-sm text-gray-500 mt-1">OCPP 1.6 · Siemens VersiCharge</p>
+          <p className="text-sm text-gray-400 mt-1">OCPP 1.6 · Siemens VersiCharge</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-          <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse-slow" />
-          <span className="text-xs text-emerald-400 font-medium">{events.length} eventos</span>
+        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm">
+          <Activity className="w-4 h-4 text-emerald-400 animate-pulse-slow" />
+          <span className="text-xs text-emerald-400 font-medium">{events.length} eventos registados</span>
         </div>
       </div>
 
@@ -124,16 +134,16 @@ export function Dashboard() {
       {/* main content */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* charger grid */}
-        <div className="xl:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Chargers</h2>
-            <span className="text-xs text-gray-600">{total} registados</span>
+        <div className="xl:col-span-2 space-y-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Postos de Carga (EVSE)</h2>
+            <span className="text-xs text-gray-400">{total} registados</span>
           </div>
 
           {isLoading && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="card h-36 animate-pulse bg-gray-800/40" />
+                <div key={i} className="card h-44 animate-pulse bg-gray-800/40" />
               ))}
             </div>
           )}
@@ -141,13 +151,13 @@ export function Dashboard() {
           {!isLoading && chargers.length === 0 && (
             <div className="card flex flex-col items-center justify-center py-16 text-center gap-4">
               <div className="p-4 rounded-2xl bg-gray-800/60">
-                <Zap className="w-8 h-8 text-gray-700" />
+                <Zap className="w-8 h-8 text-gray-600" />
               </div>
               <div>
                 <p className="text-gray-400 font-medium">Sem chargers ligados</p>
-                <p className="text-gray-600 text-sm mt-1">Liga o VersiCharge a:</p>
+                <p className="text-gray-500 text-sm mt-1">Liga o VersiCharge a:</p>
                 <p className="text-xs font-mono mt-2 px-3 py-1.5 rounded-lg bg-gray-800/80 text-blue-400 border border-blue-500/20">
-                  ws://&lt;IP&gt;:9000/&lt;charger-id&gt;
+                  wss://ocpp.gatoescondido.com/ocpp/&lt;charger-id&gt;
                 </p>
               </div>
             </div>
@@ -160,10 +170,10 @@ export function Dashboard() {
           )}
         </div>
 
-        {/* event log */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Eventos live</h2>
+        {/* event log sidebar */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Eventos Live</h2>
             <span className="live-pill">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -172,8 +182,25 @@ export function Dashboard() {
               LIVE
             </span>
           </div>
-          <EventLog maxHeight="620px" />
+          <EventLog maxHeight="520px" />
         </div>
+      </div>
+
+      {/* FULL OCPP MESSAGES LOG VIEWER SECTION */}
+      <div className="pt-6 border-t border-white/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Terminal className="w-5 h-5 text-blue-400" />
+            <h2 className="text-base font-bold text-gray-200 uppercase tracking-wider">Visualizador Completo de Logs & Payloads JSON</h2>
+          </div>
+          {firstCpId && (
+            <span className="text-xs font-mono text-gray-400 bg-gray-900 px-3 py-1 rounded-full border border-white/10">
+              Charger: {firstCpId}
+            </span>
+          )}
+        </div>
+
+        <OcppLogViewer messages={messages} cpId={firstCpId} maxHeight="500px" />
       </div>
     </div>
   )

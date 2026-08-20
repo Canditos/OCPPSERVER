@@ -232,6 +232,71 @@ export function Commands() {
       {/* charger selector */}
       <ChargerSelector chargers={chargers} value={cpId} onChange={setCpId} />
 
+      {/* Siemens VersiCharge Presets Toolbar */}
+      {cpId && !offline && (
+        <div className="card border border-blue-500/20 bg-gradient-to-r from-blue-950/40 via-slate-900/60 to-gray-900/40 p-4 mb-6 animate-fade-up">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-blue-400" />
+              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wider">Atalhos Siemens VersiCharge</h3>
+            </div>
+            <span className="text-[11px] text-gray-500 font-mono">Preset rápido 1-clique</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <button
+              onClick={() => {
+                setIdTag('VERSICHARGE_TAG')
+                setConnector('1')
+                start.run()
+              }}
+              disabled={start.loading}
+              className="btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2 shadow-sm"
+            >
+              <Zap className="w-3.5 h-3.5" fill="currentColor" />
+              <span>Carga Rápida</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setResetType('Soft')
+                reset.run()
+              }}
+              disabled={reset.loading}
+              className="btn bg-gray-800 hover:bg-gray-700 text-amber-300 border border-amber-500/30 text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Soft Reset</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setUnlockConn('1')
+                unlock.run()
+              }}
+              disabled={unlock.loading}
+              className="btn bg-gray-800 hover:bg-gray-700 text-violet-300 border border-violet-500/30 text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2"
+            >
+              <Unlock className="w-3.5 h-3.5 text-violet-400" />
+              <span>Desbloquear Cabo</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setTriggerMsg('StatusNotification')
+                trig.run()
+              }}
+              disabled={trig.loading}
+              className="btn bg-gray-800 hover:bg-gray-700 text-emerald-300 border border-emerald-500/30 text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2"
+            >
+              <Bell className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Pedir Estado</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+
       {!cpId && (
         <div className="card flex flex-col items-center py-14 text-center gap-4 border-dashed border-white/10">
           <div className="p-4 rounded-2xl bg-gray-800/40">
