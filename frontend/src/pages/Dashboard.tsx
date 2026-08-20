@@ -72,7 +72,6 @@ export function Dashboard() {
     refetchInterval: 3000,
   })
 
-
   const liveState = useChargerStore((s) => s.liveState)
   const events    = useChargerStore((s) => s.events)
 
@@ -191,26 +190,55 @@ export function Dashboard() {
 
       {/* FULL OCPP MESSAGES LOG VIEWER SECTION */}
       <div className="pt-6 border-t border-white/10 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Terminal className="w-5 h-5 text-blue-400" />
             <h2 className="text-base font-bold text-gray-200 uppercase tracking-wider">Visualizador Completo de Logs & Payloads JSON</h2>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400 font-medium">Charger Alvo:</label>
-            <select
-              value={selectedLogCpId || (chargers[0]?.charge_point_id ?? '')}
-              onChange={(e) => setSelectedLogCpId(e.target.value)}
-              className="bg-gray-900 text-blue-400 font-mono text-xs font-semibold px-3 py-1.5 rounded-xl border border-blue-500/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {chargers.map((c) => (
-                <option key={c.id} value={c.charge_point_id}>
-                  {c.charge_point_id} ({c.vendor ?? 'Siemens'})
-                </option>
-              ))}
-            </select>
-          </div>
+
+          {/* HIGH-TECH INTERACTIVE BUTTON SELECTOR CARDS FOR CHARGERS */}
+          {chargers.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-xs text-gray-400 font-medium mr-1">Selecionar Charger:</span>
+              {chargers.map((c) => {
+                const isSelected = currentCpId === c.charge_point_id
+                const isCharging = isChargerCharging(c)
+                const isOnline = isChargerOnline(c)
+
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedLogCpId(c.charge_point_id)}
+                    className={`relative px-4 py-2.5 rounded-2xl text-xs font-medium border transition-all duration-300 flex items-center gap-2.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-blue-600/35 via-cyan-600/25 to-blue-600/35 border-blue-400 text-white shadow-lg shadow-blue-500/25 scale-102 ring-1 ring-blue-400/50'
+                        : 'bg-gray-900/80 border-white/10 text-gray-400 hover:border-white/20 hover:text-gray-200 hover:bg-gray-800/80'
+                    } ${isCharging ? 'border-cyan-400/60 shadow-cyan-500/20' : ''}`}
+                  >
+                    {isCharging ? (
+                      <div className="relative flex items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-cyan-400 opacity-75" />
+                        <Zap className="w-4 h-4 text-cyan-400 animate-bounce" fill="currentColor" />
+                      </div>
+                    ) : (
+                      <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-gray-600'}`} />
+                    )}
+
+                    <div className="text-left">
+                      <p className="font-mono font-bold leading-tight text-xs">{c.charge_point_id}</p>
+                      <p className="text-[10px] opacity-75 mt-0.5">
+                        {c.vendor ?? 'Siemens'} {isCharging ? '· ⚡ CARGA ATIVA' : ''}
+                      </p>
+                    </div>
+
+                    {isSelected && (
+                      <span className="ml-1 w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <OcppLogViewer messages={messages} cpId={currentCpId} maxHeight="500px" />
@@ -218,4 +246,3 @@ export function Dashboard() {
     </div>
   )
 }
-
