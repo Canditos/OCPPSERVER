@@ -7,6 +7,9 @@ services:
       DATABASE_URL: sqlite+aiosqlite:///./data/ocpp16.db
     volumes:
       - ocpp_db:/app/data
+    networks:
+      - default
+      - coolify
     restart: unless-stopped
 
   frontend:
@@ -15,9 +18,14 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - backend
-    ports:
-      - "8180:80"
+    networks:
+      - default
+      - coolify
     restart: unless-stopped
 
 volumes:
   ocpp_db:
+
+networks:
+  coolify:
+    external: true
