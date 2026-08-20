@@ -9,7 +9,7 @@ class Transaction(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
-    charger_id: Mapped[int] = mapped_column(Integer, index=True)
+    charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
     charge_point_id: Mapped[str] = mapped_column(String(64))
     connector_id: Mapped[int] = mapped_column(Integer)
     id_tag: Mapped[str] = mapped_column(String(64))
@@ -20,10 +20,9 @@ class Transaction(Base):
     stop_reason: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), default="Active")
 
-    charger: Mapped["Charger"] = relationship(back_populates="transactions",
-                                               primaryjoin="Transaction.charger_id == Charger.id",
-                                               foreign_keys=[charger_id])
+    charger: Mapped["Charger"] = relationship(back_populates="transactions")
     meter_values: Mapped[list["MeterValue"]] = relationship(back_populates="transaction", cascade="all, delete-orphan")
+
 
 
 class MeterValue(Base):

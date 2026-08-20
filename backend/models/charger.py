@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, DateTime, Integer, Boolean, Float
+from sqlalchemy import String, DateTime, Integer, Boolean, Float, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 
@@ -31,27 +31,24 @@ class Connector(Base):
     __tablename__ = "connectors"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    charger_id: Mapped[int] = mapped_column(Integer, index=True)
+    charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
     connector_id: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(32), default="Available")
     error_code: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    charger: Mapped["Charger"] = relationship(back_populates="connectors",
-                                               primaryjoin="Connector.charger_id == Charger.id",
-                                               foreign_keys=[charger_id])
+    charger: Mapped["Charger"] = relationship(back_populates="connectors")
 
 
 class OcppMessage(Base):
     __tablename__ = "ocpp_messages_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    charger_id: Mapped[int] = mapped_column(Integer, index=True)
+    charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
     direction: Mapped[str] = mapped_column(String(8))  # "IN" or "OUT"
     action: Mapped[str] = mapped_column(String(64))
     payload: Mapped[str] = mapped_column(String(4096))
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    charger: Mapped["Charger"] = relationship(back_populates="messages",
-                                               primaryjoin="OcppMessage.charger_id == Charger.id",
-                                               foreign_keys=[charger_id])
+    charger: Mapped["Charger"] = relationship(back_populates="messages")
+
