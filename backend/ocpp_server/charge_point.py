@@ -88,7 +88,7 @@ class ChargePoint(OcppChargePoint):
             "model": charge_point_model,
         })
 
-        return call_result.BootNotification(
+        return call_result.BootNotificationPayload(
             current_time=_now().isoformat() + "Z",
             interval=60,
             status=RegistrationStatus.accepted,
@@ -103,13 +103,13 @@ class ChargePoint(OcppChargePoint):
             )
             await db.commit()
         await event_bus.publish("heartbeat", {"charge_point_id": self.id})
-        return call_result.Heartbeat(current_time=_now().isoformat() + "Z")
+        return call_result.HeartbeatPayload(current_time=_now().isoformat() + "Z")
 
     @on(Action.Authorize)
     async def on_authorize(self, id_tag, **kwargs):
         await self._log_message("IN", "Authorize", {"id_tag": id_tag})
         await event_bus.publish("authorize", {"charge_point_id": self.id, "id_tag": id_tag})
-        return call_result.Authorize(
+        return call_result.AuthorizePayload(
             id_tag_info={"status": AuthorizationStatus.accepted, "expiryDate": None, "parentIdTag": None}
         )
 
@@ -144,7 +144,7 @@ class ChargePoint(OcppChargePoint):
             "id_tag": id_tag,
             "meter_start": meter_start,
         })
-        return call_result.StartTransaction(
+        return call_result.StartTransactionPayload(
             transaction_id=tx_id,
             id_tag_info={"status": AuthorizationStatus.accepted}
         )
@@ -171,7 +171,7 @@ class ChargePoint(OcppChargePoint):
             "meter_stop": meter_stop,
             "reason": reason,
         })
-        return call_result.StopTransaction(id_tag_info={"status": AuthorizationStatus.accepted})
+        return call_result.StopTransactionPayload(id_tag_info={"status": AuthorizationStatus.accepted})
 
     @on(Action.MeterValues)
     async def on_meter_values(self, connector_id, meter_value, **kwargs):
@@ -220,7 +220,7 @@ class ChargePoint(OcppChargePoint):
             "transaction_id": tx_id_ocpp,
             "values": meter_data,
         })
-        return call_result.MeterValues()
+        return call_result.MeterValuesPayload()
 
     @on(Action.StatusNotification)
     async def on_status_notification(self, connector_id, error_code, status, **kwargs):
@@ -256,7 +256,7 @@ class ChargePoint(OcppChargePoint):
             "status": status,
             "error_code": error_code,
         })
-        return call_result.StatusNotification()
+        return call_result.StatusNotificationPayload()
 
     @on(Action.DataTransfer)
     async def on_data_transfer(self, vendor_id, **kwargs):
@@ -267,17 +267,17 @@ class ChargePoint(OcppChargePoint):
             "message_id": kwargs.get("message_id"),
             "data": kwargs.get("data"),
         })
-        return call_result.DataTransfer(status=DataTransferStatus.accepted)
+        return call_result.DataTransferPayload(status=DataTransferStatus.accepted)
 
     @on(Action.FirmwareStatusNotification)
     async def on_firmware_status(self, status, **kwargs):
         await event_bus.publish("firmware_status", {"charge_point_id": self.id, "status": status})
-        return call_result.FirmwareStatusNotification()
+        return call_result.FirmwareStatusNotificationPayload()
 
     @on(Action.DiagnosticsStatusNotification)
     async def on_diagnostics_status(self, status, **kwargs):
         await event_bus.publish("diagnostics_status", {"charge_point_id": self.id, "status": status})
-        return call_result.DiagnosticsStatusNotification()
+        return call_result.DiagnosticsStatusNotificationPayload()
 
     # ── Outgoing commands ──────────────────────────────────────────────────
 
