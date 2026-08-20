@@ -35,7 +35,6 @@ services:
       - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.rule=Host(`ocpp.gatoescondido.com`) && PathPrefix(`/`)"
       - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.service=https-0-d8j36rc0d2vizu18z7kqwf2f"
       - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.tls=true"
-      - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.tls.certresolver=letsencrypt"
       - "traefik.http.services.https-0-d8j36rc0d2vizu18z7kqwf2f.loadbalancer.server.port=80"
     restart: always
 
