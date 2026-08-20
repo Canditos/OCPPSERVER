@@ -3,7 +3,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: ocpp_backend
     volumes:
       - ocpp_data:/app/data
     environment:
@@ -18,28 +17,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: ocpp_frontend
     depends_on:
       - backend
     networks:
       - default
       - coolify
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=coolify"
-      - "traefik.http.routers.http-0-d8j36rc0d2vizu18z7kqwf2f.entryPoints=http"
-      - "traefik.http.routers.http-0-d8j36rc0d2vizu18z7kqwf2f.rule=Host(`ocpp.gatoescondido.com`) && PathPrefix(`/`)"
-      - "traefik.http.routers.http-0-d8j36rc0d2vizu18z7kqwf2f.service=http-0-d8j36rc0d2vizu18z7kqwf2f"
-      - "traefik.http.services.http-0-d8j36rc0d2vizu18z7kqwf2f.loadbalancer.server.port=80"
-      - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.entryPoints=https"
-      - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.rule=Host(`ocpp.gatoescondido.com`) && PathPrefix(`/`)"
-      - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.service=https-0-d8j36rc0d2vizu18z7kqwf2f"
-      - "traefik.http.routers.https-0-d8j36rc0d2vizu18z7kqwf2f.tls=true"
-      - "traefik.http.services.https-0-d8j36rc0d2vizu18z7kqwf2f.loadbalancer.server.port=80"
     restart: always
 
 volumes:
-  ocpp_db:
   ocpp_data:
 
 networks:

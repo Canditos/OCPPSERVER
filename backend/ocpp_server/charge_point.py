@@ -8,7 +8,7 @@ from ocpp.v16 import ChargePoint as OcppChargePoint
 from ocpp.v16 import call_result, call
 from ocpp.v16.enums import (
     Action, AuthorizationStatus, RegistrationStatus, ChargePointStatus,
-    RemoteStartStopStatus, ResetStatus, ChangeAvailabilityStatus,
+    RemoteStartStopStatus, ResetStatus, AvailabilityStatus,
     UnlockStatus, ConfigurationStatus, DataTransferStatus,
     TriggerMessageStatus, ReservationStatus, CancelReservationStatus,
     AvailabilityType, ResetType,
