@@ -21,10 +21,11 @@ class Charger(Base):
     client_ip: Mapped[str | None] = mapped_column(String(64))
     is_online: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    connectors: Mapped[list["Connector"]] = relationship(back_populates="charger", cascade="all, delete-orphan")
-    transactions: Mapped[list["Transaction"]] = relationship(back_populates="charger", cascade="all, delete-orphan")
-    configurations: Mapped[list["ChargerConfiguration"]] = relationship(back_populates="charger", cascade="all, delete-orphan")
-    messages: Mapped[list["OcppMessage"]] = relationship(back_populates="charger", cascade="all, delete-orphan")
+    connectors: Mapped[list["Connector"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+    transactions: Mapped[list["Transaction"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+    configurations: Mapped[list["ChargerConfiguration"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+    messages: Mapped[list["OcppMessage"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+
 
 
 class Connector(Base):

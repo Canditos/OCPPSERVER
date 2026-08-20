@@ -21,7 +21,8 @@ class Transaction(Base):
     status: Mapped[str] = mapped_column(String(16), default="Active")
 
     charger: Mapped["Charger"] = relationship(back_populates="transactions")
-    meter_values: Mapped[list["MeterValue"]] = relationship(back_populates="transaction", cascade="all, delete-orphan")
+    meter_values: Mapped[list["MeterValue"]] = relationship(back_populates="transaction", cascade="all, delete-orphan", lazy="selectin")
+
 
 
 
