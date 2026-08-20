@@ -22,11 +22,10 @@ services:
       - default
       - coolify
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ocpp-frontend.entryPoints=http,https"
-      - "traefik.http.routers.ocpp-frontend.rule=Host(`ocpp.gatoescondido.com`)"
-      - "traefik.http.routers.ocpp-frontend.service=ocpp-frontend"
-      - "traefik.http.services.ocpp-frontend.loadbalancer.server.port=80"
+      - "caddy_0=https://ocpp.gatoescondido.com"
+      - "caddy_0.handle_path=/*"
+      - "caddy_0.handle_path.0_reverse_proxy={{upstreams 80}}"
+      - "caddy_ingress_network=coolify"
     restart: unless-stopped
 
 volumes:
