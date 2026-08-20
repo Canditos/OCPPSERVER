@@ -4,14 +4,21 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ocpp_backend
-    environment:
-      DATABASE_URL: sqlite+aiosqlite:///./data/ocpp16.db
     volumes:
       - ocpp_db:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/ocpp16.db
+      - PORT=8000
     networks:
       - default
       - coolify
-    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ocpp-backend.entryPoints=http,https"
+      - "traefik.http.routers.ocpp-backend.rule=Host(`ocpp.gatoescondido.com`) && (PathPrefix(`/api`) || PathPrefix(`/ocpp`))"
+      - "traefik.http.routers.ocpp-backend.tls=true"
+      - "traefik.http.services.ocpp-backend.loadbalancer.server.port=8000"
+    restart: always
 
   frontend:
     build:
@@ -23,6 +30,12 @@ services:
     networks:
       - default
       - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ocpp-frontend.entryPoints=http,https"
+      - "traefik.http.routers.ocpp-frontend.rule=Host(`ocpp.gatoescondido.com`) && PathPrefix(`/`)"
+      - "traefik.http.routers.ocpp-frontend.tls=true"
+      - "traefik.http.services.ocpp-frontend.loadbalancer.server.port=80"
     restart: always
 
 volumes:
