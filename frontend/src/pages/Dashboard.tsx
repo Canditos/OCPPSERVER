@@ -62,21 +62,41 @@ export function Dashboard() {
   const liveState = useChargerStore((s) => s.liveState)
   const events    = useChargerStore((s) => s.events)
 
-  const total    = chargers.length
-  const online   = chargers.filter((c) => liveState[c.charge_point_id]?.isOnline ?? c.is_online).length
-  const charging = chargers.filter((c) =>
-    Object.values(liveState[c.charge_point_id]?.connectors ?? {}).some((cc) => cc.status === 'Charging')
-  ).length
-  const faulted  = chargers.filter((c) =>
-    Object.values(liveState[c.charge_point_id]?.connectors ?? {}).some((cc) => cc.status === 'Faulted')
-  ).length
+  const total = chargers.length
 
-  const totalEnergyWh = Object.values(liveState)
+  const isChargerOnline = (c: Charger) => {
+    const live = liveState[c.charge_point_id]
+    return live?.isOnline ?? c.is_online
+  }
+
+  const isChargerCharging = (c: Charger) => {
+    const live = liveState[c.charge_point_id]
+    if (live?.connectors) {
+      if (Object.values(live.connectors).some((cc) => cc.status === 'Charging')) return true
+    }
+    return (c.connectors ?? []).some((cc) => cc.status === 'Charging') || c.status === 'Charging'
+  }
+
+  const isChargerFaulted = (c: Charger) => {
+    const live = liveState[c.charge_point_id]
+    if (live?.connectors) {
+      if (Object.values(live.connectors).some((cc) => cc.status === 'Faulted')) return true
+    }
+    return (c.connectors ?? []).some((cc) => cc.status === 'Faulted') || c.status === 'Faulted'
+  }
+
+  const online   = chargers.filter(isChargerOnline).length
+  const charging = chargers.filter(isChargerCharging).length
+  const faulted  = chargers.filter(isChargerFaulted).length
+
+  const liveEnergyWh = Object.values(liveState)
     .flatMap((s) => Object.values(s.meters ?? {}))
     .flatMap((m) => Object.entries(m))
     .filter(([k]) => k.toLowerCase().includes('energy'))
     .reduce((acc, [, v]) => acc + Number(v.value ?? 0), 0)
-  const totalKwh = (totalEnergyWh / 1000).toFixed(1)
+
+  const totalKwh = (liveEnergyWh / 1000).toFixed(1)
+
 
   return (
     <div className="space-y-8 animate-fade-up">

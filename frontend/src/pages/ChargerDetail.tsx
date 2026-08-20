@@ -1,7 +1,9 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { format, formatDistanceToNow } from 'date-fns'
+import { format } from 'date-fns'
+import { safeFormatDate, safeFormatDistance } from '../utils/date'
 import { ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap } from 'lucide-react'
+
 import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
 import { EventLog } from '../components/EventLog'
@@ -121,8 +123,9 @@ export function ChargerDetail() {
             <InfoRow label="ICCID"       value={charger.iccid} />
             <InfoRow label="IMSI"        value={charger.imsi} />
             <InfoRow label="IP"          value={charger.client_ip} />
-            <InfoRow label="Registado"   value={charger.registered_at ? format(new Date(charger.registered_at), 'dd/MM/yyyy HH:mm') : undefined} />
-            <InfoRow label="Último sinal" value={charger.last_seen ? formatDistanceToNow(new Date(charger.last_seen), { addSuffix: true }) : undefined} />
+            <InfoRow label="Registado"   value={safeFormatDate(charger.registered_at)} />
+            <InfoRow label="Último sinal" value={safeFormatDistance(charger.last_seen)} />
+
           </div>
 
           {/* connectors */}

@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Zap, Wifi, WifiOff, Clock, Plug } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
-import { useChargerStore } from '../store/chargerStore'
-import { ConnectorBadge } from './ConnectorBadge'
+import { safeFormatDistance } from '../utils/date'
 import type { Charger } from '../types'
 
 function LiveKw({ watts }: { watts: number }) {
@@ -19,8 +17,13 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const live = useChargerStore((s) => s.liveState[charger.charge_point_id])
 
   const isOnline  = live?.isOnline  ?? charger.is_online
-  const isCharging = Object.values(live?.connectors ?? {}).some((c) => c.status === 'Charging')
-  const isFaulted  = Object.values(live?.connectors ?? {}).some((c) => c.status === 'Faulted')
+  const isCharging = (live?.connectors
+    ? Object.values(live.connectors).some((c) => c.status === 'Charging')
+    : (charger.connectors ?? []).some((c) => c.status === 'Charging')) || charger.status === 'Charging'
+
+  const isFaulted  = (live?.connectors
+    ? Object.values(live.connectors).some((c) => c.status === 'Faulted')
+    : (charger.connectors ?? []).some((c) => c.status === 'Faulted')) || charger.status === 'Faulted'
 
   const connectors = live?.connectors
     ? Object.entries(live.connectors).map(([id, c]) => ({ connector_id: Number(id), ...c }))
@@ -36,11 +39,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
   const cardGlow = isCharging ? 'card-glow-blue' : isFaulted ? 'card-glow-red' : isOnline ? 'card-glow-emerald' : ''
 
-  const lastSeen = live?.lastSeen
-    ? formatDistanceToNow(new Date(live.lastSeen), { addSuffix: true })
-    : charger.last_seen
-    ? formatDistanceToNow(new Date(charger.last_seen), { addSuffix: true })
-    : null
+  const lastSeen = safeFormatDistance(live?.lastSeen ?? charger.last_seen)
+
 
   return (
     <Link to={`/chargers/${charger.charge_point_id}`}>
