@@ -61,14 +61,17 @@ export function Dashboard() {
     refetchInterval: 5000,
   })
 
-  // Fetch all messages for the first charger (or all chargers)
-  const firstCpId = chargers[0]?.charge_point_id
+  // State for selected charger logs on the dashboard
+  const [selectedLogCpId, setSelectedLogCpId] = React.useState<string>('')
+  const currentCpId = selectedLogCpId || chargers[0]?.charge_point_id
+
   const { data: messages = [] } = useQuery<OcppMessage[]>({
-    queryKey: ['messages', firstCpId],
-    queryFn: () => api.getMessages(firstCpId!, 100),
-    enabled: !!firstCpId,
+    queryKey: ['messages', currentCpId],
+    queryFn: () => api.getMessages(currentCpId!, 100),
+    enabled: !!currentCpId,
     refetchInterval: 3000,
   })
+
 
   const liveState = useChargerStore((s) => s.liveState)
   const events    = useChargerStore((s) => s.events)
@@ -188,20 +191,31 @@ export function Dashboard() {
 
       {/* FULL OCPP MESSAGES LOG VIEWER SECTION */}
       <div className="pt-6 border-t border-white/10 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Terminal className="w-5 h-5 text-blue-400" />
             <h2 className="text-base font-bold text-gray-200 uppercase tracking-wider">Visualizador Completo de Logs & Payloads JSON</h2>
           </div>
-          {firstCpId && (
-            <span className="text-xs font-mono text-gray-400 bg-gray-900 px-3 py-1 rounded-full border border-white/10">
-              Charger: {firstCpId}
-            </span>
-          )}
+          
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400 font-medium">Charger Alvo:</label>
+            <select
+              value={selectedLogCpId || (chargers[0]?.charge_point_id ?? '')}
+              onChange={(e) => setSelectedLogCpId(e.target.value)}
+              className="bg-gray-900 text-blue-400 font-mono text-xs font-semibold px-3 py-1.5 rounded-xl border border-blue-500/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {chargers.map((c) => (
+                <option key={c.id} value={c.charge_point_id}>
+                  {c.charge_point_id} ({c.vendor ?? 'Siemens'})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <OcppLogViewer messages={messages} cpId={firstCpId} maxHeight="500px" />
+        <OcppLogViewer messages={messages} cpId={currentCpId} maxHeight="500px" />
       </div>
     </div>
   )
 }
+

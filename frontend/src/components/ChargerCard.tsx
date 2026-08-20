@@ -12,7 +12,7 @@ function LiveKw({ watts }: { watts: number }) {
   return (
     <div className="flex items-baseline gap-1">
       <span className="text-2xl font-bold text-gradient-blue">{kw}</span>
-      <span className="text-xs text-gray-500 font-medium">kW</span>
+      <span className="text-xs text-gray-400 font-medium">kW</span>
     </div>
   )
 }
@@ -35,6 +35,11 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     ? Object.entries(live.connectors).map(([id, c]) => ({ connector_id: Number(id), ...c }))
     : charger.connectors ?? []
 
+  // State for selected connector plug (default to first connector ID or 1)
+  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(
+    connectors.length > 0 ? connectors[0].connector_id : 1
+  )
+
   const livePower = live?.meters
     ? Object.values(live.meters)
         .flatMap((m) => Object.entries(m))
@@ -52,10 +57,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setLoadingAction('start')
     setFeedback(null)
     try {
-      await api.remoteStart(charger.charge_point_id, 'VERSICHARGE_TAG', 1)
-      setFeedback({ type: 'success', message: 'Comando de arranque enviado!' })
+      await api.remoteStart(charger.charge_point_id, 'VERSICHARGE_TAG', selectedConnectorId)
+      setFeedback({ type: 'success', message: `Arrancou carga no Conector #${selectedConnectorId}!` })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: 'Falha ao ligar o posto' })
+      setFeedback({ type: 'error', message: `Falha ao ligar Conector #${selectedConnectorId}` })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 3500)
@@ -100,10 +105,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setLoadingAction('unlock')
     setFeedback(null)
     try {
-      await api.unlockConnector(charger.charge_point_id, 1)
-      setFeedback({ type: 'success', message: 'Desbloqueio enviado!' })
+      await api.unlockConnector(charger.charge_point_id, selectedConnectorId)
+      setFeedback({ type: 'success', message: `Desbloqueio do Conector #${selectedConnectorId} enviado!` })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: 'Falha ao desbloquear' })
+      setFeedback({ type: 'error', message: `Falha ao desbloquear Conector #${selectedConnectorId}` })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 3500)
@@ -191,16 +196,39 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           </div>
         )}
 
-        {/* connectors list */}
+        {/* Clickable Connectors Selector */}
         {connectors.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {connectors.map((c) => (
-              <ConnectorBadge
-                key={c.connector_id}
-                connectorId={c.connector_id}
-                status={c.status}
-              />
-            ))}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Selecionar Conector/Plug</span>
+              <span className="text-[11px] text-blue-400 font-mono font-semibold">Ativo: #{selectedConnectorId}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {connectors.map((c) => {
+                const isSelected = selectedConnectorId === c.connector_id
+                return (
+                  <button
+                    key={c.connector_id}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setSelectedConnectorId(c.connector_id)
+                    }}
+                    className={`transition-all rounded-xl cursor-pointer ${
+                      isSelected
+                        ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/20 scale-105'
+                        : 'opacity-70 hover:opacity-100 hover:scale-102'
+                    }`}
+                  >
+                    <ConnectorBadge
+                      connectorId={c.connector_id}
+                      status={c.status}
+                    />
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </Link>
@@ -233,14 +261,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             className="flex-1 btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all"
           >
             {loadingAction === 'start' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>Iniciar Carga</span>
+            <span>Iniciar Carga (Plug #{selectedConnectorId})</span>
           </button>
         )}
 
         <button
           onClick={handleUnlock}
           disabled={!isOnline || loadingAction !== null}
-          title="Desbloquear Conector 1"
+          title={`Desbloquear Conector #${selectedConnectorId}`}
           className="btn-secondary p-2 text-xs text-gray-300 rounded-xl hover:text-white hover:bg-white/10"
         >
           {loadingAction === 'unlock' ? <Loader2 className="w-4 h-4 animate-spin text-blue-400" /> : <Unlock className="w-4 h-4" />}
@@ -258,8 +286,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
       {/* footer date */}
       {lastSeen && (
-        <div className="flex items-center gap-1 mt-3 pt-2 text-[11px] text-gray-500 font-medium">
-          <Clock className="w-3 h-3 text-gray-600" />
+        <div className="flex items-center gap-1 mt-3 pt-2 text-[11px] text-gray-400 font-medium">
+          <Clock className="w-3 h-3 text-gray-400" />
           <span>Visto {lastSeen}</span>
         </div>
       )}
