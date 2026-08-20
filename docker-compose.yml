@@ -7,6 +7,8 @@ services:
       DATABASE_URL: sqlite+aiosqlite:///./data/ocpp16.db
     volumes:
       - ocpp_db:/app/data
+    ports:
+      - "8000:8000"
     restart: unless-stopped
 
   frontend:
@@ -15,6 +17,8 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - backend
+    ports:
+      - "8080:80"
     restart: unless-stopped
 
 volumes:
