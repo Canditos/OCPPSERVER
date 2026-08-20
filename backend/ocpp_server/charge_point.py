@@ -282,31 +282,31 @@ class ChargePoint(OcppChargePoint):
     # ── Outgoing commands ──────────────────────────────────────────────────
 
     async def remote_start_transaction(self, id_tag: str, connector_id: int | None = None):
-        req = call.RemoteStartTransaction(id_tag=id_tag, connector_id=connector_id)
+        req = call.RemoteStartTransactionPayload(id_tag=id_tag, connector_id=connector_id)
         resp = await self.call(req)
         await self._log_message("OUT", "RemoteStartTransaction", {"id_tag": id_tag, "connector_id": connector_id})
         return resp
 
     async def remote_stop_transaction(self, transaction_id: int):
-        req = call.RemoteStopTransaction(transaction_id=transaction_id)
+        req = call.RemoteStopTransactionPayload(transaction_id=transaction_id)
         resp = await self.call(req)
         await self._log_message("OUT", "RemoteStopTransaction", {"transaction_id": transaction_id})
         return resp
 
     async def reset(self, reset_type: str = "Soft"):
-        req = call.Reset(type=ResetType(reset_type))
+        req = call.ResetPayload(type=ResetType(reset_type))
         resp = await self.call(req)
         await self._log_message("OUT", "Reset", {"type": reset_type})
         return resp
 
     async def change_configuration(self, key: str, value: str):
-        req = call.ChangeConfiguration(key=key, value=value)
+        req = call.ChangeConfigurationPayload(key=key, value=value)
         resp = await self.call(req)
         await self._log_message("OUT", "ChangeConfiguration", {"key": key, "value": value})
         return resp
 
     async def get_configuration(self, keys: list[str] | None = None):
-        req = call.GetConfiguration(key=keys or [])
+        req = call.GetConfigurationPayload(key=keys or [])
         resp = await self.call(req)
         if resp and resp.configuration_key:
             async with AsyncSessionLocal() as db:
@@ -330,18 +330,18 @@ class ChargePoint(OcppChargePoint):
         return resp
 
     async def clear_cache(self):
-        resp = await self.call(call.ClearCache())
+        resp = await self.call(call.ClearCachePayload())
         await self._log_message("OUT", "ClearCache", {})
         return resp
 
     async def unlock_connector(self, connector_id: int):
-        req = call.UnlockConnector(connector_id=connector_id)
+        req = call.UnlockConnectorPayload(connector_id=connector_id)
         resp = await self.call(req)
         await self._log_message("OUT", "UnlockConnector", {"connector_id": connector_id})
         return resp
 
     async def change_availability(self, connector_id: int, availability_type: str):
-        req = call.ChangeAvailability(
+        req = call.ChangeAvailabilityPayload(
             connector_id=connector_id,
             type=AvailabilityType(availability_type)
         )
@@ -352,7 +352,7 @@ class ChargePoint(OcppChargePoint):
         return resp
 
     async def trigger_message(self, requested_message: str, connector_id: int | None = None):
-        req = call.TriggerMessage(requested_message=requested_message, connector_id=connector_id)
+        req = call.TriggerMessagePayload(requested_message=requested_message, connector_id=connector_id)
         resp = await self.call(req)
         await self._log_message("OUT", "TriggerMessage", {
             "requested_message": requested_message, "connector_id": connector_id
@@ -360,19 +360,19 @@ class ChargePoint(OcppChargePoint):
         return resp
 
     async def get_diagnostics(self, location: str, retries: int = 3):
-        req = call.GetDiagnostics(location=location, retries=retries)
+        req = call.GetDiagnosticsPayload(location=location, retries=retries)
         resp = await self.call(req)
         await self._log_message("OUT", "GetDiagnostics", {"location": location})
         return resp
 
     async def update_firmware(self, location: str, retrieve_date: str, retries: int = 3):
-        req = call.UpdateFirmware(location=location, retrieve_date=retrieve_date, retries=retries)
+        req = call.UpdateFirmwarePayload(location=location, retrieve_date=retrieve_date, retries=retries)
         resp = await self.call(req)
         await self._log_message("OUT", "UpdateFirmware", {"location": location})
         return resp
 
     async def send_local_list(self, version: int, update_type: str, local_authorization_list: list):
-        req = call.SendLocalList(
+        req = call.SendLocalListPayload(
             list_version=version,
             update_type=update_type,
             local_authorization_list=local_authorization_list,
@@ -382,12 +382,12 @@ class ChargePoint(OcppChargePoint):
         return resp
 
     async def get_local_list_version(self):
-        resp = await self.call(call.GetLocalListVersion())
+        resp = await self.call(call.GetLocalListVersionPayload())
         await self._log_message("OUT", "GetLocalListVersion", {})
         return resp
 
     async def reserve_now(self, connector_id: int, expiry_date: str, id_tag: str, reservation_id: int):
-        req = call.ReserveNow(
+        req = call.ReserveNowPayload(
             connector_id=connector_id,
             expiry_date=expiry_date,
             id_tag=id_tag,
@@ -398,7 +398,8 @@ class ChargePoint(OcppChargePoint):
         return resp
 
     async def cancel_reservation(self, reservation_id: int):
-        req = call.CancelReservation(reservation_id=reservation_id)
+        req = call.CancelReservationPayload(reservation_id=reservation_id)
         resp = await self.call(req)
         await self._log_message("OUT", "CancelReservation", {"reservation_id": reservation_id})
         return resp
+
