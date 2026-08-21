@@ -100,11 +100,33 @@ class ChargePoint(OcppChargePoint):
             "model": charge_point_model,
         })
 
-        return call_result.BootNotificationPayload(
+        result = call_result.BootNotificationPayload(
             current_time=_now().isoformat() + "Z",
             interval=60,
             status=RegistrationStatus.accepted,
         )
+
+        # After responding, push MeterValue config so live power is visible
+        asyncio.create_task(self._configure_meter_values())
+
+        return result
+
+    async def _configure_meter_values(self):
+        """Send ChangeConfiguration to activate periodic MeterValues if not set."""
+        await asyncio.sleep(2)  # let charger settle after BootNotification
+        configs = [
+            ("MeterValueSampleInterval", "30"),
+            ("MeterValuesSampledData",
+             "Energy.Active.Import.Register,Power.Active.Import,Current.Import,Voltage,SoC"),
+            ("StopTxnSampledData",
+             "Energy.Active.Import.Register,Power.Active.Import"),
+        ]
+        for key, value in configs:
+            try:
+                resp = await self.change_configuration(key, value)
+                logger.info(f"{self.id}: ChangeConfiguration {key}={value} → {resp.status if resp else 'no response'}")
+            except Exception as e:
+                logger.warning(f"{self.id}: ChangeConfiguration {key} failed: {e}")
 
     @on(Action.Heartbeat)
     async def on_heartbeat(self, **kwargs):
