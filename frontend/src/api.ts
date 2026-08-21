@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { API_BASE } from './config'
-import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage } from './types'
+import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken } from './types'
 
 const http = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' })
 
@@ -49,4 +49,18 @@ export const api = {
     http.post('/commands/cancel-reservation', { charge_point_id, reservation_id }).then(r => r.data),
   getConnected: () =>
     http.get<{ connected: string[] }>('/commands/connected').then(r => r.data),
+
+  // Auth tokens
+  getAuthTokens: () =>
+    http.get<AuthToken[]>('/auth-tokens').then(r => r.data),
+  createAuthToken: (data: { id_tag: string; name: string; type: string; status?: string; expiry_date?: string | null; note?: string | null }) =>
+    http.post<AuthToken>('/auth-tokens', data).then(r => r.data),
+  updateAuthToken: (id: number, data: Partial<{ name: string; status: string; expiry_date: string | null; note: string | null }>) =>
+    http.put<AuthToken>(`/auth-tokens/${id}`, data).then(r => r.data),
+  deleteAuthToken: (id: number) =>
+    http.delete(`/auth-tokens/${id}`),
+  syncAuthTokens: (cpId: string) =>
+    http.post(`/auth-tokens/sync/${cpId}`).then(r => r.data),
+  setAutocharge: (cpId: string, enabled: boolean) =>
+    http.patch(`/chargers/${cpId}/autocharge`, { enabled }).then(r => r.data),
 }

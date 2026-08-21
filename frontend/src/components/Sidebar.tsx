@@ -1,12 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { Zap, LayoutDashboard, ArrowLeftRight, Terminal, Settings, Activity } from 'lucide-react'
+import { Zap, LayoutDashboard, ArrowLeftRight, Terminal, Settings, Activity, ShieldCheck } from 'lucide-react'
 import { useChargerStore } from '../store/chargerStore'
 
 const NAV = [
-  { to: '/',              icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/transactions',  icon: ArrowLeftRight,  label: 'Transações' },
-  { to: '/commands',      icon: Terminal,        label: 'Comandos' },
-  { to: '/configuration', icon: Settings,        label: 'Configuração' },
+  { to: '/',               icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/transactions',   icon: ArrowLeftRight,  label: 'Transações' },
+  { to: '/commands',       icon: Terminal,        label: 'Comandos' },
+  { to: '/configuration',  icon: Settings,        label: 'Configuração' },
+  { to: '/authentication', icon: ShieldCheck,     label: 'Autenticação' },
 ]
 
 export function Sidebar() {

@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_db
 from models.charger import Charger, Connector, OcppMessage
 from schemas import ChargerOut, OcppMessageOut
+
+
+class AutochargeUpdate(BaseModel):
+    enabled: bool
 
 router = APIRouter(prefix="/chargers", tags=["chargers"])
 
@@ -44,3 +49,14 @@ async def get_messages(cp_id: str, limit: int = 100, db: AsyncSession = Depends(
         .limit(limit)
     )
     return list(r2.scalars().all())
+
+
+@router.patch("/{cp_id}/autocharge")
+async def set_autocharge(cp_id: str, body: AutochargeUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = result.scalar_one_or_none()
+    if not charger:
+        raise HTTPException(status_code=404, detail="Charger not found")
+    charger.autocharge_enabled = body.enabled
+    await db.commit()
+    return {"charge_point_id": cp_id, "autocharge_enabled": body.enabled}

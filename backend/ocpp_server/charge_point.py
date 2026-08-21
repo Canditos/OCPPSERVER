@@ -19,7 +19,8 @@ from database import AsyncSessionLocal
 from models.charger import Charger, Connector, OcppMessage
 from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
-from sqlalchemy import select, update
+from models.auth_token import AuthToken
+from sqlalchemy import func, select, update
 
 logger = logging.getLogger(__name__)
 _TX_COUNTER = 100000
@@ -105,12 +106,37 @@ class ChargePoint(OcppChargePoint):
         await event_bus.publish("heartbeat", {"charge_point_id": self.id})
         return call_result.HeartbeatPayload(current_time=_now().isoformat() + "Z")
 
+    async def _check_auth(self, id_tag: str) -> AuthorizationStatus:
+        async with AsyncSessionLocal() as db:
+            charger_row = (await db.execute(
+                select(Charger).where(Charger.charge_point_id == self.id)
+            )).scalar_one_or_none()
+            if charger_row and charger_row.autocharge_enabled:
+                return AuthorizationStatus.accepted
+            count = (await db.execute(
+                select(func.count()).select_from(AuthToken)
+            )).scalar()
+            if count == 0:
+                return AuthorizationStatus.accepted
+            token = (await db.execute(
+                select(AuthToken).where(
+                    AuthToken.id_tag == id_tag,
+                    AuthToken.status == "Accepted"
+                )
+            )).scalar_one_or_none()
+            if not token:
+                return AuthorizationStatus.invalid
+            if token.expiry_date and token.expiry_date < datetime.utcnow():
+                return AuthorizationStatus.expired
+            return AuthorizationStatus.accepted
+
     @on(Action.Authorize)
     async def on_authorize(self, id_tag, **kwargs):
         await self._log_message("IN", "Authorize", {"id_tag": id_tag})
-        await event_bus.publish("authorize", {"charge_point_id": self.id, "id_tag": id_tag})
+        status = await self._check_auth(id_tag)
+        await event_bus.publish("authorize", {"charge_point_id": self.id, "id_tag": id_tag, "status": status.value})
         return call_result.AuthorizePayload(
-            id_tag_info={"status": AuthorizationStatus.accepted, "expiryDate": None, "parentIdTag": None}
+            id_tag_info={"status": status, "expiryDate": None, "parentIdTag": None}
         )
 
     @on(Action.StartTransaction)
@@ -144,9 +170,10 @@ class ChargePoint(OcppChargePoint):
             "id_tag": id_tag,
             "meter_start": meter_start,
         })
+        auth_status = await self._check_auth(id_tag)
         return call_result.StartTransactionPayload(
             transaction_id=tx_id,
-            id_tag_info={"status": AuthorizationStatus.accepted}
+            id_tag_info={"status": auth_status}
         )
 
     @on(Action.StopTransaction)
