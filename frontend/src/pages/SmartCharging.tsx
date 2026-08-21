@@ -179,7 +179,7 @@ function ActiveProfileBadge({
 
 export default function SmartCharging() {
   const liveState = useChargerStore(s => s.liveState)
-  const [chargers, setChargers] = useState<{ charge_point_id: string; model: string | null }[]>([])
+  const [chargers, setChargers] = useState<{ charge_point_id: string; model: string | null; is_online: boolean }[]>([])
   const [selectedCp, setSelectedCp] = useState<string>('')
   const [profiles, setProfiles] = useState<ChargingProfile[]>([])
   const [loading, setLoading] = useState(false)
@@ -288,7 +288,9 @@ export default function SmartCharging() {
   }
 
   const selectedLive = selectedCp ? liveState[selectedCp] : null
-  const isOnline = selectedLive?.isOnline ?? false
+  const selectedCharger = chargers.find(c => c.charge_point_id === selectedCp)
+  // Use liveState if available, fall back to API is_online (covers page reload before next WS event)
+  const isOnline = selectedLive?.isOnline ?? selectedCharger?.is_online ?? false
   const isCharging = selectedLive?.status === 'Charging'
   const livePowerKw = selectedLive?.meters
     ? Object.entries(selectedLive.meters)
