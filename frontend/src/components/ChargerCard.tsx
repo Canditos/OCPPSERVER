@@ -17,7 +17,7 @@ function LiveKw({ watts }: { watts: number }) {
   )
 }
 
-const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV', 'Finishing']
+const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV']
 
 export function ChargerCard({ charger }: { charger: Charger }) {
   const live = useChargerStore((s) => s.liveState[charger.charge_point_id])
