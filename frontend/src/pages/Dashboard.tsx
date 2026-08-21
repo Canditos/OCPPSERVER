@@ -123,7 +123,7 @@ export function Dashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Chargers" value={total}   icon={<Server className="w-5 h-5" />}        color="violet"  delay={0} />
         <KpiCard label="Online"   value={online}  icon={<Wifi className="w-5 h-5" />}           color="emerald" glow={online > 0} delay={60} />
         <KpiCard label="A carregar" value={charging} icon={<Zap className="w-5 h-5" />}        color="blue"    glow={charging > 0} delay={120} />

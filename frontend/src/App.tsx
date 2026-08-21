@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { Sidebar } from './components/Sidebar'
+import { AppShell } from './components/AppShell'
 import { Dashboard } from './pages/Dashboard'
 import { ChargerDetail } from './pages/ChargerDetail'
 import { Transactions } from './pages/Transactions'
@@ -8,27 +8,16 @@ import { Configuration } from './pages/Configuration'
 import Authentication from './pages/Authentication'
 import { useOcppEvents } from './hooks/useOcppEvents'
 
-function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 ml-60 p-6 max-w-screen-2xl">
-        {children}
-      </main>
-    </div>
-  )
-}
-
 function AppInner() {
   useOcppEvents()
   return (
     <Routes>
-      <Route path="/" element={<Layout><Dashboard /></Layout>} />
-      <Route path="/chargers/:id" element={<Layout><ChargerDetail /></Layout>} />
-      <Route path="/transactions" element={<Layout><Transactions /></Layout>} />
-      <Route path="/commands" element={<Layout><Commands /></Layout>} />
-      <Route path="/configuration" element={<Layout><Configuration /></Layout>} />
-      <Route path="/authentication" element={<Layout><Authentication /></Layout>} />
+      <Route path="/" element={<AppShell><Dashboard /></AppShell>} />
+      <Route path="/chargers/:id" element={<AppShell><ChargerDetail /></AppShell>} />
+      <Route path="/transactions" element={<AppShell><Transactions /></AppShell>} />
+      <Route path="/commands" element={<AppShell><Commands /></AppShell>} />
+      <Route path="/configuration" element={<AppShell><Configuration /></AppShell>} />
+      <Route path="/authentication" element={<AppShell><Authentication /></AppShell>} />
     </Routes>
   )
 }

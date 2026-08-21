@@ -32,7 +32,7 @@ const C = {
   gray:    { ring: 'border-white/8',       icon: 'bg-gray-700/50 text-gray-400',    title: 'text-gray-400',    badge: 'bg-gray-700/20 border-gray-700/30' },
 }
 
-function ResultBadge({ result }: { result: Result }) {
+function ResultBadge({ result }: { result: Result | undefined }) {
   if (!result) return null
   return (
     <div className={`flex items-center gap-2 mt-3 px-3 py-2 rounded-xl text-xs font-medium border animate-fade-up ${

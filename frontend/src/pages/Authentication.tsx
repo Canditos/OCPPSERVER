@@ -134,8 +134,8 @@ export default function Authentication() {
   }
 
   return (
-    <div className="space-y-8 p-6">
-      <div className="flex items-center gap-3">
+    <div className="space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="p-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600">
           <ShieldCheck className="h-6 w-6 text-white" />
         </div>
@@ -146,9 +146,9 @@ export default function Authentication() {
       </div>
 
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Tokens Autorizados</h2>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <select
               className="text-sm border rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 dark:border-gray-700"
               value={syncCpId}
@@ -162,12 +162,12 @@ export default function Authentication() {
             <button
               onClick={handleSync}
               disabled={!syncCpId}
-              className="btn btn-secondary flex items-center gap-1.5 text-sm disabled:opacity-40"
+              className="btn btn-secondary flex items-center justify-center gap-1.5 text-sm disabled:opacity-40"
             >
               <RefreshCw className="h-4 w-4" />
               Sincronizar
             </button>
-            <button onClick={openCreate} className="btn flex items-center gap-1.5 text-sm">
+            <button onClick={openCreate} className="btn flex items-center justify-center gap-1.5 text-sm">
               <Plus className="h-4 w-4" />
               Adicionar Token
             </button>

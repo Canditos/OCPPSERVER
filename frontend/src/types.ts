@@ -76,6 +76,7 @@ export interface OcppMessage {
 }
 
 export interface OcppEvent {
+  ts: string
   type: string
-  data: Record<string, unknown>
+  data: Record<string, any>
 }

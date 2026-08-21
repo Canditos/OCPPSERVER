@@ -15,12 +15,13 @@ export function Sidebar() {
   const liveState = useChargerStore((s) => s.liveState)
 
   const online   = Object.values(liveState).filter((s) => s.isOnline).length
+  const total    = Object.values(liveState).length
   const charging = Object.values(liveState).flatMap((s) =>
     Object.values(s.connectors ?? {})
   ).filter((c) => c.status === 'Charging').length
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-60 flex flex-col z-30"
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col lg:flex"
       style={{ background: 'rgba(8,12,20,0.92)', borderRight: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(16px)' }}
     >
       {/* logo */}
@@ -46,7 +47,7 @@ export function Sidebar() {
           <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-blue-600 to-emerald-500 transition-all duration-700"
-              style={{ width: `${online === 0 ? 2 : Math.min(100, (online / Math.max(online, 1)) * 100)}%` }}
+              style={{ width: `${online === 0 ? 2 : Math.min(100, (online / Math.max(total, 1)) * 100)}%` }}
             />
           </div>
           <span className="text-xs text-gray-600 font-mono">{online} online</span>
