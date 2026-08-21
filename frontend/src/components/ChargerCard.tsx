@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { safeFormatDistance } from '../utils/date'
@@ -17,28 +17,42 @@ function LiveKw({ watts }: { watts: number }) {
   )
 }
 
+const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV', 'Finishing']
+
 export function ChargerCard({ charger }: { charger: Charger }) {
   const live = useChargerStore((s) => s.liveState[charger.charge_point_id])
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null)
 
-  const isOnline  = live?.isOnline  ?? charger.is_online
-  const isCharging = (live?.connectors
-    ? Object.values(live.connectors).some((c) => c.status === 'Charging')
-    : (charger.connectors ?? []).some((c) => c.status === 'Charging')) || charger.status === 'Charging'
+  // Reset optimistic status when real live status updates
+  useEffect(() => {
+    if (live?.status) {
+      setOptimisticStatus(null)
+    }
+  }, [live?.status])
 
-  const isFaulted  = (live?.connectors
-    ? Object.values(live.connectors).some((c) => c.status === 'Faulted')
-    : (charger.connectors ?? []).some((c) => c.status === 'Faulted')) || charger.status === 'Faulted'
+  const isOnline = live?.isOnline ?? charger.is_online
 
-  const connectors = live?.connectors
-    ? Object.entries(live.connectors).map(([id, c]) => ({ connector_id: Number(id), ...c }))
-    : charger.connectors ?? []
+  // Determine current status incorporating optimistic state
+  const mainStatus = optimisticStatus || live?.status || charger.status || 'Available'
 
-  // State for selected connector plug (default to first connector ID or 1)
+  // Determine connectors array (NEVER EMPTY - defaults to connector #1 if DB/live empty)
+  const rawConnectors = (live?.connectors && Object.keys(live.connectors).length > 0)
+    ? Object.entries(live.connectors).map(([id, st]) => ({ connector_id: Number(id), status: typeof st === 'string' ? st : (st as any).status }))
+    : (charger.connectors && charger.connectors.length > 0
+        ? charger.connectors
+        : [{ connector_id: 1, status: mainStatus }])
+
+  // Plug selection state
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(
-    connectors.length > 0 ? connectors[0].connector_id : 1
+    rawConnectors.length > 0 ? rawConnectors[0].connector_id : 1
   )
+
+  // Check if any connector or charger is in active session (Preparing, Charging, etc.)
+  const isSessionActive = ACTIVE_STATUSES.includes(mainStatus) || rawConnectors.some((c) => ACTIVE_STATUSES.includes(c.status))
+  const isPreparing = mainStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing')
+  const isFaulted = mainStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted')
 
   const livePower = live?.meters
     ? Object.values(live.meters)
@@ -48,7 +62,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         .reduce((a, b) => a + b, 0)
     : null
 
-  const cardGlow = isCharging ? 'card-glow-blue' : isFaulted ? 'card-glow-red' : isOnline ? 'card-glow-emerald' : ''
+  const cardGlow = isSessionActive ? 'card-glow-blue' : isFaulted ? 'card-glow-red' : isOnline ? 'card-glow-emerald' : ''
   const lastSeen = safeFormatDistance(live?.lastSeen ?? charger.last_seen)
 
   const handleRemoteStart = async (e: React.MouseEvent) => {
@@ -58,12 +72,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setFeedback(null)
     try {
       await api.remoteStart(charger.charge_point_id, 'VERSICHARGE_TAG', selectedConnectorId)
-      setFeedback({ type: 'success', message: `Arrancou carga no Conector #${selectedConnectorId}!` })
+      // Instant Optimistic UI update!
+      setOptimisticStatus('Preparing')
+      setFeedback({ type: 'success', message: `Aceite! A iniciar carga na tomada #${selectedConnectorId}...` })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: `Falha ao ligar Conector #${selectedConnectorId}` })
+      setFeedback({ type: 'error', message: `Falha ao ligar tomada #${selectedConnectorId}` })
     } finally {
       setLoadingAction(null)
-      setTimeout(() => setFeedback(null), 3500)
+      setTimeout(() => setFeedback(null), 4000)
     }
   }
 
@@ -74,12 +90,13 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setFeedback(null)
     try {
       await api.remoteStop(charger.charge_point_id, 100001)
+      setOptimisticStatus('Available')
       setFeedback({ type: 'success', message: 'Comando de paragem enviado!' })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: 'Falha ao parar o posto' })
+      setFeedback({ type: 'error', message: 'Falha ao parar a carga' })
     } finally {
       setLoadingAction(null)
-      setTimeout(() => setFeedback(null), 3500)
+      setTimeout(() => setFeedback(null), 4000)
     }
   }
 
@@ -106,9 +123,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setFeedback(null)
     try {
       await api.unlockConnector(charger.charge_point_id, selectedConnectorId)
-      setFeedback({ type: 'success', message: `Desbloqueio do Conector #${selectedConnectorId} enviado!` })
+      setFeedback({ type: 'success', message: `Desbloqueio da tomada #${selectedConnectorId} enviado!` })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: `Falha ao desbloquear Conector #${selectedConnectorId}` })
+      setFeedback({ type: 'error', message: `Falha ao desbloquear tomada #${selectedConnectorId}` })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 3500)
@@ -118,8 +135,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   return (
     <div className={`charger-card relative flex flex-col justify-between ${cardGlow}`}>
       <Link to={`/chargers/${charger.charge_point_id}`} className="block">
-        {/* top stripe when charging */}
-        {isCharging && (
+        {/* top stripe when active session */}
+        {isSessionActive && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600 animate-shimmer bg-[length:200%_auto] rounded-t-2xl" />
         )}
 
@@ -127,12 +144,12 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         <div className="flex items-start justify-between mb-4 pt-1">
           <div className="flex items-center gap-3">
             <div className={`relative flex items-center justify-center w-11 h-11 rounded-2xl transition-all ${
-              isCharging ? 'bg-blue-500/20 shadow-lg shadow-blue-500/10 border border-blue-500/30'
+              isSessionActive ? 'bg-blue-500/20 shadow-lg shadow-blue-500/10 border border-blue-500/30'
               : isFaulted ? 'bg-red-500/20 border border-red-500/30'
               : isOnline  ? 'bg-emerald-500/15 border border-emerald-500/25'
               : 'bg-gray-800/60 border border-gray-700/30'
             }`}>
-              {isCharging ? (
+              {isSessionActive ? (
                 <Zap className="w-5 h-5 text-blue-400 animate-pulse" fill="currentColor" />
               ) : isFaulted ? (
                 <Zap className="w-5 h-5 text-red-400" />
@@ -167,18 +184,22 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           </div>
         </div>
 
-        {/* live power display */}
-        {isCharging && (
+        {/* live power display when session active */}
+        {isSessionActive && (
           <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/60 to-slate-900/60 border border-blue-500/20 shadow-inner">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-blue-600 animate-pulse" />
                 <div>
-                  <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Potência de Carga</p>
-                  {livePower !== null ? <LiveKw watts={livePower} /> : (
+                  <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
+                    {isPreparing ? 'Sessão em Preparação' : 'Potência de Carga'}
+                  </p>
+                  {livePower !== null && livePower > 0 ? (
+                    <LiveKw watts={livePower} />
+                  ) : (
                     <div className="flex items-center gap-1 text-blue-400 font-semibold text-sm">
                       <Zap className="w-4 h-4 animate-bounce" />
-                      <span>Em carregamento ativo...</span>
+                      <span>{isPreparing ? 'A comunicar com veículo...' : 'Em carregamento ativo...'}</span>
                     </div>
                   )}
                 </div>
@@ -197,40 +218,39 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         )}
 
         {/* Clickable Connectors Selector */}
-        {connectors.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Selecionar Conector/Plug</span>
-              <span className="text-[11px] text-blue-400 font-mono font-semibold">Ativo: #{selectedConnectorId}</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {connectors.map((c) => {
-                const isSelected = selectedConnectorId === c.connector_id
-                return (
-                  <button
-                    key={c.connector_id}
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      setSelectedConnectorId(c.connector_id)
-                    }}
-                    className={`transition-all rounded-xl cursor-pointer ${
-                      isSelected
-                        ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/20 scale-105'
-                        : 'opacity-70 hover:opacity-100 hover:scale-102'
-                    }`}
-                  >
-                    <ConnectorBadge
-                      connectorId={c.connector_id}
-                      status={c.status}
-                    />
-                  </button>
-                )
-              })}
-            </div>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Selecionar Tomada / Plug</span>
+            <span className="text-[11px] text-blue-400 font-mono font-semibold">Ativa: #{selectedConnectorId}</span>
           </div>
-        )}
+          <div className="flex flex-wrap gap-2">
+            {rawConnectors.map((c) => {
+              const isSelected = selectedConnectorId === c.connector_id
+              const connectorStatus = (isSelected && optimisticStatus) ? optimisticStatus : c.status
+              return (
+                <button
+                  key={c.connector_id}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setSelectedConnectorId(c.connector_id)
+                  }}
+                  className={`transition-all rounded-xl cursor-pointer ${
+                    isSelected
+                      ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/20 scale-105'
+                      : 'opacity-70 hover:opacity-100 hover:scale-102'
+                  }`}
+                >
+                  <ConnectorBadge
+                    connectorId={c.connector_id}
+                    status={connectorStatus}
+                  />
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </Link>
 
       {/* Inline Feedback Toast */}
@@ -245,14 +265,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
       {/* Quick Controls Toolbar */}
       <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-1.5" onClick={(e) => e.stopPropagation()}>
-        {isCharging ? (
+        {isSessionActive ? (
           <button
             onClick={handleRemoteStop}
             disabled={!isOnline || loadingAction !== null}
             className="flex-1 btn bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all"
           >
             {loadingAction === 'stop' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>Parar Carga</span>
+            <span>Parar Carga (Tomada #{selectedConnectorId})</span>
           </button>
         ) : (
           <button
@@ -261,14 +281,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             className="flex-1 btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all"
           >
             {loadingAction === 'start' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>Iniciar Carga (Plug #{selectedConnectorId})</span>
+            <span>Iniciar Carga (Tomada #{selectedConnectorId})</span>
           </button>
         )}
 
         <button
           onClick={handleUnlock}
           disabled={!isOnline || loadingAction !== null}
-          title={`Desbloquear Conector #${selectedConnectorId}`}
+          title={`Desbloquear Tomada #${selectedConnectorId}`}
           className="btn-secondary p-2 text-xs text-gray-300 rounded-xl hover:text-white hover:bg-white/10"
         >
           {loadingAction === 'unlock' ? <Loader2 className="w-4 h-4 animate-spin text-blue-400" /> : <Unlock className="w-4 h-4" />}

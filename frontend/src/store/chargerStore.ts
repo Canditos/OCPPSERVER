@@ -45,13 +45,16 @@ export const useChargerStore = create<ChargerStore>((set) => ({
         live[cpId] = { ...cur, status: 'Offline', lastSeen: new Date().toISOString() }
       } else if (event.type === 'status_notification') {
         const d = event.data as Record<string, string | number>
-        const connId = d.connector_id as number
+        const connId = Number(d.connector_id ?? 1)
+        const status = String(d.status ?? 'Available')
+
         if (connId === 0) {
-          live[cpId] = { ...cur, status: d.status as string }
+          live[cpId] = { ...cur, status }
         } else {
           live[cpId] = {
             ...cur,
-            connectors: { ...cur.connectors, [connId]: d.status as string },
+            status: status,
+            connectors: { ...cur.connectors, [connId]: status },
           }
         }
       } else if (event.type === 'heartbeat') {
@@ -64,9 +67,21 @@ export const useChargerStore = create<ChargerStore>((set) => ({
         }
         live[cpId] = { ...cur, meters }
       } else if (event.type === 'transaction_started') {
-        live[cpId] = { ...cur, status: 'Charging' }
+        const d = event.data as Record<string, unknown>
+        const connId = Number(d.connector_id ?? 1)
+        live[cpId] = {
+          ...cur,
+          status: 'Charging',
+          connectors: { ...cur.connectors, [connId]: 'Charging' },
+        }
       } else if (event.type === 'transaction_stopped') {
-        live[cpId] = { ...cur, status: 'Available' }
+        const d = event.data as Record<string, unknown>
+        const connId = Number(d.connector_id ?? 1)
+        live[cpId] = {
+          ...cur,
+          status: 'Available',
+          connectors: { ...cur.connectors, [connId]: 'Available' },
+        }
       }
 
       return { liveState: live, events }
