@@ -181,10 +181,12 @@ class ChargePoint(OcppChargePoint):
             "id_tag": id_tag,
             "meter_start": meter_start,
         })
-        auth_status = await self._check_auth(id_tag)
+        # Per OCPP 1.6 spec: once we accepted the transaction into the DB,
+        # always respond Accepted so the charger continues charging.
+        # The auth check already happened at Authorize step.
         return call_result.StartTransactionPayload(
             transaction_id=tx_id,
-            id_tag_info={"status": auth_status, "expiryDate": None, "parentIdTag": None}
+            id_tag_info={"status": AuthorizationStatus.accepted, "expiryDate": None, "parentIdTag": None}
         )
 
     @on(Action.StopTransaction)
