@@ -2,7 +2,9 @@ import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { ArrowLeftRight, LayoutDashboard, Settings, ShieldCheck, Terminal, Zap, Wifi, Activity } from 'lucide-react'
 import { Sidebar } from './Sidebar'
+import { ThemeToggle } from './ThemeToggle'
 import { useChargerStore } from '../store/chargerStore'
+import { useTheme } from '../hooks/useTheme'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -24,6 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
   const liveState = useChargerStore((s) => s.liveState)
   const events = useChargerStore((s) => s.events)
+  const { mode, setMode } = useTheme()
 
   const chargers = Object.values(liveState)
   const online = chargers.filter((c) => c.isOnline).length
@@ -38,7 +41,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-h-screen min-w-0 flex-col">
         <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur-lg lg:hidden">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">OCPP Central</p>
               <p className="text-xs text-gray-500">{currentTitle}</p>
@@ -56,6 +60,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Activity className="h-3 w-3" />
                 {events.length}
               </span>
+            </div>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <ThemeToggle value={mode} onChange={setMode} compact />
             </div>
           </div>
         </header>
@@ -98,6 +106,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Zap className="h-3.5 w-3.5 text-blue-400" />
             {charging} a carregar
           </span>
+        </div>
+        <div className="mt-2">
+          <ThemeToggle value={mode} onChange={setMode} compact />
         </div>
       </nav>
     </div>
