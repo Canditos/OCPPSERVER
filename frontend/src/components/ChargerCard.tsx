@@ -4,6 +4,7 @@ import { Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock, Loader2, Ch
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
 import { ConnectorBadge } from './ConnectorBadge'
+import { BatteryIndicator } from './BatteryIndicator'
 import { api } from '../api'
 import type { Charger } from '../types'
 
@@ -65,6 +66,22 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         .map(([, m]) => Number(m.value ?? 0))
         .reduce((a, b) => a + b, 0)
     : null
+
+  // DC detection: SICHARGE D or any model/vendor containing "DC" or ending in "D"
+  const isDC = Boolean(
+    charger.model?.toUpperCase().includes('SICHARGE D') ||
+    charger.model?.toUpperCase().includes(' DC') ||
+    charger.model?.toUpperCase().endsWith('-D') ||
+    charger.vendor?.toUpperCase().includes('DC')
+  )
+
+  // SoC from live meters (reported by vehicle via OCPP MeterValues when DC charging)
+  const rawSoC = live?.meters
+    ? Object.entries(live.meters).find(([k]) => k.toLowerCase() === 'soc')?.[1]?.value ?? null
+    : null
+  const liveSoC: number | null = rawSoC !== null ? Math.min(100, Math.max(0, Number(rawSoC))) : null
+
+  const livePowerKw = livePower !== null && livePower > 0 ? livePower / 1000 : null
 
   const cardGlow = isSessionActive ? 'card-glow-blue' : isFaulted ? 'card-glow-red' : isOnline ? 'card-glow-emerald' : ''
   const lastSeen = safeFormatDistance(live?.lastSeen ?? charger.last_seen)
@@ -168,7 +185,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           </div>
 
           <div className="min-w-0">
-            <p className="text-base font-bold text-gray-100 leading-tight truncate">{charger.charge_point_id}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-base font-bold text-gray-100 leading-tight truncate">{charger.charge_point_id}</p>
+              {isDC && (
+                <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-purple-700 text-white tracking-widest shadow-sm shadow-violet-500/30">
+                  DC
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-400 mt-0.5 font-medium truncate">{charger.model ?? 'VersiCharge'} · {charger.vendor ?? 'Siemens'}</p>
           </div>
         </div>
@@ -201,37 +225,46 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         </div>
       </div>
 
-      {/* live power display when session active */}
+      {/* live session panel — DC gets battery indicator, AC gets power bars */}
       {isSessionActive && (
-        <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/60 to-slate-900/60 border border-blue-500/20 shadow-inner">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-2 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-blue-600 animate-pulse shrink-0" />
-              <div className="min-w-0">
-                <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
-                  {isPreparing ? 'Sessão em Preparação' : 'Potência de Carga'}
-                </p>
-                {livePower !== null && livePower > 0 ? (
-                  <LiveKw watts={livePower} />
-                ) : (
-                  <div className="flex items-center gap-1 text-blue-400 font-semibold text-sm">
-                    <Zap className="w-4 h-4 animate-bounce" />
-                    <span>{isPreparing ? 'A comunicar com veículo...' : 'Em carregamento ativo...'}</span>
-                  </div>
-                )}
+        isDC ? (
+          <BatteryIndicator
+            soc={liveSoC}
+            isCharging={!isPreparing}
+            powerKw={livePowerKw}
+            className="mb-4"
+          />
+        ) : (
+          <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/60 to-slate-900/60 border border-blue-500/20 shadow-inner">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-2 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-blue-600 animate-pulse shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
+                    {isPreparing ? 'Sessão em Preparação' : 'Potência de Carga'}
+                  </p>
+                  {livePower !== null && livePower > 0 ? (
+                    <LiveKw watts={livePower} />
+                  ) : (
+                    <div className="flex items-center gap-1 text-blue-400 font-semibold text-sm">
+                      <Zap className="w-4 h-4 animate-bounce" />
+                      <span>{isPreparing ? 'A comunicar com veículo...' : 'Em carregamento ativo...'}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-end gap-1 h-7 shrink-0">
+                {[4, 7, 10, 6, 8, 12].map((h, i) => (
+                  <div
+                    key={i}
+                    className="w-1 rounded-full bg-cyan-400/80 animate-pulse"
+                    style={{ height: `${h * 2}px`, animationDelay: `${i * 0.12}s` }}
+                  />
+                ))}
               </div>
             </div>
-            <div className="flex items-end gap-1 h-7 shrink-0">
-              {[4, 7, 10, 6, 8, 12].map((h, i) => (
-                <div
-                  key={i}
-                  className="w-1 rounded-full bg-cyan-400/80 animate-pulse"
-                  style={{ height: `${h * 2}px`, animationDelay: `${i * 0.12}s` }}
-                />
-              ))}
-            </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Clickable Connectors Selector */}
