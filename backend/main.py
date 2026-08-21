@@ -65,6 +65,8 @@ async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
 @app.on_event("startup")
 async def startup():
     await init_db()
+    from ocpp_server.charge_point import _init_tx_counter
+    await _init_tx_counter()
 
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):

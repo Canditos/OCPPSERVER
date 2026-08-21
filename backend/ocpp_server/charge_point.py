@@ -26,6 +26,17 @@ logger = logging.getLogger(__name__)
 _TX_COUNTER = 100000
 
 
+async def _init_tx_counter():
+    """Read the max transaction_id from the DB so restarts never collide."""
+    global _TX_COUNTER
+    from sqlalchemy import text
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(text("SELECT COALESCE(MAX(transaction_id), 100000) FROM transactions"))
+        max_id = result.scalar() or 100000
+        _TX_COUNTER = max(max_id, 100000)
+        logger.info(f"TX counter initialized to {_TX_COUNTER}")
+
+
 def _next_tx_id() -> int:
     global _TX_COUNTER
     _TX_COUNTER += 1
@@ -173,7 +184,7 @@ class ChargePoint(OcppChargePoint):
         auth_status = await self._check_auth(id_tag)
         return call_result.StartTransactionPayload(
             transaction_id=tx_id,
-            id_tag_info={"status": auth_status}
+            id_tag_info={"status": auth_status, "expiryDate": None, "parentIdTag": None}
         )
 
     @on(Action.StopTransaction)
