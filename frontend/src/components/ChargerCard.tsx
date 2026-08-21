@@ -136,8 +136,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     }
   }
 
+  const chargerFlags = [
+    isOnline ? 'online' : '',
+    isSessionActive ? 'charging' : '',
+    isFaulted ? 'faulted' : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <div className={`charger-card relative flex flex-col justify-between ${cardGlow}`}>
+    <div className={`charger-card relative flex flex-col justify-between ${cardGlow}`} data-charger-flags={chargerFlags}>
       {/* top stripe when active session */}
       {isSessionActive && (
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600 animate-shimmer bg-[length:200%_auto] rounded-t-2xl" />

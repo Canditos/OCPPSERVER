@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
   const liveState = useChargerStore((s) => s.liveState)
   const events = useChargerStore((s) => s.events)
-  const { mode, setMode } = useTheme()
+  const { mode, resolved, setMode } = useTheme()
 
   const chargers = Object.values(liveState)
   const online = chargers.filter((c) => c.isOnline).length
@@ -36,31 +36,43 @@ export function AppShell({ children }: { children: ReactNode }) {
     : TITLES[location.pathname] ?? 'Dashboard'
 
   return (
-    <div className="min-h-screen bg-grid">
-      <Sidebar />
+    <div className={`min-h-screen bg-grid ${resolved === 'dark' ? 'bg-slate-950 text-gray-100' : 'bg-slate-50 text-slate-900'}`}>
+      <Sidebar mode={mode} resolved={resolved} setMode={setMode} />
 
       <div className="flex min-h-screen min-w-0 flex-col">
-        <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur-lg lg:hidden">
+        <header className={`sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-lg lg:hidden ${
+          resolved === 'dark'
+            ? 'border-white/10 bg-slate-950/90'
+            : 'border-slate-200 bg-white/90'
+        }`}>
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-white">OCPP Central</p>
-              <p className="text-xs text-gray-500">{currentTitle}</p>
-            </div>
+              <div>
+                <p className={`text-sm font-semibold ${resolved === 'dark' ? 'text-white' : 'text-slate-900'}`}>OCPP Central</p>
+                <p className={`text-xs ${resolved === 'dark' ? 'text-gray-500' : 'text-slate-500'}`}>{currentTitle}</p>
+              </div>
 
-            <div className="flex items-center gap-2 text-[10px] font-medium">
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-emerald-400">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <div className="flex items-center gap-2 text-[10px] font-medium">
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 ${
+                  resolved === 'dark'
+                    ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                    : 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                }`}>
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  </span>
+                  Online
                 </span>
-                Online
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-gray-300">
-                <Activity className="h-3 w-3" />
-                {events.length}
-              </span>
-            </div>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 ${
+                  resolved === 'dark'
+                    ? 'border border-white/10 bg-white/5 text-gray-300'
+                    : 'border border-slate-200 bg-slate-100 text-slate-600'
+                }`}>
+                  <Activity className="h-3 w-3" />
+                  {events.length}
+                </span>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-3">
               <ThemeToggle value={mode} onChange={setMode} compact />
@@ -74,7 +86,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-slate-950/95 px-2 pt-2 backdrop-blur-lg lg:hidden"
+        className={`fixed inset-x-0 bottom-0 z-30 border-t px-2 pt-2 backdrop-blur-lg lg:hidden ${
+          resolved === 'dark'
+            ? 'border-white/10 bg-slate-950/95'
+            : 'border-slate-200 bg-white/95'
+        }`}
         style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
       >
         <div className="grid grid-cols-5 gap-1">
@@ -86,8 +102,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-medium transition-colors ${
                   isActive
-                    ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
-                    : 'text-gray-500 hover:text-gray-300'
+                    ? resolved === 'dark'
+                      ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                      : 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : resolved === 'dark'
+                      ? 'text-gray-500 hover:text-gray-300'
+                      : 'text-slate-500 hover:text-slate-700'
                 }`
               }
             >
@@ -97,7 +117,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </div>
 
-        <div className="mt-2 flex items-center justify-between rounded-2xl border border-white/5 bg-white/3 px-3 py-2 text-[10px] text-gray-400">
+        <div className={`mt-2 flex items-center justify-between rounded-2xl px-3 py-2 text-[10px] ${
+          resolved === 'dark'
+            ? 'border border-white/5 bg-white/3 text-gray-400'
+            : 'border border-slate-200 bg-slate-50 text-slate-500'
+        }`}>
           <span className="inline-flex items-center gap-1.5">
             <Wifi className="h-3.5 w-3.5 text-emerald-400" />
             {online} online

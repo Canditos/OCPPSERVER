@@ -17,12 +17,25 @@ body {
   min-height: 100vh;
 }
 
+html:not(.dark) body {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(ellipse 80% 40% at 20% -10%, rgba(59,130,246,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 30% at 80% 110%, rgba(16,185,129,0.05) 0%, transparent 50%);
+}
+
 /* ── grid bg ─────────────────────────────────────────────── */
 .bg-grid {
   background-image:
     linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
   background-size: 48px 48px;
+}
+
+html:not(.dark) .bg-grid {
+  background-image:
+    linear-gradient(rgba(15,23,42,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,23,42,0.045) 1px, transparent 1px);
 }
 
 /* ── glass card ──────────────────────────────────────────── */
@@ -32,6 +45,14 @@ body {
   border: 1px solid rgba(255,255,255,0.07);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+html:not(.dark) .card,
+html:not(.dark) .kpi-card,
+html:not(.dark) .charger-card {
+  background: rgba(255,255,255,0.92);
+  border-color: rgba(148,163,184,0.18);
+  box-shadow: 0 10px 24px rgba(15,23,42,0.05);
 }
 
 .card-glow-blue {
@@ -122,6 +143,29 @@ body {
 .select option { background: #111827; }
 .label { @apply block text-xs font-medium text-gray-500 mb-1.5; }
 
+html:not(.dark) .btn-secondary,
+html:not(.dark) .btn-ghost {
+  color: #334155;
+  background: rgba(148,163,184,0.08);
+  border-color: rgba(148,163,184,0.18);
+}
+
+html:not(.dark) .btn-secondary:hover:not(:disabled),
+html:not(.dark) .btn-ghost:hover:not(:disabled) {
+  background: rgba(148,163,184,0.14);
+  border-color: rgba(148,163,184,0.28);
+}
+
+html:not(.dark) .input,
+html:not(.dark) .select {
+  color: #0f172a;
+  background: rgba(255,255,255,0.96);
+  border-color: rgba(148,163,184,0.24);
+}
+
+html:not(.dark) .select option { background: #ffffff; }
+html:not(.dark) .label { color: #64748b; }
+
 /* ── kpi card ────────────────────────────────────────────── */
 .kpi-card {
   @apply card flex flex-col gap-3 transition-all duration-300;
@@ -156,6 +200,12 @@ body {
   color: #34d399;
 }
 
+html:not(.dark) .live-pill {
+  background: rgba(16,185,129,0.1);
+  border-color: rgba(16,185,129,0.2);
+  color: #047857;
+}
+
 /* ── connector ring ──────────────────────────────────────── */
 .connector-ring {
   @apply relative flex items-center justify-center;
@@ -164,4 +214,25 @@ body {
   content: '';
   @apply absolute rounded-full;
   animation: ring-ping 1.4s cubic-bezier(0,0,0.2,1) infinite;
+}
+
+html:not(.dark) .text-gray-100 { color: #0f172a !important; }
+html:not(.dark) .text-gray-200 { color: #111827 !important; }
+html:not(.dark) .text-gray-300 { color: #334155 !important; }
+html:not(.dark) .text-gray-400 { color: #475569 !important; }
+html:not(.dark) .text-gray-500 { color: #64748b !important; }
+html:not(.dark) .text-gray-600 { color: #94a3b8 !important; }
+html:not(.dark) .text-gray-700 { color: #cbd5e1 !important; }
+
+html:not(.dark) .border-white\/10,
+html:not(.dark) .border-white\/5 {
+  border-color: rgba(148,163,184,0.18) !important;
+}
+
+html:not(.dark) .bg-slate-950\/90,
+html:not(.dark) .bg-slate-950\/95,
+html:not(.dark) .bg-gray-950\/80,
+html:not(.dark) .bg-gray-950\/90,
+html:not(.dark) .bg-gray-900\/80 {
+  background-color: rgba(255,255,255,0.92) !important;
 }
