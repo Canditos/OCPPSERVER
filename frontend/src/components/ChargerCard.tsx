@@ -39,7 +39,12 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
   // Determine connectors array (NEVER EMPTY - defaults to connector #1 if DB/live empty)
   const rawConnectors = (live?.connectors && Object.keys(live.connectors).length > 0)
-    ? Object.entries(live.connectors).map(([id, st]) => ({ connector_id: Number(id), status: typeof st === 'string' ? st : (st as any).status }))
+    ? Object.entries(live.connectors).map(([id, c]) => ({
+        connector_id: Number(id),
+        status: c.status,
+        error_code: c.errorCode ?? null,
+        updated_at: null,
+      }))
     : (charger.connectors && charger.connectors.length > 0
         ? charger.connectors
         : [{ connector_id: 1, status: mainStatus }])
@@ -55,10 +60,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const isFaulted = mainStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted')
 
   const livePower = live?.meters
-    ? Object.values(live.meters)
-        .flatMap((m) => Object.entries(m))
-        .filter(([k]) => k.toLowerCase().includes('power') || k.toLowerCase().includes('active'))
-        .map(([, v]) => Number(v.value))
+    ? Object.entries(live.meters)
+        .filter(([measurand]) => measurand.toLowerCase().includes('power') || measurand.toLowerCase().includes('active.power'))
+        .map(([, m]) => Number(m.value ?? 0))
         .reduce((a, b) => a + b, 0)
     : null
 

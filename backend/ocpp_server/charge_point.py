@@ -163,6 +163,28 @@ class ChargePoint(OcppChargePoint):
                 tx.stop_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).replace(tzinfo=None)
                 tx.stop_reason = reason
                 tx.status = "Completed"
+                # Mark the connector as Finishing — StatusNotification will follow with Available
+                conn_result = await db.execute(
+                    select(Connector).join(Charger, Connector.charger_id == Charger.id)
+                    .where(Charger.charge_point_id == self.id, Connector.connector_id == tx.connector_id)
+                )
+                conn = conn_result.scalar_one_or_none()
+                if conn:
+                    conn.status = "Finishing"
+                    conn.updated_at = _now()
+                # Update charger status: check if any other connector is still Charging
+                charger_result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
+                charger = charger_result.scalar_one_or_none()
+                if charger:
+                    other_conns = (await db.execute(
+                        select(Connector).where(
+                            Connector.charger_id == charger.id,
+                            Connector.connector_id != 0,
+                            Connector.connector_id != tx.connector_id,
+                        )
+                    )).scalars().all()
+                    if not any(c.status == "Charging" for c in other_conns):
+                        charger.status = "Finishing"
                 await db.commit()
 
         await event_bus.publish("transaction_stopped", {
@@ -247,6 +269,24 @@ class ChargePoint(OcppChargePoint):
                     conn.status = status
                     conn.error_code = error_code
                     conn.updated_at = _now()
+                    await db.flush()
+
+                    # Derive charger-level status from all connector statuses
+                    all_conns = (await db.execute(
+                        select(Connector).where(Connector.charger_id == charger.id, Connector.connector_id != 0)
+                    )).scalars().all()
+                    connector_statuses = [c.status for c in all_conns]
+                    if any(s == "Charging" for s in connector_statuses):
+                        charger.status = "Charging"
+                    elif any(s == "Faulted" for s in connector_statuses):
+                        charger.status = "Faulted"
+                    elif any(s == "Preparing" for s in connector_statuses):
+                        charger.status = "Preparing"
+                    elif any(s == "Finishing" for s in connector_statuses):
+                        charger.status = "Finishing"
+                    elif connector_statuses and all(s == "Available" for s in connector_statuses):
+                        charger.status = "Available"
+
                 charger.last_seen = _now()
                 await db.commit()
 

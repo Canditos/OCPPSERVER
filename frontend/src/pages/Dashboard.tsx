@@ -102,13 +102,11 @@ export function Dashboard() {
   const charging = chargers.filter(isChargerCharging).length
   const faulted  = chargers.filter(isChargerFaulted).length
 
-  const liveEnergyWh = Object.values(liveState)
-    .flatMap((s) => Object.values(s.meters ?? {}))
-    .flatMap((m) => Object.entries(m))
-    .filter(([k]) => k.toLowerCase().includes('energy'))
-    .reduce((acc, [, v]) => acc + Number(v.value ?? 0), 0)
-
-  const totalKwh = (liveEnergyWh / 1000).toFixed(1)
+  const totalEnergyWh = Object.values(liveState)
+    .flatMap((s) => Object.entries(s.meters ?? {}))
+    .filter(([measurand]) => measurand.toLowerCase().includes('energy'))
+    .reduce((acc, [, m]) => acc + Number(m.value ?? 0), 0)
+  const totalKwh = (totalEnergyWh / 1000).toFixed(1)
 
   return (
     <div className="space-y-8 animate-fade-up">
