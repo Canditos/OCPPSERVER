@@ -28,7 +28,9 @@ class SchedulePeriod(BaseModel):
 class SetProfileRequest(BaseModel):
     charge_point_id: str
     connector_id: int = Field(0, description="0 = all connectors")
-    limit_amps: float = Field(..., ge=0, le=63, description="Max charge current in Amps")
+    limit_amps: float | None = Field(None, ge=0, le=1000, description="Max charge current in Amps (AC)")
+    limit_watts: float | None = Field(None, ge=0, description="Max charge power in Watts (DC or AC)")
+    rate_unit: str = Field("A", description="A (Amps) or W (Watts)")
     purpose: str = Field("TxDefaultProfile",
                          description="TxDefaultProfile | ChargePointMaxProfile | TxProfile")
     stack_level: int = Field(0, ge=0, le=10)
@@ -49,15 +51,22 @@ class ClearProfileRequest(BaseModel):
 
 def _build_ocpp_profile(req: SetProfileRequest, profile_id: int) -> dict:
     """Build the csChargingProfiles dict for OCPP SetChargingProfile."""
+    rate_unit = req.rate_unit if req.rate_unit in ("A", "W") else "A"
+
+    # Determine the numeric limit for this unit
+    if rate_unit == "W":
+        base_limit = req.limit_watts if req.limit_watts is not None else (req.limit_amps or 0) * 230
+    else:
+        base_limit = req.limit_amps if req.limit_amps is not None else 0
 
     if req.schedule_periods:
         periods = [{"startPeriod": p.start_period, "limit": p.limit}
                    for p in req.schedule_periods]
     else:
-        periods = [{"startPeriod": 0, "limit": req.limit_amps}]
+        periods = [{"startPeriod": 0, "limit": base_limit}]
 
     schedule: dict = {
-        "chargingRateUnit": "A",
+        "chargingRateUnit": rate_unit,
         "chargingSchedulePeriod": periods,
     }
     if req.duration is not None:
@@ -148,13 +157,18 @@ async def set_profile(req: SetProfileRequest):
         for p in old.scalars().all():
             p.active = False
 
+        # Store a human-readable limit: for W unit convert to "amps equivalent" just for display
+        display_amps = (
+            int(req.limit_amps) if req.limit_amps is not None
+            else int((req.limit_watts or 0) / 230)
+        )
         profile = ChargingProfile(
             charge_point_id=req.charge_point_id,
             connector_id=req.connector_id,
             profile_id=profile_id,
             stack_level=req.stack_level,
             purpose=req.purpose,
-            limit_amps=int(req.limit_amps),
+            limit_amps=display_amps,
             duration=req.duration,
             label=req.label,
             schedule_json=json.dumps([p.dict() for p in req.schedule_periods])

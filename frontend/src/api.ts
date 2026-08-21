@@ -70,7 +70,9 @@ export const api = {
   setChargingProfile: (data: {
     charge_point_id: string
     connector_id?: number
-    limit_amps: number
+    limit_amps?: number
+    limit_watts?: number
+    rate_unit?: 'A' | 'W'
     purpose?: string
     stack_level?: number
     label: string
