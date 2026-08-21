@@ -16,6 +16,7 @@ from api.commands import router as commands_router
 from api.configuration import router as configuration_router
 from api.ws_events import router as ws_router
 from api.auth_tokens import router as auth_tokens_router
+from api.smart_charging import router as smart_charging_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,7 @@ app.include_router(commands_router)
 app.include_router(configuration_router)
 app.include_router(ws_router)
 app.include_router(auth_tokens_router)
+app.include_router(smart_charging_router)
 
 
 @app.get("/health")

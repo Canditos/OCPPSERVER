@@ -6,6 +6,7 @@ import { Transactions } from './pages/Transactions'
 import { Commands } from './pages/Commands'
 import { Configuration } from './pages/Configuration'
 import Authentication from './pages/Authentication'
+import SmartCharging from './pages/SmartCharging'
 import { useOcppEvents } from './hooks/useOcppEvents'
 
 function AppInner() {
@@ -18,6 +19,7 @@ function AppInner() {
       <Route path="/commands" element={<AppShell><Commands /></AppShell>} />
       <Route path="/configuration" element={<AppShell><Configuration /></AppShell>} />
       <Route path="/authentication" element={<AppShell><Authentication /></AppShell>} />
+      <Route path="/smart-charging" element={<AppShell><SmartCharging /></AppShell>} />
     </Routes>
   )
 }

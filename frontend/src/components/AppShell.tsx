@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ArrowLeftRight, LayoutDashboard, Settings, ShieldCheck, Terminal, Zap, Wifi, Activity } from 'lucide-react'
+import { ArrowLeftRight, LayoutDashboard, Settings, ShieldCheck, Terminal, Zap, Wifi, Activity, Gauge } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { ThemeToggle } from './ThemeToggle'
 import { useChargerStore } from '../store/chargerStore'
@@ -10,14 +10,15 @@ const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
   { to: '/commands', label: 'Comandos', icon: Terminal },
-  { to: '/authentication', label: 'Autenticação', icon: ShieldCheck },
-  { to: '/configuration', label: 'Configuração', icon: Settings },
+  { to: '/smart-charging', label: 'Smart', icon: Gauge },
+  { to: '/authentication', label: 'Auth', icon: ShieldCheck },
 ]
 
 const TITLES: Record<string, string> = {
   '/': 'Resumo',
   '/transactions': 'Transações',
   '/commands': 'Comandos',
+  '/smart-charging': 'Smart Charging',
   '/authentication': 'Autenticação',
   '/configuration': 'Configuração',
 }

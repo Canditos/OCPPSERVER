@@ -63,4 +63,24 @@ export const api = {
     http.post(`/auth-tokens/sync/${cpId}`).then(r => r.data),
   setAutocharge: (cpId: string, enabled: boolean) =>
     http.patch(`/chargers/${cpId}/autocharge`, { enabled }).then(r => r.data),
+
+  // Smart Charging
+  getChargingProfiles: (cpId?: string) =>
+    http.get('/smart-charging', { params: cpId ? { charge_point_id: cpId } : {} }).then(r => r.data),
+  setChargingProfile: (data: {
+    charge_point_id: string
+    connector_id?: number
+    limit_amps: number
+    purpose?: string
+    stack_level?: number
+    label: string
+    schedule_periods?: { start_period: number; limit: number }[]
+    duration?: number | null
+  }) => http.post('/smart-charging/set', data).then(r => r.data),
+  clearChargingProfile: (data: {
+    charge_point_id: string
+    connector_id?: number | null
+    purpose?: string | null
+    stack_level?: number | null
+  }) => http.delete('/smart-charging/clear', { data }).then(r => r.data),
 }

@@ -499,9 +499,30 @@ class ChargePoint(OcppChargePoint):
         await self._log_message("OUT", "ReserveNow", {"connector_id": connector_id, "id_tag": id_tag})
         return resp
 
-    async def cancel_reservation(self, reservation_id: int):
-        req = call.CancelReservationPayload(reservation_id=reservation_id)
+    async def set_charging_profile(self, connector_id: int, charging_profile: dict):
+        req = call.SetChargingProfilePayload(
+            connector_id=connector_id,
+            cs_charging_profiles=charging_profile,
+        )
         resp = await self.call(req)
-        await self._log_message("OUT", "CancelReservation", {"reservation_id": reservation_id})
+        await self._log_message("OUT", "SetChargingProfile", {
+            "connector_id": connector_id, "profile": charging_profile
+        })
+        return resp
+
+    async def clear_charging_profile(self, profile_id: int | None = None,
+                                     connector_id: int | None = None,
+                                     charging_profile_purpose: str | None = None,
+                                     stack_level: int | None = None):
+        req = call.ClearChargingProfilePayload(
+            id=profile_id,
+            connector_id=connector_id,
+            charging_profile_purpose=charging_profile_purpose,
+            stack_level=stack_level,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "ClearChargingProfile", {
+            "profile_id": profile_id, "connector_id": connector_id
+        })
         return resp
 

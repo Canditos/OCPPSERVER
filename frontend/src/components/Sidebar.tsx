@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Zap, LayoutDashboard, ArrowLeftRight, Terminal, Settings, Activity, ShieldCheck } from 'lucide-react'
+import { Zap, LayoutDashboard, ArrowLeftRight, Terminal, Settings, Activity, ShieldCheck, Gauge } from 'lucide-react'
 import { useChargerStore } from '../store/chargerStore'
 import { ThemeToggle } from './ThemeToggle'
 import type { ThemeMode } from '../hooks/useTheme'
@@ -8,6 +8,7 @@ const NAV = [
   { to: '/',               icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/transactions',   icon: ArrowLeftRight,  label: 'Transações' },
   { to: '/commands',       icon: Terminal,        label: 'Comandos' },
+  { to: '/smart-charging', icon: Gauge,           label: 'Smart Charging' },
   { to: '/configuration',  icon: Settings,        label: 'Configuração' },
   { to: '/authentication', icon: ShieldCheck,     label: 'Autenticação' },
 ]
