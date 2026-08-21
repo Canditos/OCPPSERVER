@@ -19,6 +19,7 @@ interface CmdCardProps {
   disabled?: boolean
   result?: Result
   onClear?: () => void
+  anchorId?: string
   children: React.ReactNode
 }
 
@@ -48,10 +49,13 @@ function ResultBadge({ result }: { result: Result | undefined }) {
   )
 }
 
-function CmdCard({ icon, title, description, color, disabled, result, children }: CmdCardProps) {
+function CmdCard({ icon, title, description, color, disabled, result, children, anchorId }: CmdCardProps) {
   const c = C[color]
   return (
-    <div className={`card border transition-all duration-300 ${disabled ? 'opacity-40 pointer-events-none' : ''} ${result?.ok ? 'card-glow-emerald' : result && !result.ok ? 'card-glow-red' : c.ring}`}>
+    <div
+      id={anchorId}
+      className={`card border transition-all duration-300 ${disabled ? 'opacity-40 pointer-events-none' : ''} ${result?.ok ? 'card-glow-emerald' : result && !result.ok ? 'card-glow-red' : c.ring}`}
+    >
       <div className="flex items-start gap-3 mb-4">
         <div className={`p-2.5 rounded-xl shrink-0 ${c.icon}`}>{icon}</div>
         <div>
@@ -87,6 +91,16 @@ function useCmd(fn: () => Promise<{ status: string }>) {
   }
 
   return { loading, result, run, clear: () => setResult(null) }
+}
+
+function scrollToAnchor(anchorId: string) {
+  const el = document.getElementById(anchorId)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  el.classList.add('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
+  window.setTimeout(() => {
+    el.classList.remove('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
+  }, 1400)
 }
 
 // ── charger selector ────────────────────────────────────────
@@ -229,6 +243,32 @@ export function Commands() {
         )}
       </div>
 
+      <div className="card border border-white/8">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-500 mr-1">Atalhos:</span>
+          {[
+            ['start-card', 'Remote Start'],
+            ['stop-card', 'Remote Stop'],
+            ['reset-card', 'Reset'],
+            ['unlock-card', 'Unlock'],
+            ['availability-card', 'Availability'],
+            ['trigger-card', 'Trigger'],
+            ['cache-card', 'Clear Cache'],
+            ['config-card', 'Config'],
+            ['config-get-card', 'Get Config'],
+          ].map(([anchorId, label]) => (
+            <button
+              key={anchorId}
+              type="button"
+              onClick={() => scrollToAnchor(anchorId)}
+              className="btn-secondary px-3 py-1.5 text-xs rounded-full"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* charger selector */}
       <ChargerSelector chargers={chargers} value={cpId} onChange={setCpId} />
 
@@ -313,7 +353,7 @@ export function Commands() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* remote start */}
-          <CmdCard icon={<Zap className="w-5 h-5" fill="currentColor" />} title="Remote Start" description="Inicia uma sessão de carregamento remotamente" color="blue" disabled={noTarget} result={start.result}>
+          <CmdCard anchorId="start-card" icon={<Zap className="w-5 h-5" fill="currentColor" />} title="Remote Start" description="Inicia uma sessão de carregamento remotamente" color="blue" disabled={noTarget} result={start.result}>
             <div>
               <label className="label">ID Tag</label>
               <input className="input" value={idTag} onChange={(e) => setIdTag(e.target.value)} placeholder="ex: VERSICHARGE_TAG" />
@@ -326,7 +366,7 @@ export function Commands() {
           </CmdCard>
 
           {/* remote stop */}
-          <CmdCard icon={<Square className="w-5 h-5" />} title="Remote Stop" description="Para uma sessão de carregamento activa" color="red" disabled={noTarget} result={stop.result}>
+          <CmdCard anchorId="stop-card" icon={<Square className="w-5 h-5" />} title="Remote Stop" description="Para uma sessão de carregamento activa" color="red" disabled={noTarget} result={stop.result}>
             <div>
               <label className="label">Transação activa</label>
               {activeTxs.length > 0 ? (
@@ -352,7 +392,7 @@ export function Commands() {
           </CmdCard>
 
           {/* reset */}
-          <CmdCard icon={<RotateCcw className="w-5 h-5" />} title="Reset" description="Reinicia o charger (Soft não interrompe sessões activas)" color="amber" disabled={noTarget} result={reset.result}>
+          <CmdCard anchorId="reset-card" icon={<RotateCcw className="w-5 h-5" />} title="Reset" description="Reinicia o charger (Soft não interrompe sessões activas)" color="amber" disabled={noTarget} result={reset.result}>
             <div>
               <label className="label">Tipo</label>
               <div className="grid grid-cols-2 gap-2">
@@ -377,7 +417,7 @@ export function Commands() {
           </CmdCard>
 
           {/* unlock connector */}
-          <CmdCard icon={<Unlock className="w-5 h-5" />} title="Unlock Connector" description="Desbloqueia mecanicamente o conector do veículo" color="violet" disabled={noTarget} result={unlock.result}>
+          <CmdCard anchorId="unlock-card" icon={<Unlock className="w-5 h-5" />} title="Unlock Connector" description="Desbloqueia mecanicamente o conector do veículo" color="violet" disabled={noTarget} result={unlock.result}>
             <div>
               <label className="label">Conector ID</label>
               <input className="input" type="number" min={1} value={unlockConn} onChange={(e) => setUnlockConn(e.target.value)} />
@@ -386,7 +426,7 @@ export function Commands() {
           </CmdCard>
 
           {/* change availability */}
-          <CmdCard icon={<ToggleLeft className="w-5 h-5" />} title="Change Availability" description="Coloca um conector Operative ou Inoperative" color="emerald" disabled={noTarget} result={avail.result}>
+          <CmdCard anchorId="availability-card" icon={<ToggleLeft className="w-5 h-5" />} title="Change Availability" description="Coloca um conector Operative ou Inoperative" color="emerald" disabled={noTarget} result={avail.result}>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Conector (0 = todos)</label>
@@ -415,7 +455,7 @@ export function Commands() {
           </CmdCard>
 
           {/* trigger message */}
-          <CmdCard icon={<Bell className="w-5 h-5" />} title="Trigger Message" description="Força o charger a enviar uma mensagem específica" color="violet" disabled={noTarget} result={trig.result}>
+          <CmdCard anchorId="trigger-card" icon={<Bell className="w-5 h-5" />} title="Trigger Message" description="Força o charger a enviar uma mensagem específica" color="violet" disabled={noTarget} result={trig.result}>
             <div>
               <label className="label">Mensagem</label>
               <div className="relative">
@@ -431,7 +471,7 @@ export function Commands() {
           </CmdCard>
 
           {/* clear cache */}
-          <CmdCard icon={<Trash2 className="w-5 h-5" />} title="Clear Cache" description="Limpa a cache de autorização local do charger" color="red" disabled={noTarget} result={cache.result}>
+          <CmdCard anchorId="cache-card" icon={<Trash2 className="w-5 h-5" />} title="Clear Cache" description="Limpa a cache de autorização local do charger" color="red" disabled={noTarget} result={cache.result}>
             <p className="text-xs text-gray-600 bg-red-500/6 border border-red-500/15 rounded-xl p-3">
               ⚠️ O charger vai apagar todos os idTags em cache. Sessões activas não são interrompidas.
             </p>
@@ -439,7 +479,7 @@ export function Commands() {
           </CmdCard>
 
           {/* change configuration */}
-          <CmdCard icon={<Settings className="w-5 h-5" />} title="Change Configuration" description="Altera um parâmetro de configuração OCPP" color="gray" disabled={noTarget} result={cfg.result}>
+          <CmdCard anchorId="config-card" icon={<Settings className="w-5 h-5" />} title="Change Configuration" description="Altera um parâmetro de configuração OCPP" color="gray" disabled={noTarget} result={cfg.result}>
             <div>
               <label className="label">Chave</label>
               <input className="input" value={cfgKey} onChange={(e) => setCfgKey(e.target.value)} placeholder="ex: HeartbeatInterval" />
@@ -452,7 +492,7 @@ export function Commands() {
           </CmdCard>
 
           {/* get configuration */}
-          <CmdCard icon={<FileSearch className="w-5 h-5" />} title="Get Configuration" description="Lê e guarda toda a configuração na base de dados" color="gray" disabled={noTarget} result={getcfg.result}>
+          <CmdCard anchorId="config-get-card" icon={<FileSearch className="w-5 h-5" />} title="Get Configuration" description="Lê e guarda toda a configuração na base de dados" color="gray" disabled={noTarget} result={getcfg.result}>
             <p className="text-xs text-gray-600 bg-gray-700/20 border border-white/6 rounded-xl p-3">
               Faz GetConfiguration ao charger e actualiza a página de Configuração com os valores reais.
             </p>
