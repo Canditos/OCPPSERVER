@@ -13,11 +13,19 @@ import { api } from '../api'
 import type { Charger } from '../types'
 
 function LiveKw({ watts }: { watts: number }) {
-  const kw = (watts / 1000).toFixed(1)
+  if (watts >= 1000) {
+    const kw = (watts / 1000).toFixed(1)
+    return (
+      <div className="flex items-baseline gap-1">
+        <span className="text-2xl font-bold text-gradient-blue">{kw}</span>
+        <span className="text-xs text-gray-400 font-medium">kW</span>
+      </div>
+    )
+  }
   return (
     <div className="flex items-baseline gap-1">
-      <span className="text-2xl font-bold text-gradient-blue">{kw}</span>
-      <span className="text-xs text-gray-400 font-medium">kW</span>
+      <span className="text-2xl font-bold text-gradient-blue">{Math.round(watts)}</span>
+      <span className="text-xs text-gray-400 font-medium">W</span>
     </div>
   )
 }
@@ -304,15 +312,13 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             <span>
               {!isOnline
                 ? 'Offline'
-                : computedStatus === 'Available'
-                ? 'Disponível'
-                : computedStatus === 'Charging'
+                : isSessionActive
                 ? 'A Carregar'
-                : computedStatus === 'Preparing'
+                : isPreparing
                 ? 'A Preparar'
-                : computedStatus === 'Faulted'
+                : isFaulted
                 ? 'Avaria'
-                : computedStatus}
+                : 'Disponível'}
             </span>
           </span>
 
