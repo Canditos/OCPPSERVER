@@ -102,8 +102,38 @@ export function SmartCharging() {
     { startHHMM: '07:00', limit: 10, phases: 3 },
   ])
 
-  // Composite schedule query results
-  const [compositeData, setCompositeData] = useState<any | null>(null)
+  // Find currently deployed active profile
+  const activeProfile = profiles.find((p) => p.is_deployed)
+
+  // Calculate current active period limit in real-time
+  const getCurrentPeriodInfo = (periods: Array<{ start_period: number; limit: number; number_phases?: number; label?: string }>, rateUnit: string = 'A') => {
+    if (!periods || periods.length === 0) return null
+    const now = new Date()
+    const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+    const sorted = [...periods].sort((a, b) => a.start_period - b.start_period)
+    let active = sorted[0]
+    let next = sorted.length > 1 ? sorted[1] : null
+
+    for (let i = 0; i < sorted.length; i++) {
+      if (currentSeconds >= sorted[i].start_period) {
+        active = sorted[i]
+        next = sorted[(i + 1) % sorted.length]
+      }
+    }
+
+    const formattedLimit = rateUnit === 'W'
+      ? (active.limit >= 1000 ? `${(active.limit / 1000).toLocaleString('pt-PT')} kW` : `${active.limit} W`)
+      : `${active.limit} A`
+
+    return {
+      active,
+      next,
+      formattedLimit,
+      currentTimeStr: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+    }
+  }
+
+  const activePeriodInfo = activeProfile ? getCurrentPeriodInfo(activeProfile.periods, activeProfile.charging_rate_unit) : null
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setFeedback({ type, message })
@@ -297,6 +327,129 @@ export function SmartCharging() {
             <AlertTriangle className="w-5 h-5 shrink-0 text-red-400" />
           )}
           <span>{feedback.message}</span>
+        </div>
+      )}
+
+      {/* ── ACTIVE DEPLOYED PROFILE LIVE STATUS HERO BANNER ─────────────────── */}
+      {activeProfile && (
+        <div className="card p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-gray-900/80 to-blue-950/40 border border-emerald-500/30 shadow-xl space-y-4 animate-fade-up">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center justify-center p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <Zap className="w-6 h-6 animate-pulse" fill="currentColor" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-gray-100">{activeProfile.name}</h3>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Ativo e em Vigor no Posto
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-lg border font-bold ${
+                    activeProfile.charging_rate_unit === 'W'
+                      ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  }`}>
+                    {activeProfile.charging_rate_unit === 'W' ? 'DC FAST (Watts / kW)' : 'AC (Amperes)'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  ID #{activeProfile.profile_id} · Finalidade: <span className="text-gray-200 font-mono">{activeProfile.purpose}</span> · {activeProfile.kind} {activeProfile.recurrency_kind ? `(${activeProfile.recurrency_kind})` : ''} · {activeProfile.connector_id === 0 ? 'Todas as Tomadas (Limite Geral)' : `Tomada #${activeProfile.connector_id}`}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClearAllProfiles}
+              disabled={!isOnline || loadingAction !== null}
+              className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-2 px-3.5 rounded-xl flex items-center gap-1.5 self-start sm:self-auto shrink-0 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Desativar / Limpar Perfil</span>
+            </button>
+          </div>
+
+          {/* Real-time active window & limit metric */}
+          {activePeriodInfo && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
+                <span className="text-[11px] text-gray-400 font-medium">⚡ Limite em Vigor Agora ({activePeriodInfo.currentTimeStr})</span>
+                <p className="text-xl font-bold text-emerald-400 font-mono">
+                  {activePeriodInfo.formattedLimit}
+                </p>
+                <span className="text-[10px] text-gray-500 block truncate">
+                  {activePeriodInfo.active?.label || `Iniciado às ${secondsToHHMM(activePeriodInfo.active?.start_period || 0)}`}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
+                <span className="text-[11px] text-gray-400 font-medium">🕒 Próxima Janela de Modulação</span>
+                <p className="text-base font-bold text-blue-300 font-mono">
+                  {activePeriodInfo.next ? `Às ${secondsToHHMM(activePeriodInfo.next.start_period)}` : 'Ciclo Contínuo'}
+                </p>
+                <span className="text-[10px] text-gray-500 block truncate">
+                  {activePeriodInfo.next
+                    ? `Passará para ${activeProfile.charging_rate_unit === 'W' && activePeriodInfo.next.limit >= 1000 ? `${(activePeriodInfo.next.limit / 1000).toLocaleString('pt-PT')} kW` : `${activePeriodInfo.next.limit} ${activeProfile.charging_rate_unit}`}`
+                    : 'Sem alterações agendadas'}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
+                <span className="text-[11px] text-gray-400 font-medium">📊 Total de Janelas Programadas</span>
+                <p className="text-base font-bold text-gray-200 font-mono">
+                  {activeProfile.periods.length} {activeProfile.periods.length === 1 ? 'Janela' : 'Janelas Horárias'}
+                </p>
+                <span className="text-[10px] text-gray-500 block">
+                  Duração: {activeProfile.duration ? `${activeProfile.duration / 3600}h (${activeProfile.recurrency_kind || 'Diário'})` : '24h'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* 24-Hour Visual Schedule Bar with current hour marker */}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-[11px] text-gray-400">
+              <span className="flex items-center gap-1 font-medium">
+                <Clock className="w-3.5 h-3.5 text-emerald-400" /> Distribuição Horária do Perfil Ativo (24 Horas):
+              </span>
+              <span className="text-xs font-mono text-emerald-300 font-bold">
+                Hora Atual: {activePeriodInfo?.currentTimeStr}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+              {activeProfile.periods.map((p, idx) => {
+                const isActiveNow = activePeriodInfo?.active?.start_period === p.start_period
+                const formattedLimit = activeProfile.charging_rate_unit === 'W'
+                  ? (p.limit >= 1000 ? `${(p.limit / 1000).toLocaleString('pt-PT')} kW` : `${p.limit} W`)
+                  : `${p.limit} A`
+
+                return (
+                  <div
+                    key={idx}
+                    className={`p-2.5 rounded-xl border text-xs font-mono transition-all ${
+                      isActiveNow
+                        ? 'bg-emerald-500/20 border-emerald-500/50 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-400/50'
+                        : 'bg-white/3 border-white/5 opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300 font-bold">
+                        {secondsToHHMM(p.start_period)}
+                      </span>
+                      <span className={`font-bold text-sm ${isActiveNow ? 'text-emerald-300' : 'text-gray-300'}`}>
+                        {formattedLimit}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 truncate mt-1">
+                      {p.label || (isActiveNow ? '⚡ Janela Ativa Agora' : 'Programada')}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -746,48 +899,116 @@ export function SmartCharging() {
               Nenhum perfil gravado para este posto. Aplica um dos modelos acima.
             </div>
           ) : (
-            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
               {profiles.map((prof) => (
                 <div
                   key={prof.id}
-                  className="p-3.5 rounded-xl bg-white/3 border border-white/6 flex items-center justify-between gap-3 hover:border-white/15 transition-all"
+                  className={`p-4 rounded-xl border transition-all ${
+                    prof.is_deployed
+                      ? 'bg-emerald-950/20 border-emerald-500/30 shadow-md shadow-emerald-950/40'
+                      : 'bg-white/3 border-white/6 hover:border-white/15'
+                  }`}
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-gray-200">{prof.name}</span>
-                      {prof.is_deployed && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                          Ativo no Posto
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-gray-100">{prof.name}</span>
+                        {prof.is_deployed && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                            Ativo no Posto
+                          </span>
+                        )}
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded border font-semibold ${
+                          prof.charging_rate_unit === 'W'
+                            ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                        }`}>
+                          {prof.charging_rate_unit === 'W' ? 'DC (kW/W)' : 'AC (A)'}
                         </span>
+                      </div>
+
+                      <p className="text-[11px] text-gray-400 font-mono">
+                        ID #{prof.profile_id} · Finalidade: <strong className="text-gray-300">{prof.purpose}</strong> · {prof.kind} {prof.recurrency_kind ? `(${prof.recurrency_kind})` : ''} · {prof.connector_id === 0 ? 'Geral (Posto)' : `Tomada #${prof.connector_id}`}
+                      </p>
+
+                      {/* Scheduled Periods Breakdown */}
+                      {prof.periods && prof.periods.length > 0 && (
+                        <div className="pt-1">
+                          <span className="text-[10px] text-gray-500 font-medium block mb-1">Horários & Limites Programados:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {prof.periods.map((per: any, pIdx: number) => {
+                              const isKw = prof.charging_rate_unit === 'W' && per.limit >= 1000
+                              const displayLimit = isKw
+                                ? `${(per.limit / 1000).toLocaleString('pt-PT')} kW`
+                                : `${per.limit} ${prof.charging_rate_unit || 'A'}`
+
+                              return (
+                                <span
+                                  key={pIdx}
+                                  className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md bg-black/40 border border-white/10 text-gray-300"
+                                >
+                                  <Clock className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-gray-400">{secondsToHHMM(per.start_period || 0)}:</span>
+                                  <strong className="text-emerald-300">{displayLimit}</strong>
+                                  {per.number_phases && (
+                                    <span className="text-gray-500">({per.number_phases === 3 ? 'Trifásico' : '1F'})</span>
+                                  )}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-500 font-mono mt-0.5">
-                      ID #{prof.profile_id} · {prof.purpose} · {prof.kind} {prof.recurrency_kind ? `(${prof.recurrency_kind})` : ''} · Tomada #{prof.connector_id}
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => api.applySmartChargingProfile(prof.id, selectedCpId).then(() => {
-                        showToast('success', `Perfil #${prof.profile_id} reenviado!`)
-                        refetchProfiles()
-                      })}
-                      disabled={!isOnline}
-                      title="Reenviar este perfil ao posto"
-                      className="btn-secondary p-2 text-xs text-blue-400 hover:text-white rounded-lg"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => api.deleteSmartChargingProfile(prof.id).then(() => {
-                        showToast('success', 'Perfil eliminado.')
-                        refetchProfiles()
-                      })}
-                      title="Eliminar perfil da base de dados"
-                      className="btn-ghost p-2 text-xs text-red-400 hover:text-red-300 rounded-lg"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0 self-start">
+                      <button
+                        onClick={() => {
+                          setCustomName(prof.name + ' (Cópia)')
+                          setPurpose(prof.purpose)
+                          setKind(prof.kind)
+                          setRecurrencyKind(prof.recurrency_kind || 'Daily')
+                          setRateUnit(prof.charging_rate_unit || 'A')
+                          setConnectorId(prof.connector_id)
+                          if (prof.periods && prof.periods.length > 0) {
+                            setPeriods(
+                              prof.periods.map((per: any) => ({
+                                startHHMM: secondsToHHMM(per.start_period || 0),
+                                limit: prof.charging_rate_unit === 'W' && per.limit >= 1000 ? per.limit / 1000 : per.limit,
+                                phases: per.number_phases || 3,
+                              }))
+                            )
+                          }
+                          showToast('success', `Perfil #${prof.profile_id} carregado no construtor abaixo para edição!`)
+                        }}
+                        title="Carregar no Construtor para Editar"
+                        className="btn-ghost p-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => api.applySmartChargingProfile(prof.id, selectedCpId).then(() => {
+                          showToast('success', `Perfil #${prof.profile_id} reenviado ao posto!`)
+                          refetchProfiles()
+                        })}
+                        disabled={!isOnline}
+                        title="Reenviar e Ativar este perfil no posto"
+                        className="btn-secondary p-2 text-xs text-blue-400 hover:text-white rounded-lg"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => api.deleteSmartChargingProfile(prof.id).then(() => {
+                          showToast('success', 'Perfil eliminado da base de dados.')
+                          refetchProfiles()
+                        })}
+                        title="Eliminar perfil da base de dados"
+                        className="btn-ghost p-2 text-xs text-red-400 hover:text-red-300 rounded-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
