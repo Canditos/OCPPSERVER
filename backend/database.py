@@ -33,6 +33,6 @@ async def get_db():
 
 
 async def init_db():
-    from models import charger, transaction, configuration  # noqa: F401
+    from models import charger, transaction, configuration, authorized_tag, smart_charging  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

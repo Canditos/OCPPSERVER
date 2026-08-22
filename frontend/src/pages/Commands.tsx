@@ -179,6 +179,11 @@ export function Commands() {
   const { data: chargers = [] } = useQuery<Charger[]>({ queryKey: ['chargers'], queryFn: api.getChargers, refetchInterval: 5000 })
   const [cpId, setCpId] = useState('')
 
+  const { data: authorizedTags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: api.getTags,
+  })
+
   const { data: activeTxs = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions', cpId, 'Active'],
     queryFn: () => api.getTransactions(cpId, 'Active'),
@@ -189,7 +194,8 @@ export function Commands() {
   const offline = !chargers.find((c) => c.charge_point_id === cpId && c.is_online) && !!cpId
 
   // form state
-  const [idTag, setIdTag]           = useState('VERSICHARGE_TAG')
+  const defaultTag = authorizedTags.length > 0 ? authorizedTags[0].id_tag : 'TAG-MASTER'
+  const [idTag, setIdTag]           = useState('')
   const [connector, setConnector]   = useState('1')
   const [txId, setTxId]             = useState('')
   const [resetType, setResetType]   = useState('Soft')
@@ -199,6 +205,13 @@ export function Commands() {
   const [triggerMsg, setTriggerMsg] = useState('StatusNotification')
   const [cfgKey, setCfgKey]         = useState('')
   const [cfgVal, setCfgVal]         = useState('')
+
+  // Sync idTag with defaultTag once loaded
+  React.useEffect(() => {
+    if (!idTag && defaultTag) {
+      setIdTag(defaultTag)
+    }
+  }, [defaultTag, idTag])
 
   // commands
   const start  = useCmd(() => api.remoteStart(cpId, idTag, Number(connector)))
@@ -246,7 +259,7 @@ export function Commands() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <button
               onClick={() => {
-                setIdTag('VERSICHARGE_TAG')
+                setIdTag(defaultTag)
                 setConnector('1')
                 start.run()
               }}

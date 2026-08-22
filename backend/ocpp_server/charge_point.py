@@ -19,6 +19,7 @@ from database import AsyncSessionLocal
 from models.charger import Charger, Connector, OcppMessage
 from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
+from models.authorized_tag import AuthorizedTag
 from sqlalchemy import select, update
 
 logger = logging.getLogger(__name__)
@@ -108,9 +109,36 @@ class ChargePoint(OcppChargePoint):
     @on(Action.Authorize)
     async def on_authorize(self, id_tag, **kwargs):
         await self._log_message("IN", "Authorize", {"id_tag": id_tag})
-        await event_bus.publish("authorize", {"charge_point_id": self.id, "id_tag": id_tag})
+
+        is_auth = False
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(AuthorizedTag).where(
+                    AuthorizedTag.id_tag == id_tag,
+                    AuthorizedTag.is_active == True
+                )
+            )
+            tag = result.scalar_one_or_none()
+            if tag:
+                is_auth = True
+            else:
+                # If table is completely empty, auto-seed this first tag so initial setup works
+                count_res = await db.execute(select(AuthorizedTag))
+                all_tags = count_res.scalars().all()
+                if not all_tags:
+                    new_tag = AuthorizedTag(id_tag=id_tag, description="Auto-registada (Primeira)")
+                    db.add(new_tag)
+                    await db.commit()
+                    is_auth = True
+
+        status = AuthorizationStatus.accepted if is_auth else AuthorizationStatus.invalid
+        await event_bus.publish("authorize", {
+            "charge_point_id": self.id,
+            "id_tag": id_tag,
+            "status": status,
+        })
         return call_result.AuthorizePayload(
-            id_tag_info={"status": AuthorizationStatus.accepted, "expiryDate": None, "parentIdTag": None}
+            id_tag_info={"status": status, "expiryDate": None, "parentIdTag": None}
         )
 
     @on(Action.StartTransaction)
@@ -118,6 +146,33 @@ class ChargePoint(OcppChargePoint):
         await self._log_message("IN", "StartTransaction", {
             "connector_id": connector_id, "id_tag": id_tag, "meter_start": meter_start
         })
+
+        is_auth = False
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(AuthorizedTag).where(
+                    AuthorizedTag.id_tag == id_tag,
+                    AuthorizedTag.is_active == True
+                )
+            )
+            tag = result.scalar_one_or_none()
+            if tag:
+                is_auth = True
+            else:
+                count_res = await db.execute(select(AuthorizedTag))
+                all_tags = count_res.scalars().all()
+                if not all_tags:
+                    new_tag = AuthorizedTag(id_tag=id_tag, description="Auto-registada (Primeira)")
+                    db.add(new_tag)
+                    await db.commit()
+                    is_auth = True
+
+        if not is_auth:
+            return call_result.StartTransactionPayload(
+                transaction_id=0,
+                id_tag_info={"status": AuthorizationStatus.invalid}
+            )
+
         tx_id = _next_tx_id()
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
@@ -402,4 +457,55 @@ class ChargePoint(OcppChargePoint):
         resp = await self.call(req)
         await self._log_message("OUT", "CancelReservation", {"reservation_id": reservation_id})
         return resp
+
+    # ── Smart Charging ──────────────────────────────────────────────────────
+
+    async def set_charging_profile(self, connector_id: int, cs_charging_profiles: dict):
+        req = call.SetChargingProfilePayload(
+            connector_id=connector_id,
+            cs_charging_profiles=cs_charging_profiles,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "SetChargingProfile", {
+            "connector_id": connector_id,
+            "cs_charging_profiles": cs_charging_profiles,
+        })
+        return resp
+
+    async def clear_charging_profile(
+        self,
+        profile_id: int | None = None,
+        connector_id: int | None = None,
+        purpose: str | None = None,
+        stack_level: int | None = None,
+    ):
+        payload_kwargs = {}
+        if profile_id is not None:
+            payload_kwargs["id"] = profile_id
+        if connector_id is not None:
+            payload_kwargs["connector_id"] = connector_id
+        if purpose is not None:
+            payload_kwargs["charging_profile_purpose"] = purpose
+        if stack_level is not None:
+            payload_kwargs["stack_level"] = stack_level
+
+        req = call.ClearChargingProfilePayload(**payload_kwargs)
+        resp = await self.call(req)
+        await self._log_message("OUT", "ClearChargingProfile", payload_kwargs)
+        return resp
+
+    async def get_composite_schedule(
+        self,
+        connector_id: int,
+        duration: int,
+        rate_unit: str | None = None,
+    ):
+        payload_kwargs = {"connector_id": connector_id, "duration": duration}
+        if rate_unit:
+            payload_kwargs["charging_rate_unit"] = rate_unit
+        req = call.GetCompositeSchedulePayload(**payload_kwargs)
+        resp = await self.call(req)
+        await self._log_message("OUT", "GetCompositeSchedule", payload_kwargs)
+        return resp
+
 

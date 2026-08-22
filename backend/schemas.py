@@ -95,7 +95,7 @@ class RemoteStartRequest(BaseModel):
 
 class RemoteStopRequest(BaseModel):
     charge_point_id: str
-    transaction_id: int
+    transaction_id: int | None = None
 
 
 class ResetRequest(BaseModel):

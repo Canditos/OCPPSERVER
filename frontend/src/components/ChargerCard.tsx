@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock, Loader2, CheckCircle2, AlertCircle, Tag } from 'lucide-react'
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
 import { ConnectorBadge } from './ConnectorBadge'
@@ -24,6 +25,20 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null)
+
+  // Fetch authorized tags
+  const { data: authorizedTags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: api.getTags,
+    staleTime: 30000,
+  })
+
+  // Fetch active transaction for this charger
+  const { data: activeTransaction, refetch: refetchActiveTx } = useQuery({
+    queryKey: ['activeTransaction', charger.charge_point_id],
+    queryFn: () => api.getActiveTransaction(charger.charge_point_id),
+    refetchInterval: 5000,
+  })
 
   // Reset optimistic status when real live status updates
   useEffect(() => {
@@ -54,6 +69,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const isPreparing = mainStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing')
   const isFaulted = mainStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted')
 
+  // Get tag to use for RemoteStart
+  const defaultTag = authorizedTags.length > 0 ? authorizedTags[0].id_tag : null
+  const hasAuthorizedTag = defaultTag !== null
+
   const livePower = live?.meters
     ? Object.values(live.meters)
         .flatMap((m) => Object.entries(m))
@@ -68,13 +87,19 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const handleRemoteStart = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (!hasAuthorizedTag) {
+      setFeedback({ type: 'error', message: 'Sem tag autorizada! Vai a Configuração > Tags para adicionar.' })
+      setTimeout(() => setFeedback(null), 5000)
+      return
+    }
     setLoadingAction('start')
     setFeedback(null)
     try {
-      await api.remoteStart(charger.charge_point_id, 'VERSICHARGE_TAG', selectedConnectorId)
-      // Instant Optimistic UI update!
+      await api.remoteStart(charger.charge_point_id, defaultTag!, selectedConnectorId)
       setOptimisticStatus('Preparing')
-      setFeedback({ type: 'success', message: `Aceite! A iniciar carga na tomada #${selectedConnectorId}...` })
+      setFeedback({ type: 'success', message: `Aceite! Tag "${defaultTag}" na tomada #${selectedConnectorId}` })
+      // Refetch active transaction after a short delay
+      setTimeout(() => refetchActiveTx(), 2000)
     } catch (err: unknown) {
       setFeedback({ type: 'error', message: `Falha ao ligar tomada #${selectedConnectorId}` })
     } finally {
@@ -89,11 +114,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setLoadingAction('stop')
     setFeedback(null)
     try {
-      await api.remoteStop(charger.charge_point_id, 100001)
+      // Pass the real active transaction_id, or null for auto-detect on backend
+      const txId = activeTransaction?.transaction_id ?? null
+      const resp = await api.remoteStop(charger.charge_point_id, txId)
       setOptimisticStatus('Available')
-      setFeedback({ type: 'success', message: 'Comando de paragem enviado!' })
+      setFeedback({ type: 'success', message: `Paragem enviada! Transação #${resp.transaction_id ?? txId}` })
+      setTimeout(() => refetchActiveTx(), 2000)
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: 'Falha ao parar a carga' })
+      setFeedback({ type: 'error', message: 'Falha ao parar — sem transação ativa encontrada' })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 4000)
@@ -263,6 +291,29 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         </div>
       )}
 
+      {/* Active Tag & Transaction Info */}
+      {(hasAuthorizedTag || activeTransaction) && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
+          {hasAuthorizedTag && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
+              <Tag className="w-3 h-3" />
+              {defaultTag}
+            </span>
+          )}
+          {!hasAuthorizedTag && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 font-medium">
+              <AlertCircle className="w-3 h-3" />
+              Sem tag autorizada
+            </span>
+          )}
+          {activeTransaction && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-medium">
+              TX #{activeTransaction.transaction_id}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Quick Controls Toolbar */}
       <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-1.5" onClick={(e) => e.stopPropagation()}>
         {isSessionActive ? (
@@ -272,16 +323,20 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             className="flex-1 btn bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all"
           >
             {loadingAction === 'stop' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>Parar Carga (Tomada #{selectedConnectorId})</span>
+            <span>Parar {activeTransaction ? `TX #${activeTransaction.transaction_id}` : `Tomada #${selectedConnectorId}`}</span>
           </button>
         ) : (
           <button
             onClick={handleRemoteStart}
-            disabled={!isOnline || loadingAction !== null}
-            className="flex-1 btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all"
+            disabled={!isOnline || loadingAction !== null || !hasAuthorizedTag}
+            className={`flex-1 btn text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all ${
+              hasAuthorizedTag
+                ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500'
+                : 'bg-gray-700 cursor-not-allowed opacity-60'
+            }`}
           >
             {loadingAction === 'start' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>Iniciar Carga (Tomada #{selectedConnectorId})</span>
+            <span>{hasAuthorizedTag ? `Iniciar (Tomada #${selectedConnectorId})` : 'Adicionar Tag!'}</span>
           </button>
         )}
 

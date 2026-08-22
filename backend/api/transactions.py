@@ -55,3 +55,22 @@ async def live_meter_values(cp_id: str, connector_id: int = 1, limit: int = 60, 
         .limit(limit)
     )
     return list(reversed(r2.scalars().all()))
+
+
+@router.get("/active/{cp_id}", response_model=TransactionOut | None)
+async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """Get the currently active transaction for a charger."""
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.charge_point_id == cp_id, Transaction.status == "Active")
+        .order_by(Transaction.start_time.desc())
+        .limit(1)
+    )
+    tx = result.scalar_one_or_none()
+    if not tx:
+        return None
+    d = TransactionOut.model_validate(tx)
+    if tx.meter_stop is not None:
+        d.energy_kwh = round((tx.meter_stop - tx.meter_start) / 1000, 3)
+    return d
+

@@ -15,6 +15,8 @@ from api.transactions import router as transactions_router
 from api.commands import router as commands_router
 from api.configuration import router as configuration_router
 from api.ws_events import router as ws_router
+from api.tags import router as tags_router
+from api.smart_charging import router as smart_charging_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,6 +39,8 @@ app.include_router(transactions_router)
 app.include_router(commands_router)
 app.include_router(configuration_router)
 app.include_router(ws_router)
+app.include_router(tags_router)
+app.include_router(smart_charging_router)
 
 
 @app.get("/health")
