@@ -7,8 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 
 from database import get_db, AsyncSessionLocal
-from models.charging_profile import ChargingProfile
-from models.smart_charging import ChargingProfileModel
+from models.charging_profile import ChargingProfile, ChargingProfileModel
 from ocpp_server.central_system import get_charge_point
 
 logger = logging.getLogger(__name__)
