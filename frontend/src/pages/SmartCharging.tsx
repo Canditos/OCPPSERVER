@@ -623,7 +623,7 @@ export function SmartCharging() {
       </div>
 
       {/* ── SECTION 2: CUSTOM PROFILE BUILDER ─────────────────────────────────── */}
-      <div className="card border border-white/10 bg-gray-900/60 p-6 space-y-6">
+      <div id="custom-profile-builder" className="card border border-white/10 bg-gray-900/60 p-6 space-y-6 scroll-mt-20">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400">
@@ -968,7 +968,7 @@ export function SmartCharging() {
                     <div className="flex items-center gap-1.5 shrink-0 self-start">
                       <button
                         onClick={() => {
-                          setCustomName(prof.name + ' (Cópia)')
+                          setProfileName(prof.name + ' (Edição)')
                           setPurpose(prof.purpose)
                           setKind(prof.kind)
                           setRecurrencyKind(prof.recurrency_kind || 'Daily')
@@ -983,7 +983,8 @@ export function SmartCharging() {
                               }))
                             )
                           }
-                          showToast('success', `Perfil #${prof.profile_id} carregado no construtor abaixo para edição!`)
+                          document.getElementById('custom-profile-builder')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          showToast('success', `Perfil "${prof.name}" carregado no construtor acima! Podes editar e gravar.`)
                         }}
                         title="Carregar no Construtor para Editar"
                         className="btn-ghost p-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg"
