@@ -841,15 +841,15 @@ export function SmartCharging() {
             </div>
 
             {/* Visual 24-hour Preview Bar */}
-            <div className="p-3 rounded-xl bg-gray-950/60 border border-white/5 space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-gray-400">
-                <span className="flex items-center gap-1">
-                  <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-gray-950/60 border border-slate-200 dark:border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1 text-slate-700 dark:text-gray-300 font-semibold">
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
                   Previsão Gráfica de 24 Horas:
                 </span>
-                <span className="text-gray-500 font-mono">00:00 → 24:00</span>
+                <span className="text-slate-500 dark:text-gray-400 font-mono font-medium">00:00 → 24:00</span>
               </div>
-              <div className="h-6 w-full rounded-lg bg-gray-900 flex overflow-hidden border border-white/10">
+              <div className="h-6 w-full rounded-lg bg-slate-200 dark:bg-gray-900 flex overflow-hidden border border-slate-300 dark:border-white/10">
                 {periods.map((p, idx) => {
                   const widthPercent = Math.max(10, 100 / periods.length)
                   return (
@@ -949,13 +949,13 @@ export function SmartCharging() {
                               return (
                                 <span
                                   key={pIdx}
-                                  className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md bg-black/40 border border-white/10 text-gray-300"
+                                  className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-200 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-800 dark:text-gray-300"
                                 >
-                                  <Clock className="w-3 h-3 text-emerald-400" />
-                                  <span className="text-gray-400">{secondsToHHMM(per.start_period || 0)}:</span>
-                                  <strong className="text-emerald-300">{displayLimit}</strong>
+                                  <Clock className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
+                                  <span className="text-slate-600 dark:text-gray-400">{secondsToHHMM(per.start_period || 0)}:</span>
+                                  <strong className="text-emerald-600 dark:text-emerald-300">{displayLimit}</strong>
                                   {per.number_phases && (
-                                    <span className="text-gray-500">({per.number_phases === 3 ? 'Trifásico' : '1F'})</span>
+                                    <span className="text-slate-500 dark:text-gray-500">({per.number_phases === 3 ? 'Trifásico' : '1F'})</span>
                                   )}
                                 </span>
                               )
