@@ -329,6 +329,8 @@ async def create_profile(req: ProfileCreateRequest, db: AsyncSession = Depends(g
     last = result.scalar_one_or_none()
     next_profile_id = (last.profile_id + 1) if last else _PROFILE_ID_BASE
 
+    first_limit = req.periods[0].limit if req.periods else 16.0
+
     profile = ChargingProfileModel(
         profile_id=next_profile_id,
         charge_point_id=req.charge_point_id,
@@ -338,6 +340,7 @@ async def create_profile(req: ProfileCreateRequest, db: AsyncSession = Depends(g
         purpose=req.purpose,
         kind=req.kind,
         recurrency_kind=req.recurrency_kind if req.kind == "Recurring" else None,
+        limit_amps=int(first_limit) if req.charging_rate_unit == "A" else 0,
         valid_from=req.valid_from,
         valid_to=req.valid_to,
         duration=req.duration,

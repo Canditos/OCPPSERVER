@@ -104,16 +104,16 @@ export function Dashboard() {
 
   const isChargerCharging = (c: Charger) => {
     const live = liveState[c.charge_point_id]
-    if (live?.connectors) {
-      if (Object.values(live.connectors).some((cc) => cc.status === 'Charging')) return true
+    if (live?.connectors && Object.keys(live.connectors).length > 0) {
+      return Object.values(live.connectors).some((cc) => cc.status === 'Charging')
     }
     return (c.connectors ?? []).some((cc) => cc.status === 'Charging') || c.status === 'Charging'
   }
 
   const isChargerFaulted = (c: Charger) => {
     const live = liveState[c.charge_point_id]
-    if (live?.connectors) {
-      if (Object.values(live.connectors).some((cc) => cc.status === 'Faulted')) return true
+    if (live?.connectors && Object.keys(live.connectors).length > 0) {
+      return Object.values(live.connectors).some((cc) => cc.status === 'Faulted')
     }
     return (c.connectors ?? []).some((cc) => cc.status === 'Faulted') || c.status === 'Faulted'
   }

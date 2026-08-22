@@ -254,6 +254,7 @@ class ChargePoint(OcppChargePoint):
             "transaction_id": transaction_id, "meter_stop": meter_stop
         })
         reason = kwargs.get("reason", "Local")
+        stopped_connector_id = 1
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Transaction).where(Transaction.transaction_id == transaction_id))
             tx = result.scalar_one_or_none()
@@ -262,13 +263,59 @@ class ChargePoint(OcppChargePoint):
                 tx.stop_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).replace(tzinfo=None)
                 tx.stop_reason = reason
                 tx.status = "Completed"
+                stopped_connector_id = tx.connector_id
+
+            # Update charger and connector status
+            r_charger = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
+            charger = r_charger.scalar_one_or_none()
+            if charger:
+                # Check if there are other active transactions
+                r_active = await db.execute(
+                    select(Transaction).where(
+                        Transaction.charge_point_id == self.id,
+                        Transaction.status == "Active",
+                        Transaction.transaction_id != transaction_id,
+                    )
+                )
+                other_active = r_active.scalars().all()
+                if not other_active:
+                    charger.status = "Available"
+
+                # Update the specific connector status
+                r_conn = await db.execute(
+                    select(Connector).where(
+                        Connector.charger_id == charger.id,
+                        Connector.connector_id == stopped_connector_id,
+                    )
+                )
+                conn = r_conn.scalar_one_or_none()
+                if conn:
+                    conn.status = "Available"
+                    conn.updated_at = _now()
+
+                # Add availability log
+                avail = AvailabilityLog(
+                    charger_id=charger.id,
+                    charge_point_id=self.id,
+                    connector_id=stopped_connector_id,
+                    status="Available",
+                    timestamp=_now(),
+                )
+                db.add(avail)
                 await db.commit()
 
         await event_bus.publish("transaction_stopped", {
             "charge_point_id": self.id,
             "transaction_id": transaction_id,
+            "connector_id": stopped_connector_id,
             "meter_stop": meter_stop,
             "reason": reason,
+        })
+        await event_bus.publish("status_notification", {
+            "charge_point_id": self.id,
+            "connector_id": stopped_connector_id,
+            "status": "Available",
+            "error_code": "NoError",
         })
         return call_result.StopTransactionPayload(id_tag_info={"status": AuthorizationStatus.accepted})
 
@@ -346,6 +393,17 @@ class ChargePoint(OcppChargePoint):
                     conn.status = status
                     conn.error_code = error_code
                     conn.updated_at = _now()
+
+                    # Sync overall charger status
+                    r_all_conn = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
+                    all_conns = r_all_conn.scalars().all()
+                    if any(c.status == "Charging" for c in all_conns):
+                        charger.status = "Charging"
+                    elif any(c.status == "Faulted" for c in all_conns):
+                        charger.status = "Faulted"
+                    else:
+                        charger.status = status
+
                 charger.last_seen = _now()
 
                 avail = AvailabilityLog(
