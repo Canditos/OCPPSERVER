@@ -407,10 +407,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               <select
                 value={effectiveTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
-                className="bg-white/5 border border-white/10 text-emerald-400 rounded-lg px-2 py-0.5 text-xs font-mono font-medium focus:outline-none focus:border-emerald-500/50"
+                className="bg-white/5 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-emerald-600 dark:text-emerald-400 rounded-lg px-2 py-0.5 text-xs font-mono font-medium focus:outline-none focus:border-emerald-500/50"
               >
                 {authorizedTags.map((t) => (
-                  <option key={t.id} value={t.id_tag} className="bg-gray-900 text-gray-200">
+                  <option key={t.id} value={t.id_tag}>
                     {t.id_tag} {t.description ? `(${t.description})` : ''}
                   </option>
                 ))}
