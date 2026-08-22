@@ -43,8 +43,15 @@ export function SmartCharging() {
   const currentCharger = chargers.find((c) => c.charge_point_id === selectedCpId)
   const isOnline = currentCharger?.is_online ?? false
 
-  // Detect charger capabilities
-  const isDC = currentCharger?.model?.toLowerCase().includes('sicharge') || currentCharger?.model?.toLowerCase().includes('dc')
+  // Detect charger capabilities (DC Fast vs AC)
+  const isDC = Boolean(
+    currentCharger?.model?.toLowerCase().includes('sicharge') ||
+    currentCharger?.model?.toLowerCase().includes('dc') ||
+    currentCharger?.model?.toUpperCase().endsWith('-D') ||
+    currentCharger?.vendor?.toLowerCase().includes('dc')
+  )
+
+  const [presetFilter, setPresetFilter] = useState<'ALL' | 'AC' | 'DC'>('ALL')
 
   // Fetch presets
   const { data: presets = [] } = useQuery<SmartChargingPreset[]>({
@@ -58,6 +65,25 @@ export function SmartCharging() {
     queryFn: () => api.getSmartChargingProfiles(selectedCpId),
     enabled: !!selectedCpId,
   })
+
+  // Auto-switch filter when selecting a DC or AC charger
+  React.useEffect(() => {
+    if (isDC) {
+      setPresetFilter('DC')
+      setRateUnit('W')
+      setPeriods([
+        { startHHMM: '00:00', limit: 150000, phases: 3 },
+        { startHHMM: '07:00', limit: 50000, phases: 3 },
+      ])
+    } else if (currentCharger) {
+      setPresetFilter('AC')
+      setRateUnit('A')
+      setPeriods([
+        { startHHMM: '00:00', limit: 32, phases: 3 },
+        { startHHMM: '07:00', limit: 10, phases: 3 },
+      ])
+    }
+  }, [selectedCpId, isDC])
 
   // Action status state
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -275,84 +301,168 @@ export function SmartCharging() {
       )}
 
       {/* ── SECTION 1: 1-CLICK PRESETS ────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
-              Modelos Rápidos Pré-configurados (1-Clique)
-            </h2>
+            <div>
+              <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
+                Modelos Rápidos Pré-configurados (1-Clique)
+              </h2>
+              <p className="text-xs text-gray-500">
+                Modelos específicos para postos AC (Amperes) e postos DC Fast (kW)
+              </p>
+            </div>
           </div>
-          <span className="text-xs text-gray-500">Prontos a enviar para o posto</span>
+
+          {/* Category Filter Tabs */}
+          <div className="inline-flex rounded-xl bg-white/5 border border-white/10 p-1 gap-1">
+            <button
+              type="button"
+              onClick={() => setPresetFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                presetFilter === 'ALL'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              ⚡ Todos ({presets.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPresetFilter('AC')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                presetFilter === 'AC'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+              <span>AC (Amperes 6A-32A)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPresetFilter('DC')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                presetFilter === 'DC'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />
+              <span>DC Fast (Potência 30-300 kW)</span>
+            </button>
+          </div>
         </div>
 
+        {/* Presets Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {presets.map((preset) => (
-            <div
-              key={preset.id}
-              className="card border border-white/8 hover:border-amber-500/30 transition-all duration-300 flex flex-col justify-between group"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-xs font-semibold text-amber-400 px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    {preset.recurrency_kind || preset.kind}
-                  </span>
-                  <span className="text-[11px] text-gray-500 font-mono">
-                    {preset.purpose}
-                  </span>
-                </div>
+          {presets
+            .filter((p) => {
+              if (presetFilter === 'ALL') return true
+              if (p.category) return p.category === presetFilter
+              return presetFilter === 'DC' ? p.charging_rate_unit === 'W' : p.charging_rate_unit === 'A'
+            })
+            .map((preset) => {
+              const isPresetDC = preset.category === 'DC' || preset.charging_rate_unit === 'W'
+              const matchesSelectedCharger = isDC ? isPresetDC : !isPresetDC
 
-                <h3 className="text-sm font-bold text-gray-100 group-hover:text-amber-300 transition-colors">
-                  {preset.name}
-                </h3>
-                <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                  {preset.description}
-                </p>
-
-                {/* Visual Periods Mini Timeline */}
-                <div className="mt-4 pt-3 border-t border-white/5 space-y-1.5">
-                  <p className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-400" /> Janelas Horárias:
-                  </p>
-                  <div className="space-y-1">
-                    {preset.periods.map((p, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-white/3 border border-white/5 font-mono"
-                      >
-                        <span className="text-gray-300 truncate max-w-[70%]">
-                          {p.label || `A partir das ${secondsToHHMM(p.start_period)}`}
+              return (
+                <div
+                  key={preset.id}
+                  className={`card border transition-all duration-300 flex flex-col justify-between group ${
+                    isPresetDC
+                      ? 'border-purple-500/20 hover:border-purple-500/50 bg-gradient-to-b from-purple-950/20 to-transparent'
+                      : 'border-emerald-500/20 hover:border-emerald-500/50 bg-gradient-to-b from-emerald-950/20 to-transparent'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${
+                          isPresetDC
+                            ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {isPresetDC ? '⚡ DC FAST (kW)' : '🔌 AC (Amperes)'}
                         </span>
-                        <span className="text-amber-400 font-bold">
-                          {p.limit} {preset.charging_rate_unit}
+
+                        <span className="text-xs font-semibold text-gray-400 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10">
+                          {preset.recurrency_kind || preset.kind}
                         </span>
                       </div>
-                    ))}
+
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        {preset.purpose === 'ChargePointMaxProfile' ? 'Limite Geral Posto' : 'Por Conector'}
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-gray-100 group-hover:text-amber-300 transition-colors">
+                      {preset.name}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                      {preset.description}
+                    </p>
+
+                    {/* Visual Periods Mini Timeline */}
+                    <div className="mt-4 pt-3 border-t border-white/5 space-y-1.5">
+                      <p className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-400" /> Janelas Horárias:
+                      </p>
+                      <div className="space-y-1">
+                        {preset.periods.map((p, idx) => {
+                          const formattedLimit = isPresetDC
+                            ? p.limit >= 1000
+                              ? `${(p.limit / 1000).toLocaleString('pt-PT')} kW`
+                              : `${p.limit} W`
+                            : `${p.limit} A`
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-white/3 border border-white/5 font-mono"
+                            >
+                              <span className="text-gray-300 truncate max-w-[70%]">
+                                {p.label || `A partir das ${secondsToHHMM(p.start_period)}`}
+                              </span>
+                              <span className={`font-bold ${isPresetDC ? 'text-purple-300' : 'text-emerald-400'}`}>
+                                {formattedLimit}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4 pt-3 border-t border-white/5 flex items-center gap-2">
+                    <button
+                      onClick={() => handleApplyPreset(preset)}
+                      disabled={!isOnline || loadingAction !== null}
+                      className={`flex-1 btn text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-50 ${
+                        isPresetDC
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'
+                          : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
+                      }`}
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{loadingAction === `preset-${preset.id}` ? 'A enviar…' : 'Aplicar no Posto'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleLoadPresetToForm(preset)}
+                      title="Editar este modelo no construtor abaixo"
+                      className="btn-secondary text-xs p-2 text-gray-400 hover:text-white rounded-xl"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Actions */}
-              <div className="mt-4 pt-3 border-t border-white/5 flex items-center gap-2">
-                <button
-                  onClick={() => handleApplyPreset(preset)}
-                  disabled={!isOnline || loadingAction !== null}
-                  className="flex-1 btn bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{loadingAction === `preset-${preset.id}` ? 'A enviar…' : 'Aplicar no Posto'}</span>
-                </button>
-
-                <button
-                  onClick={() => handleLoadPresetToForm(preset)}
-                  title="Editar este modelo no construtor abaixo"
-                  className="btn-secondary text-xs p-2 text-gray-400 hover:text-white rounded-xl"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
+              )
+            })}
         </div>
       </div>
 

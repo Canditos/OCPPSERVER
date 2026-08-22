@@ -145,6 +145,7 @@ export interface SchedulePeriod {
 
 export interface SmartChargingPreset {
   id: string
+  category?: 'AC' | 'DC'
   name: string
   description: string
   purpose: string
