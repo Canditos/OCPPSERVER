@@ -102,6 +102,9 @@ export function SmartCharging() {
     { startHHMM: '07:00', limit: 10, phases: 3 },
   ])
 
+  // Composite schedule query results
+  const [compositeData, setCompositeData] = useState<any | null>(null)
+
   // Find currently deployed active profile
   const activeProfile = profiles.find((p) => p.is_deployed)
 
