@@ -16,10 +16,22 @@ export interface Charger {
   imsi: string | null
   status: string
   is_online: boolean
+  autocharge_enabled: boolean
   last_seen: string | null
   registered_at: string | null
   client_ip: string | null
   connectors: Connector[]
+}
+
+export interface AuthToken {
+  id: number
+  id_tag: string
+  name: string
+  type: 'rfid' | 'pin' | 'vid'
+  status: 'Accepted' | 'Blocked' | 'Expired'
+  expiry_date: string | null
+  note: string | null
+  created_at: string
 }
 
 export interface Transaction {
@@ -64,6 +76,7 @@ export interface OcppMessage {
 }
 
 export interface OcppEvent {
+  ts: string
   type: string
-  data: Record<string, unknown>
+  data: Record<string, any>
 }

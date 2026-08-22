@@ -1,0 +1,18 @@
+{
+  "name": "OCPP Central",
+  "short_name": "OCPP",
+  "description": "Painel OCPP 1.6 para gestão de chargers no telemóvel",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

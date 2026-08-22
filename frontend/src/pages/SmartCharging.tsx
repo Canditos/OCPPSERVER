@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Zap, Calendar, Clock, Sun, Moon, ShieldAlert, Sparkles,
+  Zap, Calendar, Clock, Sun, Moon, Sparkles,
   Plus, Trash2, Send, RotateCcw, AlertTriangle, CheckCircle2,
-  XCircle, ChevronDown, Activity, Info, BarChart3, Layers, Sliders
+  ChevronDown, Activity, Info, BarChart3, Layers, Sliders, BatteryCharging
 } from 'lucide-react'
-import { api, SmartChargingPreset, SmartChargingProfile, SchedulePeriod } from '../api'
+import { api, SmartChargingPreset, SmartChargingProfile } from '../api'
 import type { Charger } from '../types'
 
 // Helper to convert seconds into HH:MM
@@ -42,6 +42,9 @@ export function SmartCharging() {
 
   const currentCharger = chargers.find((c) => c.charge_point_id === selectedCpId)
   const isOnline = currentCharger?.is_online ?? false
+
+  // Detect charger capabilities
+  const isDC = currentCharger?.model?.toLowerCase().includes('sicharge') || currentCharger?.model?.toLowerCase().includes('dc')
 
   // Fetch presets
   const { data: presets = [] } = useQuery<SmartChargingPreset[]>({
@@ -86,7 +89,6 @@ export function SmartCharging() {
     if (!selectedCpId) return
     setLoadingAction(`preset-${preset.id}`)
     try {
-      // 1. Create profile
       const res = await api.createSmartChargingProfile({
         charge_point_id: selectedCpId,
         connector_id: preset.purpose === 'ChargePointMaxProfile' ? 0 : 1,
@@ -100,8 +102,8 @@ export function SmartCharging() {
         periods: preset.periods,
       })
 
-      // 2. Apply via OCPP
-      await api.applySmartChargingProfile(res.data?.id || (res as any).id, selectedCpId)
+      const profileId = (res as any).id || (res as any).data?.id
+      await api.applySmartChargingProfile(profileId, selectedCpId)
       showToast('success', `Perfil "${preset.name}" aplicado com sucesso no posto ${selectedCpId}!`)
       await refetchProfiles()
     } catch (err: any) {
@@ -128,23 +130,19 @@ export function SmartCharging() {
     showToast('success', `Modelo "${preset.name}" carregado para o editor abaixo!`)
   }
 
-  // Add a period to custom builder
   const handleAddPeriod = () => {
     setPeriods([...periods, { startHHMM: '18:00', limit: 16, phases: 3 }])
   }
 
-  // Remove a period from custom builder
   const handleRemovePeriod = (index: number) => {
     if (periods.length <= 1) return
     setPeriods(periods.filter((_, i) => i !== index))
   }
 
-  // Submit custom profile
   const handleSaveAndApplyCustom = async () => {
     if (!selectedCpId) return
     setLoadingAction('custom')
     try {
-      // Sort periods by start time
       const sortedPeriods = [...periods]
         .map((p) => ({
           start_period: hhmmToSeconds(p.startHHMM),
@@ -153,7 +151,6 @@ export function SmartCharging() {
         }))
         .sort((a, b) => a.start_period - b.start_period)
 
-      // 1. Create in DB
       const res = await api.createSmartChargingProfile({
         charge_point_id: selectedCpId,
         connector_id: purpose === 'ChargePointMaxProfile' ? 0 : connectorId,
@@ -167,9 +164,7 @@ export function SmartCharging() {
         periods: sortedPeriods,
       })
 
-      const profileId = (res as any).id
-
-      // 2. Send SetChargingProfile OCPP
+      const profileId = (res as any).id || (res as any).data?.id
       await api.applySmartChargingProfile(profileId, selectedCpId)
       showToast('success', `Perfil personalizado "${profileName}" enviado com sucesso!`)
       await refetchProfiles()
@@ -180,7 +175,6 @@ export function SmartCharging() {
     }
   }
 
-  // Clear all profiles from charger
   const handleClearAllProfiles = async () => {
     if (!selectedCpId) return
     setLoadingAction('clear-all')
@@ -195,7 +189,6 @@ export function SmartCharging() {
     }
   }
 
-  // Query Composite Schedule
   const handleFetchCompositeSchedule = async () => {
     if (!selectedCpId) return
     setLoadingAction('composite')
@@ -207,7 +200,7 @@ export function SmartCharging() {
         rate_unit: rateUnit,
       })
       setCompositeData(data)
-      showToast('success', 'Horário composto calculado pelo posto recebido!')
+      showToast('success', 'Horário composto calculado pelo posto recebido com sucesso!')
     } catch (err: any) {
       showToast('error', `Erro ao consultar horário composto: ${err?.response?.data?.detail || err.message}`)
     } finally {
@@ -230,6 +223,11 @@ export function SmartCharging() {
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
                   OCPP 1.6-J
                 </span>
+                {isDC && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+                    DC Fast Charger
+                  </span>
+                )}
               </h1>
               <p className="text-sm text-gray-500 mt-0.5">
                 Perfis de modulação de potência, tarifas noturnas, bi-horárias e otimização solar
@@ -370,7 +368,7 @@ export function SmartCharging() {
                 Construtor de Perfis Smart Charging Avançado
               </h2>
               <p className="text-xs text-gray-500">
-                Cria e ajusta perfis com horários, dias da semana, potências e finalidades OCPP 1.6
+                Cria e ajusta perfis com horários, potências, recorrências (Daily/Weekly) e finalidades OCPP 1.6
               </p>
             </div>
           </div>
@@ -729,3 +727,4 @@ export function SmartCharging() {
     </div>
   )
 }
+export default SmartCharging

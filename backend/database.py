@@ -32,7 +32,21 @@ async def get_db():
         yield session
 
 
+async def _add_missing_columns(conn) -> None:
+    from sqlalchemy import text
+    if "sqlite" in DATABASE_URL:
+        try:
+            await conn.execute(text("ALTER TABLE chargers ADD COLUMN autocharge_enabled BOOLEAN NOT NULL DEFAULT 0"))
+        except Exception:
+            pass  # column already exists
+    else:
+        await conn.execute(text(
+            "ALTER TABLE chargers ADD COLUMN IF NOT EXISTS autocharge_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+
+
 async def init_db():
-    from models import charger, transaction, configuration, authorized_tag, smart_charging  # noqa: F401
+    from models import charger, transaction, configuration, auth_token, authorized_tag, charging_profile, smart_charging  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _add_missing_columns(conn)

@@ -7,9 +7,15 @@ interface LiveMeter {
   timestamp: string
 }
 
+interface ConnectorLive {
+  status: string
+  errorCode?: string
+}
+
 interface ChargerLiveState {
   status: string
-  connectors: Record<number, string>
+  isOnline: boolean
+  connectors: Record<number, ConnectorLive>
   lastSeen: string | null
   meters: Record<string, LiveMeter>
 }
@@ -18,6 +24,17 @@ interface ChargerStore {
   liveState: Record<string, ChargerLiveState>
   events: OcppEvent[]
   updateFromEvent: (event: OcppEvent) => void
+}
+
+function deriveChargerStatus(connectors: Record<number, ConnectorLive>): string {
+  const statuses = Object.values(connectors).map((c) => c.status)
+  if (statuses.some((s) => s === 'Charging')) return 'Charging'
+  if (statuses.some((s) => s === 'Faulted')) return 'Faulted'
+  if (statuses.some((s) => s === 'Preparing')) return 'Preparing'
+  if (statuses.some((s) => s === 'Finishing')) return 'Finishing'
+  if (statuses.some((s) => s === 'SuspendedEV' || s === 'SuspendedEVSE')) return 'SuspendedEV'
+  if (statuses.length > 0 && statuses.every((s) => s === 'Available')) return 'Available'
+  return 'Available'
 }
 
 export const useChargerStore = create<ChargerStore>((set) => ({
@@ -34,31 +51,37 @@ export const useChargerStore = create<ChargerStore>((set) => ({
 
       const cur: ChargerLiveState = live[cpId] ?? {
         status: 'Unknown',
+        isOnline: false,
         connectors: {},
         lastSeen: null,
         meters: {},
       }
 
       if (event.type === 'charger_connected') {
-        live[cpId] = { ...cur, status: 'Available', lastSeen: new Date().toISOString() }
+        live[cpId] = { ...cur, isOnline: true, status: cur.status === 'Unknown' ? 'Available' : cur.status, lastSeen: new Date().toISOString() }
       } else if (event.type === 'charger_disconnected') {
-        live[cpId] = { ...cur, status: 'Offline', lastSeen: new Date().toISOString() }
+        live[cpId] = { ...cur, isOnline: false, status: 'Offline', lastSeen: new Date().toISOString() }
       } else if (event.type === 'status_notification') {
         const d = event.data as Record<string, string | number>
         const connId = Number(d.connector_id ?? 1)
         const status = String(d.status ?? 'Available')
 
         if (connId === 0) {
-          live[cpId] = { ...cur, status }
+          // charger-level status (firmware update, etc.)
+          live[cpId] = { ...cur, status: d.status as string }
         } else {
+          const updatedConnectors = {
+            ...cur.connectors,
+            [connId]: { status: d.status as string, errorCode: d.error_code as string | undefined },
+          }
           live[cpId] = {
             ...cur,
-            status: status,
-            connectors: { ...cur.connectors, [connId]: status },
+            connectors: updatedConnectors,
+            status: deriveChargerStatus(updatedConnectors),
           }
         }
       } else if (event.type === 'heartbeat') {
-        live[cpId] = { ...cur, lastSeen: new Date().toISOString() }
+        live[cpId] = { ...cur, isOnline: true, lastSeen: new Date().toISOString() }
       } else if (event.type === 'meter_values') {
         const d = event.data as { values: Array<{ measurand: string; value: number; unit: string; timestamp: string }> }
         const meters = { ...cur.meters }
@@ -67,21 +90,20 @@ export const useChargerStore = create<ChargerStore>((set) => ({
         }
         live[cpId] = { ...cur, meters }
       } else if (event.type === 'transaction_started') {
-        const d = event.data as Record<string, unknown>
-        const connId = Number(d.connector_id ?? 1)
-        live[cpId] = {
-          ...cur,
-          status: 'Charging',
-          connectors: { ...cur.connectors, [connId]: 'Charging' },
+        const d = event.data as Record<string, string | number>
+        const connId = d.connector_id as number
+        if (connId) {
+          const updatedConnectors = {
+            ...cur.connectors,
+            [connId]: { status: 'Charging', errorCode: undefined },
+          }
+          live[cpId] = { ...cur, connectors: updatedConnectors, status: 'Charging' }
+        } else {
+          live[cpId] = { ...cur, status: 'Charging' }
         }
       } else if (event.type === 'transaction_stopped') {
-        const d = event.data as Record<string, unknown>
-        const connId = Number(d.connector_id ?? 1)
-        live[cpId] = {
-          ...cur,
-          status: 'Available',
-          connectors: { ...cur.connectors, [connId]: 'Available' },
-        }
+        // Don't reset status here — wait for StatusNotification from the charger
+        // which gives the authoritative Available/Finishing state
       }
 
       return { liveState: live, events }

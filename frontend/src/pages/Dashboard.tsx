@@ -16,6 +16,7 @@ interface KpiProps {
   color: 'blue' | 'emerald' | 'red' | 'amber' | 'violet'
   glow?: boolean
   delay?: number
+  onClick?: () => void
 }
 
 const COLOR_MAP = {
@@ -26,13 +27,10 @@ const COLOR_MAP = {
   violet: { icon: 'bg-violet-500/15 text-violet-400', val: 'bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent', card: '' },
 }
 
-function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0 }: KpiProps) {
+function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0, onClick }: KpiProps) {
   const c = COLOR_MAP[color]
-  return (
-    <div
-      className={`kpi-card ${glow ? c.card : ''} animate-fade-up`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
+  const content = (
+    <>
       <div className="flex items-start justify-between">
         <div className={`p-2.5 rounded-xl ${c.icon}`}>{icon}</div>
         {glow && (
@@ -50,6 +48,28 @@ function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0 }: Kp
         {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
         <p className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">{label}</p>
       </div>
+    </>
+  )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`kpi-card w-full text-left ${glow ? c.card : ''} animate-fade-up cursor-pointer hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
+        style={{ animationDelay: `${delay}ms` }}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div
+      className={`kpi-card ${glow ? c.card : ''} animate-fade-up`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      {content}
     </div>
   )
 }
@@ -102,13 +122,37 @@ export function Dashboard() {
   const charging = chargers.filter(isChargerCharging).length
   const faulted  = chargers.filter(isChargerFaulted).length
 
-  const liveEnergyWh = Object.values(liveState)
-    .flatMap((s) => Object.values(s.meters ?? {}))
-    .flatMap((m) => Object.entries(m))
-    .filter(([k]) => k.toLowerCase().includes('energy'))
-    .reduce((acc, [, v]) => acc + Number(v.value ?? 0), 0)
+  const totalEnergyWh = Object.values(liveState)
+    .flatMap((s) => Object.entries(s.meters ?? {}))
+    .filter(([measurand]) => measurand.toLowerCase().includes('energy'))
+    .reduce((acc, [, m]) => acc + Number(m.value ?? 0), 0)
+  const totalKwh = (totalEnergyWh / 1000).toFixed(1)
 
-  const totalKwh = (liveEnergyWh / 1000).toFixed(1)
+  const scrollToSelector = (selector: string) => {
+    const el = document.querySelector(selector) as HTMLElement | null
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    el?.classList.add('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
+    window.setTimeout(() => {
+      el?.classList.remove('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
+    }, 1400)
+  }
+
+  const scrollToSection = (id: string) => {
+    scrollToSelector(`#${id}`)
+  }
+
+  const scrollToFirstMatchingCard = (status: 'online' | 'charging' | 'faulted') => {
+    const el = document.querySelector(`[data-charger-flags~="${status}"]`) as HTMLElement | null
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
+      window.setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
+      }, 1400)
+      return
+    }
+    scrollToSection('chargers-section')
+  }
 
   return (
     <div className="space-y-8 animate-fade-up">
@@ -125,18 +169,57 @@ export function Dashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard label="Chargers" value={total}   icon={<Server className="w-5 h-5" />}        color="violet"  delay={0} />
-        <KpiCard label="Online"   value={online}  icon={<Wifi className="w-5 h-5" />}           color="emerald" glow={online > 0} delay={60} />
-        <KpiCard label="A carregar" value={charging} icon={<Zap className="w-5 h-5" />}        color="blue"    glow={charging > 0} delay={120} />
-        <KpiCard label="Avaria"   value={faulted} icon={<AlertTriangle className="w-5 h-5" />}  color="red"     glow={faulted > 0} delay={180} />
-        <KpiCard label="Energia live" value={totalKwh} sub="kWh acumulado" icon={<TrendingUp className="w-5 h-5" />} color="amber" delay={240} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <KpiCard
+          label="Chargers"
+          value={total}
+          icon={<Server className="w-5 h-5" />}
+          color="violet"
+          delay={0}
+          onClick={() => scrollToSection('chargers-section')}
+        />
+        <KpiCard
+          label="Online"
+          value={online}
+          icon={<Wifi className="w-5 h-5" />}
+          color="emerald"
+          glow={online > 0}
+          delay={60}
+          onClick={() => scrollToFirstMatchingCard('online')}
+        />
+        <KpiCard
+          label="A carregar"
+          value={charging}
+          icon={<Zap className="w-5 h-5" />}
+          color="blue"
+          glow={charging > 0}
+          delay={120}
+          onClick={() => scrollToFirstMatchingCard('charging')}
+        />
+        <KpiCard
+          label="Avaria"
+          value={faulted}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          color="red"
+          glow={faulted > 0}
+          delay={180}
+          onClick={() => scrollToFirstMatchingCard('faulted')}
+        />
+        <KpiCard
+          label="Energia live"
+          value={totalKwh}
+          sub="kWh acumulado"
+          icon={<TrendingUp className="w-5 h-5" />}
+          color="amber"
+          delay={240}
+          onClick={() => scrollToSection('live-events-section')}
+        />
       </div>
 
       {/* main content */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* charger grid */}
-        <div className="xl:col-span-2 space-y-6">
+        <div className="xl:col-span-2 space-y-6" id="chargers-section">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Postos de Carga (EVSE)</h2>
             <span className="text-xs text-gray-400">{total} registados</span>
@@ -173,7 +256,7 @@ export function Dashboard() {
         </div>
 
         {/* event log sidebar */}
-        <div className="space-y-4">
+        <div className="space-y-4" id="live-events-section">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Eventos Live</h2>
             <span className="live-pill">

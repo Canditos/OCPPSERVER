@@ -16,6 +16,7 @@ from api.commands import router as commands_router
 from api.configuration import router as configuration_router
 from api.ws_events import router as ws_router
 from api.tags import router as tags_router
+from api.auth_tokens import router as auth_tokens_router
 from api.smart_charging import router as smart_charging_router
 
 logging.basicConfig(
@@ -40,6 +41,7 @@ app.include_router(commands_router)
 app.include_router(configuration_router)
 app.include_router(ws_router)
 app.include_router(tags_router)
+app.include_router(auth_tokens_router)
 app.include_router(smart_charging_router)
 
 
@@ -67,6 +69,8 @@ async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
 @app.on_event("startup")
 async def startup():
     await init_db()
+    from ocpp_server.charge_point import _init_tx_counter
+    await _init_tx_counter()
 
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):

@@ -2,24 +2,28 @@ import json
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 
-from database import get_db
+from database import get_db, AsyncSessionLocal
+from models.charging_profile import ChargingProfile
 from models.smart_charging import ChargingProfileModel
 from ocpp_server.central_system import get_charge_point
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/smart-charging", tags=["smart-charging"])
 
+_PROFILE_ID_BASE = 2000
+
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
 
 class SchedulePeriodItem(BaseModel):
-    start_period: int  # Seconds from start / midnight (e.g. 0 = 00:00, 25200 = 07:00)
-    limit: float       # In Amperes (e.g. 16.0, 32.0) or Watts (e.g. 11000.0)
+    start_period: int = Field(0, description="Seconds from start/midnight (e.g. 0=00:00, 25200=07:00)")
+    limit: float = Field(16.0, description="Limit in Amps or Watts")
     number_phases: int | None = 3
+    label: str | None = None
 
 
 class ProfileCreateRequest(BaseModel):
@@ -32,7 +36,7 @@ class ProfileCreateRequest(BaseModel):
     recurrency_kind: str | None = "Daily"  # Daily, Weekly
     valid_from: datetime | None = None
     valid_to: datetime | None = None
-    duration: int | None = 86400        # Default 24h in seconds
+    duration: int | None = 86400
     start_schedule: datetime | None = None
     charging_rate_unit: str = "A"       # A or W
     min_charging_rate: float | None = None
@@ -40,8 +44,21 @@ class ProfileCreateRequest(BaseModel):
 
 
 class ApplyProfileRequest(BaseModel):
-    profile_id: int  # Database profile model ID
+    profile_id: int
     charge_point_id: str | None = None
+
+
+class SetProfileLegacyRequest(BaseModel):
+    charge_point_id: str
+    connector_id: int = 0
+    limit_amps: float | None = None
+    limit_watts: float | None = None
+    rate_unit: str = "A"
+    purpose: str = "TxDefaultProfile"
+    stack_level: int = 0
+    label: str = "Custom"
+    schedule_periods: list[SchedulePeriodItem] | None = None
+    duration: int | None = None
 
 
 class ClearProfileRequest(BaseModel):
@@ -79,7 +96,7 @@ PRESETS = [
     {
         "id": "tri_hourly_portugal",
         "name": "Tarifa Tri-horária Portugal (Vazio 32A / Cheias 16A / Ponta 6A)",
-        "description": "Modulação inteligente por 3 patamares horários: Vazio (00h-07h) 32A, Cheias 16A, Horas de Ponta (18h-21h) 6A.",
+        "description": "Modulação inteligente por 3 patamares: Vazio (00h-07h) 32A, Cheias 16A, Horas de Ponta (18h-21h) 6A.",
         "purpose": "TxDefaultProfile",
         "kind": "Recurring",
         "recurrency_kind": "Daily",
@@ -95,7 +112,7 @@ PRESETS = [
     {
         "id": "solar_eco_day",
         "name": "Solar Autoconsumo / Eco Diurno (10A 09h00-17h00)",
-        "description": "Prioriza produção solar diurna com 16A entre as 10h00 e as 17h00 e reduz para 6A no resto do dia.",
+        "description": "Prioriza produção solar diurna com 20A entre as 10h00 e as 17h00 e reduz para 6A no resto do dia.",
         "purpose": "TxDefaultProfile",
         "kind": "Recurring",
         "recurrency_kind": "Daily",
@@ -110,7 +127,7 @@ PRESETS = [
     {
         "id": "max_station_limit_16a",
         "name": "Limite Geral Posto (ChargePointMax 16A)",
-        "description": "Limita o posto inteiro a 16A (11kW trifásico ou 3.7kW mono) para proteção da rede elétrica local.",
+        "description": "Limita o posto inteiro a 16A (11kW trifásico ou 3.7kW mono) para proteção do disjuntor principal.",
         "purpose": "ChargePointMaxProfile",
         "kind": "Recurring",
         "recurrency_kind": "Daily",
@@ -123,7 +140,7 @@ PRESETS = [
     {
         "id": "max_station_limit_32a",
         "name": "Limite Geral Posto (ChargePointMax 32A)",
-        "description": "Limita o posto inteiro a 32A (22kW trifásico ou 7.4kW mono) garantindo equilíbrio com o disjuntor principal.",
+        "description": "Limita o posto inteiro a 32A (22kW trifásico ou 7.4kW mono) para equilíbrio total com a rede.",
         "purpose": "ChargePointMaxProfile",
         "kind": "Recurring",
         "recurrency_kind": "Daily",
@@ -136,7 +153,7 @@ PRESETS = [
     {
         "id": "weekend_full_speed",
         "name": "Semanal: Fim-de-Semana 32A / Dias Úteis 16A (Weekly)",
-        "description": "Perfil recorrente semanal de 7 dias (604800 segundos) para carregamento rápido ao fim de semana.",
+        "description": "Perfil recorrente semanal de 7 dias para carregamento rápido ao fim de semana e moderado nos dias úteis.",
         "purpose": "TxDefaultProfile",
         "kind": "Recurring",
         "recurrency_kind": "Weekly",
@@ -159,11 +176,13 @@ async def get_presets():
 
 
 @router.get("/profiles")
-async def list_profiles(cp_id: str | None = None, db: AsyncSession = Depends(get_db)):
+@router.get("")
+async def list_profiles(cp_id: str | None = None, charge_point_id: str | None = None, db: AsyncSession = Depends(get_db)):
     """List all saved Smart Charging profiles."""
+    target_id = cp_id or charge_point_id
     q = select(ChargingProfileModel).order_by(ChargingProfileModel.created_at.desc())
-    if cp_id:
-        q = q.where(ChargingProfileModel.charge_point_id == cp_id)
+    if target_id:
+        q = q.where(ChargingProfileModel.charge_point_id == target_id)
     result = await db.execute(q)
     profiles = result.scalars().all()
     out = []
@@ -193,10 +212,9 @@ async def list_profiles(cp_id: str | None = None, db: AsyncSession = Depends(get
 @router.post("/profiles")
 async def create_profile(req: ProfileCreateRequest, db: AsyncSession = Depends(get_db)):
     """Create and save a new Smart Charging profile."""
-    # Generate unique profile_id integer
     result = await db.execute(select(ChargingProfileModel).order_by(ChargingProfileModel.profile_id.desc()).limit(1))
     last = result.scalar_one_or_none()
-    next_profile_id = (last.profile_id + 1) if last else 1
+    next_profile_id = (last.profile_id + 1) if last else _PROFILE_ID_BASE
 
     profile = ChargingProfileModel(
         profile_id=next_profile_id,
@@ -254,7 +272,6 @@ async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get
 
     ocpp_payload = profile.to_ocpp_dict()
     connector_id = profile.connector_id
-    # If purpose is ChargePointMaxProfile, connector_id MUST be 0
     if profile.purpose == "ChargePointMaxProfile":
         connector_id = 0
 
@@ -273,7 +290,48 @@ async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get
         raise HTTPException(status_code=500, detail=f"Failed to apply profile: {str(e)}")
 
 
+@router.post("/set")
+async def set_profile_legacy(req: SetProfileLegacyRequest, db: AsyncSession = Depends(get_db)):
+    """Legacy compatibility endpoint for SetChargingProfile."""
+    cp = get_charge_point(req.charge_point_id)
+    if not cp:
+        raise HTTPException(status_code=404, detail=f"Charger '{req.charge_point_id}' not connected")
+
+    profile_id = _PROFILE_ID_BASE + (int(datetime.utcnow().timestamp()) % 10000)
+    rate_unit = req.rate_unit if req.rate_unit in ("A", "W") else "A"
+    base_limit = req.limit_watts if rate_unit == "W" and req.limit_watts is not None else (req.limit_amps or 16.0)
+
+    periods = []
+    if req.schedule_periods:
+        for p in req.schedule_periods:
+            periods.append({"startPeriod": p.start_period, "limit": p.limit})
+    else:
+        periods.append({"startPeriod": 0, "limit": float(base_limit)})
+
+    ocpp_payload = {
+        "chargingProfileId": profile_id,
+        "stackLevel": req.stack_level,
+        "chargingProfilePurpose": req.purpose,
+        "chargingProfileKind": "Absolute" if req.schedule_periods else "Relative",
+        "chargingSchedule": {
+            "chargingRateUnit": rate_unit,
+            "chargingSchedulePeriod": periods,
+        },
+    }
+
+    try:
+        resp = await cp.set_charging_profile(
+            connector_id=req.connector_id,
+            cs_charging_profiles=ocpp_payload,
+        )
+        status = getattr(resp, "status", "Accepted")
+        return {"status": status, "profile_id": profile_id}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"OCPP error: {e}")
+
+
 @router.post("/clear")
+@router.delete("/clear")
 async def clear_profile(req: ClearProfileRequest, db: AsyncSession = Depends(get_db)):
     """Send ClearChargingProfile to the connected charger."""
     cp = get_charge_point(req.charge_point_id)
@@ -289,7 +347,6 @@ async def clear_profile(req: ClearProfileRequest, db: AsyncSession = Depends(get
         )
         status = getattr(resp, "status", "Accepted")
         if status == "Accepted":
-            # Update database deployed status
             if req.profile_id:
                 await db.execute(
                     update(ChargingProfileModel)

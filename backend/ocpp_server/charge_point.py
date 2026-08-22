@@ -19,8 +19,9 @@ from database import AsyncSessionLocal
 from models.charger import Charger, Connector, OcppMessage
 from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
+from models.auth_token import AuthToken
 from models.authorized_tag import AuthorizedTag
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 
 logger = logging.getLogger(__name__)
 _TX_COUNTER = 100000
@@ -30,6 +31,18 @@ def _next_tx_id() -> int:
     global _TX_COUNTER
     _TX_COUNTER += 1
     return _TX_COUNTER
+
+
+async def _init_tx_counter():
+    global _TX_COUNTER
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(func.max(Transaction.transaction_id)))
+            max_id = result.scalar()
+            if max_id and max_id >= _TX_COUNTER:
+                _TX_COUNTER = max_id
+    except Exception as e:
+        logger.warning(f"Failed to load max transaction ID: {e}")
 
 
 def _now() -> datetime:
@@ -89,11 +102,33 @@ class ChargePoint(OcppChargePoint):
             "model": charge_point_model,
         })
 
-        return call_result.BootNotificationPayload(
+        result = call_result.BootNotificationPayload(
             current_time=_now().isoformat() + "Z",
             interval=60,
             status=RegistrationStatus.accepted,
         )
+
+        # After responding, push MeterValue config so live power is visible
+        asyncio.create_task(self._configure_meter_values())
+
+        return result
+
+    async def _configure_meter_values(self):
+        """Send ChangeConfiguration to activate periodic MeterValues if not set."""
+        await asyncio.sleep(2)  # let charger settle after BootNotification
+        configs = [
+            ("MeterValueSampleInterval", "30"),
+            ("MeterValuesSampledData",
+             "Energy.Active.Import.Register,Power.Active.Import,Current.Import,Voltage,SoC"),
+            ("StopTxnSampledData",
+             "Energy.Active.Import.Register,Power.Active.Import"),
+        ]
+        for key, value in configs:
+            try:
+                resp = await self.change_configuration(key, value)
+                logger.info(f"{self.id}: ChangeConfiguration {key}={value} → {resp.status if resp else 'no response'}")
+            except Exception as e:
+                logger.warning(f"{self.id}: ChangeConfiguration {key} failed: {e}")
 
     @on(Action.Heartbeat)
     async def on_heartbeat(self, **kwargs):
@@ -106,36 +141,55 @@ class ChargePoint(OcppChargePoint):
         await event_bus.publish("heartbeat", {"charge_point_id": self.id})
         return call_result.HeartbeatPayload(current_time=_now().isoformat() + "Z")
 
-    @on(Action.Authorize)
-    async def on_authorize(self, id_tag, **kwargs):
-        await self._log_message("IN", "Authorize", {"id_tag": id_tag})
-
-        is_auth = False
+    async def _check_auth(self, id_tag: str) -> AuthorizationStatus:
         async with AsyncSessionLocal() as db:
-            result = await db.execute(
+            charger_row = (await db.execute(
+                select(Charger).where(Charger.charge_point_id == self.id)
+            )).scalar_one_or_none()
+            if charger_row and getattr(charger_row, "autocharge_enabled", False):
+                return AuthorizationStatus.accepted
+
+            # Check AuthorizedTag first
+            tag = (await db.execute(
                 select(AuthorizedTag).where(
                     AuthorizedTag.id_tag == id_tag,
                     AuthorizedTag.is_active == True
                 )
-            )
-            tag = result.scalar_one_or_none()
+            )).scalar_one_or_none()
             if tag:
-                is_auth = True
-            else:
-                # If table is completely empty, auto-seed this first tag so initial setup works
-                count_res = await db.execute(select(AuthorizedTag))
-                all_tags = count_res.scalars().all()
-                if not all_tags:
-                    new_tag = AuthorizedTag(id_tag=id_tag, description="Auto-registada (Primeira)")
-                    db.add(new_tag)
-                    await db.commit()
-                    is_auth = True
+                return AuthorizationStatus.accepted
 
-        status = AuthorizationStatus.accepted if is_auth else AuthorizationStatus.invalid
+            # Check AuthToken table
+            token = (await db.execute(
+                select(AuthToken).where(
+                    AuthToken.id_tag == id_tag,
+                    AuthToken.status == "Accepted"
+                )
+            )).scalar_one_or_none()
+            if token:
+                if token.expiry_date and token.expiry_date < datetime.utcnow():
+                    return AuthorizationStatus.expired
+                return AuthorizationStatus.accepted
+
+            # If both tables are empty, auto-accept and seed first tag
+            count_tags = (await db.execute(select(func.count()).select_from(AuthorizedTag))).scalar()
+            count_tokens = (await db.execute(select(func.count()).select_from(AuthToken))).scalar()
+            if (count_tags or 0) == 0 and (count_tokens or 0) == 0:
+                new_tag = AuthorizedTag(id_tag=id_tag, description="Auto-registada")
+                db.add(new_tag)
+                await db.commit()
+                return AuthorizationStatus.accepted
+
+            return AuthorizationStatus.invalid
+
+    @on(Action.Authorize)
+    async def on_authorize(self, id_tag, **kwargs):
+        await self._log_message("IN", "Authorize", {"id_tag": id_tag})
+        status = await self._check_auth(id_tag)
         await event_bus.publish("authorize", {
             "charge_point_id": self.id,
             "id_tag": id_tag,
-            "status": status,
+            "status": status.value,
         })
         return call_result.AuthorizePayload(
             id_tag_info={"status": status, "expiryDate": None, "parentIdTag": None}
@@ -147,30 +201,11 @@ class ChargePoint(OcppChargePoint):
             "connector_id": connector_id, "id_tag": id_tag, "meter_start": meter_start
         })
 
-        is_auth = False
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(AuthorizedTag).where(
-                    AuthorizedTag.id_tag == id_tag,
-                    AuthorizedTag.is_active == True
-                )
-            )
-            tag = result.scalar_one_or_none()
-            if tag:
-                is_auth = True
-            else:
-                count_res = await db.execute(select(AuthorizedTag))
-                all_tags = count_res.scalars().all()
-                if not all_tags:
-                    new_tag = AuthorizedTag(id_tag=id_tag, description="Auto-registada (Primeira)")
-                    db.add(new_tag)
-                    await db.commit()
-                    is_auth = True
-
-        if not is_auth:
+        auth_status = await self._check_auth(id_tag)
+        if auth_status != AuthorizationStatus.accepted:
             return call_result.StartTransactionPayload(
                 transaction_id=0,
-                id_tag_info={"status": AuthorizationStatus.invalid}
+                id_tag_info={"status": auth_status}
             )
 
         tx_id = _next_tx_id()
@@ -507,5 +542,3 @@ class ChargePoint(OcppChargePoint):
         resp = await self.call(req)
         await self._log_message("OUT", "GetCompositeSchedule", payload_kwargs)
         return resp
-
-
