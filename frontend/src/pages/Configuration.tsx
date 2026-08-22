@@ -165,9 +165,9 @@ export function Configuration() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-white/6 bg-gray-950/60">
-                      <th className="text-left px-5 py-3 text-gray-500 font-medium">Chave</th>
-                      <th className="text-left px-5 py-3 text-gray-500 font-medium">Valor</th>
+                    <tr className="border-b border-slate-200 dark:border-white/6 bg-slate-100 dark:bg-gray-950/60">
+                      <th className="text-left px-5 py-3 text-slate-800 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">Chave</th>
+                      <th className="text-left px-5 py-3 text-slate-800 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">Valor</th>
                       <th className="px-5 py-3 w-24"></th>
                     </tr>
                   </thead>
