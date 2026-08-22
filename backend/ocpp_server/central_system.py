@@ -66,6 +66,27 @@ async def on_connect_fastapi(websocket, charge_point_id: str) -> None:
     CONNECTED[charge_point_id] = cp
     logger.info(f"Charger connected: {charge_point_id} from {client_ip}")
 
+    # Immediately mark as online in database
+    try:
+        from datetime import datetime
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Charger).where(Charger.charge_point_id == charge_point_id))
+            charger_row = result.scalar_one_or_none()
+            if charger_row:
+                charger_row.is_online = True
+                charger_row.last_seen = datetime.utcnow()
+                if charger_row.status == "Offline":
+                    charger_row.status = "Available"
+                await db.commit()
+    except Exception as e:
+        logger.warning(f"Error marking charger {charge_point_id} online in DB: {e}")
+
+    await event_bus.publish("charger_connected", {
+        "charge_point_id": charge_point_id,
+        "is_online": True,
+        "status": "Available",
+    })
+
     try:
         await cp.start()
     except WebSocketDisconnect:

@@ -8,6 +8,9 @@ from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
 from schemas import ChargerOut, OcppMessageOut
 
 
+from ocpp_server.central_system import CONNECTED
+
+
 class AutochargeUpdate(BaseModel):
     enabled: bool
 
@@ -20,6 +23,7 @@ async def list_chargers(db: AsyncSession = Depends(get_db)):
     chargers = result.scalars().all()
     out = []
     for ch in chargers:
+        ch.is_online = ch.charge_point_id in CONNECTED
         r2 = await db.execute(select(Connector).where(Connector.charger_id == ch.id))
         ch.connectors = list(r2.scalars().all())
         out.append(ch)
@@ -32,6 +36,7 @@ async def get_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
     charger = result.scalar_one_or_none()
     if not charger:
         raise HTTPException(status_code=404, detail="Charger not found")
+    charger.is_online = charger.charge_point_id in CONNECTED
     r2 = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
     charger.connectors = list(r2.scalars().all())
     return charger
