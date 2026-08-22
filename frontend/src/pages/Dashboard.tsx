@@ -294,8 +294,8 @@ export function Dashboard() {
                     onClick={() => setSelectedLogCpId(c.charge_point_id)}
                     className={`relative px-4 py-2.5 rounded-2xl text-xs font-medium border transition-all duration-300 flex items-center gap-2.5 cursor-pointer ${
                       isSelected
-                        ? 'bg-gradient-to-r from-blue-600/35 via-cyan-600/25 to-blue-600/35 border-blue-400 text-white shadow-lg shadow-blue-500/25 scale-102 ring-1 ring-blue-400/50'
-                        : 'bg-gray-900/80 border-white/10 text-gray-400 hover:border-white/20 hover:text-gray-200 hover:bg-gray-800/80'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/25 scale-102 ring-2 ring-blue-400/50'
+                        : 'bg-white dark:bg-gray-900/80 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-400 hover:border-slate-300 dark:hover:border-white/20 hover:text-slate-900 dark:hover:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-800/80 shadow-sm'
                     } ${isCharging ? 'border-cyan-400/60 shadow-cyan-500/20' : ''}`}
                   >
                     {isCharging ? (
