@@ -120,28 +120,41 @@ export function MeterChart({ cpId, connectorId = 1, transactionId }: Props) {
     setSelectedMeasurands(allMeasurands)
   }
 
-  // Merge raw datapoints by timestamp
+  // Merge raw datapoints by timestamp chronologically
   const chartData = useMemo(() => {
-    const byTs: Record<string, Record<string, number>> = {}
+    const byTs: Record<string, { timestampMs: number; time: string; [key: string]: any }> = {}
+
     for (const mv of raw) {
-      const key = safeFormatTime(mv.timestamp) || '00:00:00'
+      if (!mv.timestamp) continue
+      const rawIso = mv.timestamp
+      const d = new Date(rawIso.endsWith('Z') ? rawIso : rawIso + 'Z')
+      const tsMs = !isNaN(d.getTime()) ? d.getTime() : new Date(rawIso).getTime()
+      const timeLabel = safeFormatTime(mv.timestamp) || '00:00:00'
+      const key = rawIso
+
+      if (!byTs[key]) {
+        byTs[key] = { timestampMs: tsMs, time: timeLabel }
+      }
       const measurandKey = mv.measurand ?? 'Energy.Active.Import.Register'
-      byTs[key] = byTs[key] ?? {}
       byTs[key][measurandKey] = Number(mv.value)
     }
 
-    return Object.entries(byTs)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([time, vals]) => ({ time, ...vals }))
+    return Object.values(byTs)
+      .sort((a, b) => a.timestampMs - b.timestampMs)
   }, [raw])
 
-  // Latest values map for badges
+  // Latest values map for badges (sorted by real timestamp)
   const latestValues = useMemo(() => {
+    const sorted = [...raw].sort((a, b) => {
+      const ta = new Date(a.timestamp?.endsWith('Z') ? a.timestamp : (a.timestamp + 'Z')).getTime()
+      const tb = new Date(b.timestamp?.endsWith('Z') ? b.timestamp : (b.timestamp + 'Z')).getTime()
+      return ta - tb
+    })
     const latest: Record<string, number> = {}
-    for (let i = raw.length - 1; i >= 0; i--) {
-      const m = raw[i].measurand ?? 'Energy.Active.Import.Register'
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const m = sorted[i].measurand ?? 'Energy.Active.Import.Register'
       if (latest[m] === undefined) {
-        latest[m] = Number(raw[i].value)
+        latest[m] = Number(sorted[i].value)
       }
     }
     return latest

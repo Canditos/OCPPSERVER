@@ -49,14 +49,33 @@ export function ChargerDetail() {
   })
 
   const isOnline   = live?.isOnline ?? charger?.is_online ?? false
-  const connectors = live?.connectors
+  const connectors = (live?.connectors && Object.keys(live.connectors).length > 0)
     ? Object.entries(live.connectors).map(([cid, c]) => ({ connector_id: Number(cid), ...c }))
-    : charger?.connectors ?? []
+    : (charger?.connectors && charger.connectors.length > 0)
+    ? charger.connectors
+    : [{ connector_id: 1, status: isOnline ? (charger?.status || 'Available') : 'Offline' }]
 
   const isCharging = connectors.some((c) => c.status === 'Charging')
 
+  const FRIENDLY_MEASURANDS: Record<string, string> = {
+    'Voltage': 'Tensão',
+    'Power.Active.Import': 'Potência Ativa',
+    'Power.Offered': 'Potência Oferecida',
+    'Current.Import': 'Corrente',
+    'Current.Offered': 'Corrente Oferecida',
+    'Energy.Active.Import.Register': 'Energia Total',
+    'SoC': 'Bateria (SoC)',
+    'Temperature': 'Temperatura',
+  }
+
   const liveMeters = live?.meters
-    ? Object.values(live.meters).flatMap((m) => Object.entries(m).map(([k, v]) => ({ key: k, ...v })))
+    ? Object.entries(live.meters).map(([measurand, data]) => ({
+        key: measurand,
+        label: FRIENDLY_MEASURANDS[measurand] || measurand,
+        value: typeof data.value === 'number' ? data.value.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : data.value,
+        unit: data.unit || '',
+        timestamp: data.timestamp,
+      }))
     : []
 
   if (!charger) {
@@ -161,10 +180,10 @@ export function ChargerDetail() {
                 </span>
               </div>
               <div className="space-y-2">
-                {liveMeters.slice(0, 6).map((m) => (
-                  <div key={m.key} className="flex justify-between items-center py-1.5 border-b border-white/4 last:border-0">
-                    <span className="text-xs text-gray-600 truncate max-w-[55%]">{m.key}</span>
-                    <span className="text-xs font-mono text-amber-400 font-medium">{m.value} {m.unit}</span>
+                {liveMeters.map((m) => (
+                  <div key={m.key} className="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
+                    <span className="text-xs text-gray-400 font-medium truncate max-w-[55%]">{m.label}</span>
+                    <span className="text-xs font-mono text-amber-300 font-bold">{m.value} {m.unit}</span>
                   </div>
                 ))}
               </div>
