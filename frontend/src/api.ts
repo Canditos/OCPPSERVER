@@ -14,6 +14,8 @@ export interface AuthorizedTag {
 export const api = {
   getChargers: () => http.get<Charger[]>('/chargers').then(r => r.data),
   getCharger: (id: string) => http.get<Charger>(`/chargers/${id}`).then(r => r.data),
+  getChargerAvailability: (cpId: string) =>
+    http.get<AvailabilityData>(`/chargers/${cpId}/availability`).then(r => r.data),
   getMessages: (id: string, limit = 100) =>
     http.get<OcppMessage[]>(`/chargers/${id}/messages?limit=${limit}`).then(r => r.data),
 
@@ -172,5 +174,42 @@ export interface SmartChargingProfile {
   is_deployed: boolean
   created_at?: string | null
 }
+
+export interface HourlyTimelineItem {
+  hour: string
+  status: string
+  is_operational: boolean
+}
+
+export interface AvailabilityEvent {
+  id: number
+  timestamp: string | null
+  connector_id: number
+  status: string
+  error_code: string | null
+  info: string | null
+}
+
+export interface AvailabilityData {
+  charge_point_id: string
+  is_online: boolean
+  status: string
+  last_seen: string | null
+  heartbeat_age_seconds: number
+  heartbeat_status: 'healthy' | 'warning' | 'timeout'
+  uptime_24h_pct: number
+  uptime_7d_pct: number
+  uptime_30d_pct: number
+  total_faults_24h: number
+  connectors: Array<{
+    connector_id: number
+    status: string
+    error_code: string | null
+    updated_at: string | null
+  }>
+  hourly_timeline: HourlyTimelineItem[]
+  recent_events: AvailabilityEvent[]
+}
+
 
 

@@ -1,4 +1,4 @@
-from models.charger import Charger, Connector, OcppMessage
+from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
 from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
 from models.auth_token import AuthToken
@@ -7,7 +7,7 @@ from models.charging_profile import ChargingProfile
 from models.smart_charging import ChargingProfileModel
 
 __all__ = [
-    "Charger", "Connector", "OcppMessage",
+    "Charger", "Connector", "OcppMessage", "AvailabilityLog",
     "Transaction", "MeterValue",
     "ChargerConfiguration",
     "AuthToken",

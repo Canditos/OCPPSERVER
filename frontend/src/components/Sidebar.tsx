@@ -102,7 +102,7 @@ export function Sidebar({
       </nav>
 
       {/* footer stats */}
-      <div className="p-3 m-3 space-y-2">
+      <div className="mt-auto p-3 m-3 space-y-2 box-border">
         <div className={`rounded-xl p-3 border space-y-2 ${
           resolved === 'dark'
             ? 'bg-white/3 border-white/5'
@@ -136,7 +136,9 @@ export function Sidebar({
           </div>
         </div>
 
-        <ThemeToggle value={mode} onChange={setMode} />
+        <div className="w-full">
+          <ThemeToggle value={mode} onChange={setMode} />
+        </div>
       </div>
     </aside>
   )

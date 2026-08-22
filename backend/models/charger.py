@@ -54,3 +54,17 @@ class OcppMessage(Base):
 
     charger: Mapped["Charger"] = relationship(back_populates="messages")
 
+
+class AvailabilityLog(Base):
+    __tablename__ = "availability_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
+    charge_point_id: Mapped[str] = mapped_column(String(64), index=True)
+    connector_id: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32))  # Available, Occupied, Charging, Faulted, Offline, Inoperative
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    info: Mapped[str | None] = mapped_column(String(256))
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+

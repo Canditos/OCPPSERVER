@@ -8,6 +8,7 @@ import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
 import { EventLog } from '../components/EventLog'
 import { ConnectorBadge } from '../components/ConnectorBadge'
+import { AvailabilityMonitor } from '../components/AvailabilityMonitor'
 import { useChargerStore } from '../store/chargerStore'
 import type { Charger, OcppMessage } from '../types'
 
@@ -173,6 +174,9 @@ export function ChargerDetail() {
 
         {/* right columns */}
         <div className="xl:col-span-2 space-y-5">
+          {/* availability monitor */}
+          <AvailabilityMonitor chargePointId={charger.charge_point_id} />
+
           {/* meter chart */}
           <div>
             <div className="flex items-center justify-between mb-3">

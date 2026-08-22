@@ -16,7 +16,7 @@ from ocpp.v16.enums import (
 
 import event_bus
 from database import AsyncSessionLocal
-from models.charger import Charger, Connector, OcppMessage
+from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
 from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
 from models.auth_token import AuthToken
@@ -93,6 +93,15 @@ class ChargePoint(OcppChargePoint):
             charger.last_seen = _now()
             charger.client_ip = self.client_ip
             charger.registered_at = charger.registered_at or _now()
+            avail = AvailabilityLog(
+                charger_id=charger.id,
+                charge_point_id=self.id,
+                connector_id=0,
+                status="Available",
+                info="BootNotification",
+                timestamp=_now(),
+            )
+            db.add(avail)
             await db.commit()
             await db.refresh(charger)
 
@@ -338,6 +347,16 @@ class ChargePoint(OcppChargePoint):
                     conn.error_code = error_code
                     conn.updated_at = _now()
                 charger.last_seen = _now()
+
+                avail = AvailabilityLog(
+                    charger_id=charger.id,
+                    charge_point_id=self.id,
+                    connector_id=connector_id,
+                    status=status,
+                    error_code=error_code if error_code != "NoError" else None,
+                    timestamp=_now(),
+                )
+                db.add(avail)
                 await db.commit()
 
         await event_bus.publish("status_notification", {
