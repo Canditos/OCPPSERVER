@@ -45,8 +45,25 @@ async def _add_missing_columns(conn) -> None:
         ))
 
 
+async def _seed_default_tags(session: AsyncSession) -> None:
+    from models.authorized_tag import AuthorizedTag
+    from sqlalchemy import select
+    result = await session.execute(select(AuthorizedTag))
+    if not result.scalars().first():
+        defaults = [
+            AuthorizedTag(id_tag="VERSICHARGE_TAG", description="Tag Padrão Siemens VersiCharge", is_active=True),
+            AuthorizedTag(id_tag="ADMIN_TAG", description="Tag Administrador", is_active=True),
+            AuthorizedTag(id_tag="MASTER_RFID", description="Tag Mestre RFID", is_active=True),
+        ]
+        session.add_all(defaults)
+        await session.commit()
+
+
 async def init_db():
     from models import charger, transaction, configuration, auth_token, authorized_tag, charging_profile  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _add_missing_columns(conn)
+
+    async with AsyncSessionLocal() as session:
+        await _seed_default_tags(session)

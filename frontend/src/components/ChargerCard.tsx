@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock, Loader2, CheckCircle2, AlertCircle, Tag } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock,
+  Loader2, CheckCircle2, AlertCircle, Tag, Plus, X, ShieldCheck
+} from 'lucide-react'
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
 import { ConnectorBadge } from './ConnectorBadge'
@@ -22,10 +25,17 @@ function LiveKw({ watts }: { watts: number }) {
 const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV']
 
 export function ChargerCard({ charger }: { charger: Charger }) {
+  const queryClient = useQueryClient()
   const live = useChargerStore((s) => s.liveState[charger.charge_point_id])
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null)
+
+  // Quick Add Tag Modal state
+  const [showTagModal, setShowTagModal] = useState(false)
+  const [newTagId, setNewTagId] = useState('')
+  const [newTagDesc, setNewTagDesc] = useState('')
+  const [isSavingTag, setIsSavingTag] = useState(false)
 
   // Fetch authorized tags
   const { data: authorizedTags = [] } = useQuery({
@@ -33,6 +43,15 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     queryFn: api.getTags,
     staleTime: 30000,
   })
+
+  // Selected tag for RemoteStart
+  const [selectedTag, setSelectedTag] = useState<string>('')
+
+  useEffect(() => {
+    if (authorizedTags.length > 0 && !selectedTag) {
+      setSelectedTag(authorizedTags[0].id_tag)
+    }
+  }, [authorizedTags, selectedTag])
 
   // Fetch active transaction for this charger
   const { data: activeTransaction, refetch: refetchActiveTx } = useQuery({
@@ -75,9 +94,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const isPreparing = mainStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing')
   const isFaulted = mainStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted')
 
-  // Get tag to use for RemoteStart
-  const defaultTag = authorizedTags.length > 0 ? authorizedTags[0].id_tag : null
-  const hasAuthorizedTag = defaultTag !== null
+  const effectiveTag = selectedTag || (authorizedTags.length > 0 ? authorizedTags[0].id_tag : 'VERSICHARGE_TAG')
+  const hasAuthorizedTag = authorizedTags.length > 0
 
   const livePower = live?.meters
     ? Object.entries(live.meters)
@@ -108,22 +126,49 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const handleRemoteStart = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+
     if (!hasAuthorizedTag) {
-      setFeedback({ type: 'error', message: 'Sem tag autorizada! Vai a Configuração > Tags para adicionar.' })
-      setTimeout(() => setFeedback(null), 5000)
+      setNewTagId('VERSICHARGE_TAG')
+      setShowTagModal(true)
       return
     }
+
     setLoadingAction('start')
     setFeedback(null)
     try {
-      await api.remoteStart(charger.charge_point_id, defaultTag!, selectedConnectorId)
+      await api.remoteStart(charger.charge_point_id, effectiveTag, selectedConnectorId)
       setOptimisticStatus('Preparing')
-      setFeedback({ type: 'success', message: `Aceite! Tag "${defaultTag}" na tomada #${selectedConnectorId}` })
-      // Refetch active transaction after a short delay
+      setFeedback({ type: 'success', message: `Aceite! Tag "${effectiveTag}" na tomada #${selectedConnectorId}` })
       setTimeout(() => refetchActiveTx(), 2000)
     } catch (err: unknown) {
       setFeedback({ type: 'error', message: `Falha ao ligar tomada #${selectedConnectorId}` })
     } finally {
+      setLoadingAction(null)
+      setTimeout(() => setFeedback(null), 4000)
+    }
+  }
+
+  const handleSaveAndStart = async (tagToSave: string, desc: string, startImmediately: boolean) => {
+    if (!tagToSave.trim()) return
+    setIsSavingTag(true)
+    try {
+      await api.createTag(tagToSave.trim(), desc.trim() || undefined)
+      await queryClient.invalidateQueries({ queryKey: ['tags'] })
+      setSelectedTag(tagToSave.trim())
+      setShowTagModal(false)
+      setFeedback({ type: 'success', message: `Tag "${tagToSave.trim()}" autorizada com sucesso!` })
+
+      if (startImmediately) {
+        setLoadingAction('start')
+        await api.remoteStart(charger.charge_point_id, tagToSave.trim(), selectedConnectorId)
+        setOptimisticStatus('Preparing')
+        setFeedback({ type: 'success', message: `Carga iniciada na tomada #${selectedConnectorId} com tag "${tagToSave.trim()}"!` })
+        setTimeout(() => refetchActiveTx(), 2000)
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: 'Erro ao registar a tag RFID.' })
+    } finally {
+      setIsSavingTag(false)
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 4000)
     }
@@ -135,7 +180,6 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setLoadingAction('stop')
     setFeedback(null)
     try {
-      // Pass the real active transaction_id, or null for auto-detect on backend
       const txId = activeTransaction?.transaction_id ?? null
       const resp = await api.remoteStop(charger.charge_point_id, txId)
       setOptimisticStatus('Available')
@@ -221,82 +265,57 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-400 mt-0.5 font-medium truncate">{charger.model ?? 'VersiCharge'} · {charger.vendor ?? 'Siemens'}</p>
+            <p className="text-xs text-gray-500 truncate mt-0.5">
+              {[charger.model, charger.vendor].filter(Boolean).join(' · ') || 'Posto OCPP'}
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-            isOnline
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shadow-sm'
-              : 'bg-gray-800/60 text-gray-500 border border-gray-700/30'
+          <span className={`status-pill ${
+            isSessionActive ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+            : isPreparing   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse'
+            : isFaulted     ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+            : isOnline      ? 'status-online'
+            : 'status-offline'
           }`}>
-            {isOnline ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-                </span>
-                Online
-              </>
-            ) : (
-              <><WifiOff className="w-3.5 h-3.5" />Offline</>
-            )}
-          </div>
+            <span className={`status-dot ${isSessionActive ? 'bg-blue-400' : isOnline ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+            {mainStatus}
+          </span>
 
           <Link
             to={`/chargers/${charger.charge_point_id}`}
-            className="btn-ghost px-3 py-1.5 rounded-full text-xs"
+            className="btn-ghost text-xs text-gray-400 hover:text-gray-200 py-1 px-2 rounded-lg"
           >
             Detalhes
           </Link>
         </div>
       </div>
 
-      {/* live session panel — DC gets battery indicator, AC gets power bars */}
+      {/* Live charging telemetry card */}
       {isSessionActive && (
-        isDC ? (
-          <BatteryIndicator
-            soc={liveSoC}
-            isCharging={!isPreparing}
-            powerKw={livePowerKw}
-            className="mb-4"
-          />
-        ) : (
-          <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/60 to-slate-900/60 border border-blue-500/20 shadow-inner">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-2 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-blue-600 animate-pulse shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
-                    {isPreparing ? 'Sessão em Preparação' : 'Potência de Carga'}
-                  </p>
-                  {livePower !== null && livePower > 0 ? (
-                    <LiveKw watts={livePower} />
-                  ) : (
-                    <div className="flex items-center gap-1 text-blue-400 font-semibold text-sm">
-                      <Zap className="w-4 h-4 animate-bounce" />
-                      <span>{isPreparing ? 'A comunicar com veículo...' : 'Em carregamento ativo...'}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-end gap-1 h-7 shrink-0">
-                {[4, 7, 10, 6, 8, 12].map((h, i) => (
-                  <div
-                    key={i}
-                    className="w-1 rounded-full bg-cyan-400/80 animate-pulse"
-                    style={{ height: `${h * 2}px`, animationDelay: `${i * 0.12}s` }}
-                  />
-                ))}
-              </div>
+        <div className="mb-4 p-3 rounded-xl bg-blue-500/5 border border-blue-500/15 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+              </span>
+              <span className="text-xs font-semibold text-blue-300">Sessão em Curso</span>
             </div>
+            {livePowerKw !== null && <LiveKw watts={livePower!} />}
           </div>
-        )
+
+          {liveSoC !== null && (
+            <div className="pt-2 border-t border-blue-500/10">
+              <BatteryIndicator percentage={liveSoC} animated={true} />
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Clickable Connectors Selector */}
-      <div className="mb-4">
+      {/* Plugs / Connectors selector */}
+      <div className="mb-3">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Selecionar Tomada / Plug</span>
           <span className="text-[11px] text-blue-400 font-mono font-semibold">Ativa: #{selectedConnectorId}</span>
@@ -340,28 +359,57 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         </div>
       )}
 
-      {/* Active Tag & Transaction Info */}
-      {(hasAuthorizedTag || activeTransaction) && (
-        <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
+      {/* Active Tag & Transaction Bar */}
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {hasAuthorizedTag ? (
+            <div className="flex items-center gap-1">
+              <span className="text-gray-500 text-[10px]">Tag:</span>
+              <select
+                value={effectiveTag}
+                onChange={(e) => setSelectedTag(e.target.value)}
+                className="bg-white/5 border border-white/10 text-emerald-400 rounded-lg px-2 py-0.5 text-xs font-mono font-medium focus:outline-none focus:border-emerald-500/50"
+              >
+                {authorizedTags.map((t) => (
+                  <option key={t.id} value={t.id_tag} className="bg-gray-900 text-gray-200">
+                    {t.id_tag} {t.description ? `(${t.description})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setNewTagId('VERSICHARGE_TAG')
+                setShowTagModal(true)
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium hover:bg-amber-500/25 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              <span>+ Registar Tag RFID</span>
+            </button>
+          )}
+
           {hasAuthorizedTag && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
-              <Tag className="w-3 h-3" />
-              {defaultTag}
-            </span>
-          )}
-          {!hasAuthorizedTag && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 font-medium">
-              <AlertCircle className="w-3 h-3" />
-              Sem tag autorizada
-            </span>
-          )}
-          {activeTransaction && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-medium">
-              TX #{activeTransaction.transaction_id}
-            </span>
+            <button
+              onClick={() => {
+                setNewTagId('')
+                setShowTagModal(true)
+              }}
+              className="p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/5"
+              title="Adicionar nova tag"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
-      )}
+
+        {activeTransaction && (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-medium">
+            TX #{activeTransaction.transaction_id}
+          </span>
+        )}
+      </div>
 
       {/* Quick Controls Toolbar */}
       <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -379,15 +427,13 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           <button
             type="button"
             onClick={handleRemoteStart}
-            disabled={!isOnline || loadingAction !== null || !hasAuthorizedTag}
-            className={`flex-1 btn text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all ${
-              hasAuthorizedTag
-                ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500'
-                : 'bg-gray-700 cursor-not-allowed opacity-60'
-            }`}
+            disabled={!isOnline || loadingAction !== null}
+            className="flex-1 btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
           >
             {loadingAction === 'start' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>{hasAuthorizedTag ? `Iniciar (Tomada #${selectedConnectorId})` : 'Adicionar Tag!'}</span>
+            <span>
+              {hasAuthorizedTag ? `Iniciar Carga (Tomada #${selectedConnectorId})` : 'Adicionar Tag & Iniciar'}
+            </span>
           </button>
         )}
 
@@ -417,6 +463,105 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         <div className="flex items-center gap-1 mt-3 pt-2 text-[11px] text-gray-400 font-medium">
           <Clock className="w-3 h-3 text-gray-400" />
           <span>Visto {lastSeen}</span>
+        </div>
+      )}
+
+      {/* Quick Add Tag Modal */}
+      {showTagModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={() => setShowTagModal(false)}
+        >
+          <div
+            className="w-full max-w-md bg-gray-900 border border-white/15 rounded-2xl p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
+                  <Tag className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-100">Registar Tag RFID Autorizada</h3>
+                  <p className="text-xs text-gray-500">Permite autorizar arranques remotos e no posto</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTagModal(false)}
+                className="p-1 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Presets */}
+            <div className="space-y-1.5">
+              <span className="text-xs text-gray-400 font-medium">Sugestões rápidas (1 clique):</span>
+              <div className="flex flex-wrap gap-1.5">
+                {['VERSICHARGE_TAG', 'ADMIN_TAG', 'MASTER_RFID', 'TAG_001'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setNewTagId(preset)
+                      setNewTagDesc(`Tag ${preset}`)
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-emerald-400 border border-emerald-500/20 font-mono"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Inputs */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">ID da Tag RFID / Cartão</label>
+                <input
+                  type="text"
+                  value={newTagId}
+                  onChange={(e) => setNewTagId(e.target.value)}
+                  placeholder="Ex: VERSICHARGE_TAG ou 04A1B2C3D4"
+                  className="input w-full font-mono text-sm uppercase"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Descrição (opcional)</label>
+                <input
+                  type="text"
+                  value={newTagDesc}
+                  onChange={(e) => setNewTagDesc(e.target.value)}
+                  placeholder="Ex: Cartão Siemens Principal / Utilizador"
+                  className="input w-full text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => handleSaveAndStart(newTagId, newTagDesc, false)}
+                disabled={isSavingTag || !newTagId.trim()}
+                className="flex-1 btn-secondary text-xs py-2 rounded-xl text-gray-300 hover:text-white"
+              >
+                {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Apenas Guardar Tag'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSaveAndStart(newTagId, newTagDesc, true)}
+                disabled={isSavingTag || !newTagId.trim()}
+                className="flex-1 btn bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-md font-semibold"
+              >
+                {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
+                <span>Guardar & Iniciar Carga</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
