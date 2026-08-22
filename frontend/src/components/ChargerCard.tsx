@@ -69,9 +69,6 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
   const isOnline = live?.isOnline ?? charger.is_online
 
-  // Determine current status incorporating optimistic state
-  const mainStatus = optimisticStatus || live?.status || charger.status || 'Available'
-
   // Determine connectors array (NEVER EMPTY - defaults to connector #1 if DB/live empty)
   const rawConnectors = (live?.connectors && Object.keys(live.connectors).length > 0)
     ? Object.entries(live.connectors).map(([id, c]) => ({
@@ -82,17 +79,22 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       }))
     : (charger.connectors && charger.connectors.length > 0
         ? charger.connectors
-        : [{ connector_id: 1, status: mainStatus }])
+        : [{ connector_id: 1, status: isOnline ? (charger.status || 'Available') : 'Offline' }])
 
   // Plug selection state
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(
     rawConnectors.length > 0 ? rawConnectors[0].connector_id : 1
   )
 
+  // Determine current operational status incorporating optimistic state
+  const computedStatus = !isOnline
+    ? 'Offline'
+    : (optimisticStatus || live?.status || (charger.status && charger.status !== 'Offline' ? charger.status : null) || (rawConnectors[0]?.status && rawConnectors[0]?.status !== 'Offline' ? rawConnectors[0]?.status : null) || 'Available')
+
   // Check if any connector or charger is in active session (Preparing, Charging, etc.)
-  const isSessionActive = ACTIVE_STATUSES.includes(mainStatus) || rawConnectors.some((c) => ACTIVE_STATUSES.includes(c.status))
-  const isPreparing = mainStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing')
-  const isFaulted = mainStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted')
+  const isSessionActive = isOnline && (ACTIVE_STATUSES.includes(computedStatus) || rawConnectors.some((c) => ACTIVE_STATUSES.includes(c.status)))
+  const isPreparing = isOnline && (computedStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing'))
+  const isFaulted = isOnline && (computedStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted'))
 
   const effectiveTag = selectedTag || (authorizedTags.length > 0 ? authorizedTags[0].id_tag : 'VERSICHARGE_TAG')
   const hasAuthorizedTag = authorizedTags.length > 0
@@ -242,17 +244,22 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       <div className="flex items-start justify-between mb-4 pt-1 gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className={`relative flex items-center justify-center w-11 h-11 rounded-2xl transition-all shrink-0 ${
-            isSessionActive ? 'bg-blue-500/20 shadow-lg shadow-blue-500/10 border border-blue-500/30'
-            : isFaulted ? 'bg-red-500/20 border border-red-500/30'
-            : isOnline  ? 'bg-emerald-500/15 border border-emerald-500/25'
-            : 'bg-gray-800/60 border border-gray-700/30'
+            !isOnline
+              ? 'bg-gray-800/60 border border-gray-700/40 text-gray-500'
+              : isSessionActive
+              ? 'bg-blue-500/20 shadow-lg shadow-blue-500/10 border border-blue-500/30 text-blue-400'
+              : isFaulted
+              ? 'bg-red-500/20 border border-red-500/30 text-red-400'
+              : 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400'
           }`}>
-            {isSessionActive ? (
+            {!isOnline ? (
+              <WifiOff className="w-5 h-5 text-gray-500" />
+            ) : isSessionActive ? (
               <Zap className="w-5 h-5 text-blue-400 animate-pulse" fill="currentColor" />
             ) : isFaulted ? (
-              <Zap className="w-5 h-5 text-red-400" />
+              <AlertCircle className="w-5 h-5 text-red-400" />
             ) : (
-              <Plug className={`w-5 h-5 ${isOnline ? 'text-emerald-400' : 'text-gray-600'}`} />
+              <Plug className="w-5 h-5 text-emerald-400" />
             )}
           </div>
 
@@ -272,15 +279,41 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className={`status-pill ${
-            isSessionActive ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
-            : isPreparing   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse'
-            : isFaulted     ? 'bg-red-500/15 text-red-400 border border-red-500/30'
-            : isOnline      ? 'status-online'
-            : 'status-offline'
+          <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+            !isOnline
+              ? 'bg-gray-800/80 text-gray-400 border-gray-700/60'
+              : isSessionActive
+              ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30 shadow-sm shadow-blue-500/10'
+              : isPreparing
+              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse'
+              : isFaulted
+              ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+              : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
           }`}>
-            <span className={`status-dot ${isSessionActive ? 'bg-blue-400' : isOnline ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-            {mainStatus}
+            <span className={`w-2 h-2 rounded-full ${
+              !isOnline
+                ? 'bg-gray-500'
+                : isSessionActive
+                ? 'bg-blue-400 animate-ping'
+                : isPreparing
+                ? 'bg-amber-400 animate-pulse'
+                : isFaulted
+                ? 'bg-red-400'
+                : 'bg-emerald-400 shadow-sm shadow-emerald-400'
+            }`} />
+            <span>
+              {!isOnline
+                ? 'Offline'
+                : computedStatus === 'Available'
+                ? 'Disponível'
+                : computedStatus === 'Charging'
+                ? 'A Carregar'
+                : computedStatus === 'Preparing'
+                ? 'A Preparar'
+                : computedStatus === 'Faulted'
+                ? 'Avaria'
+                : computedStatus}
+            </span>
           </span>
 
           <Link

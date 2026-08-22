@@ -50,15 +50,15 @@ export const useChargerStore = create<ChargerStore>((set) => ({
       if (!cpId) return { events }
 
       const cur: ChargerLiveState = live[cpId] ?? {
-        status: 'Unknown',
-        isOnline: false,
+        status: 'Available',
+        isOnline: true,
         connectors: {},
-        lastSeen: null,
+        lastSeen: new Date().toISOString(),
         meters: {},
       }
 
       if (event.type === 'charger_connected') {
-        live[cpId] = { ...cur, isOnline: true, status: cur.status === 'Unknown' ? 'Available' : cur.status, lastSeen: new Date().toISOString() }
+        live[cpId] = { ...cur, isOnline: true, status: 'Available', lastSeen: new Date().toISOString() }
       } else if (event.type === 'charger_disconnected') {
         live[cpId] = { ...cur, isOnline: false, status: 'Offline', lastSeen: new Date().toISOString() }
       } else if (event.type === 'status_notification') {
@@ -68,7 +68,7 @@ export const useChargerStore = create<ChargerStore>((set) => ({
 
         if (connId === 0) {
           // charger-level status (firmware update, etc.)
-          live[cpId] = { ...cur, status: d.status as string }
+          live[cpId] = { ...cur, status: d.status as string, isOnline: true }
         } else {
           const updatedConnectors = {
             ...cur.connectors,
@@ -76,12 +76,32 @@ export const useChargerStore = create<ChargerStore>((set) => ({
           }
           live[cpId] = {
             ...cur,
+            isOnline: true,
             connectors: updatedConnectors,
             status: deriveChargerStatus(updatedConnectors),
           }
         }
       } else if (event.type === 'heartbeat') {
-        live[cpId] = { ...cur, isOnline: true, lastSeen: new Date().toISOString() }
+        live[cpId] = {
+          ...cur,
+          isOnline: true,
+          status: (cur.status === 'Unknown' || cur.status === 'Offline') ? 'Available' : cur.status,
+          lastSeen: new Date().toISOString(),
+        }
+      } else if (event.type === 'transaction_stopped') {
+        live[cpId] = {
+          ...cur,
+          isOnline: true,
+          status: 'Available',
+          lastSeen: new Date().toISOString(),
+        }
+      } else if (event.type === 'transaction_started') {
+        live[cpId] = {
+          ...cur,
+          isOnline: true,
+          status: 'Charging',
+          lastSeen: new Date().toISOString(),
+        }
       } else if (event.type === 'meter_values') {
         const d = event.data as { values: Array<{ measurand: string; value: number; unit: string; timestamp: string }> }
         const meters = { ...cur.meters }
