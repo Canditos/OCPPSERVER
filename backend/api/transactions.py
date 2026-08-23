@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_db
 from models.transaction import Transaction, MeterValue
+from models.user import User
 from schemas import TransactionOut, MeterValueOut
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -15,6 +16,11 @@ async def list_transactions(
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
 ):
+    # Fetch all users to map RFID -> user info
+    user_res = await db.execute(select(User))
+    users = user_res.scalars().all()
+    user_by_tag = {u.rfid_tag: u for u in users if u.rfid_tag}
+
     q = select(Transaction).order_by(Transaction.start_time.desc()).limit(limit)
     if cp_id:
         q = q.where(Transaction.charge_point_id == cp_id)
@@ -25,8 +31,30 @@ async def list_transactions(
     out = []
     for tx in txs:
         d = TransactionOut.model_validate(tx)
-        if tx.meter_stop is not None:
-            d.energy_kwh = round((tx.meter_stop - tx.meter_start) / 1000, 3)
+        if tx.meter_stop is not None and tx.meter_start is not None:
+            d.energy_kwh = round(max(0, tx.meter_stop - tx.meter_start) / 1000, 3)
+        elif tx.status == "Active":
+            # calculate from latest meter value if active
+            mv_res = await db.execute(
+                select(MeterValue)
+                .where(MeterValue.transaction_id == tx.transaction_id)
+                .order_by(MeterValue.timestamp.desc())
+                .limit(5)
+            )
+            mvs = mv_res.scalars().all()
+            for mv in mvs:
+                if mv.measurand and 'energy' in mv.measurand.lower():
+                    consumed = float(mv.value) - (tx.meter_start or 0)
+                    if consumed > 0:
+                        d.energy_kwh = round(consumed / 1000, 3)
+                    break
+
+        user = user_by_tag.get(tx.id_tag)
+        if user:
+            d.user_username = user.username
+            d.user_email = user.email
+            d.user_role = user.role
+
         out.append(d)
     return out
 
@@ -72,5 +100,13 @@ async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db))
     d = TransactionOut.model_validate(tx)
     if tx.meter_stop is not None:
         d.energy_kwh = round((tx.meter_stop - tx.meter_start) / 1000, 3)
-    return d
 
+    if tx.id_tag:
+        u_res = await db.execute(select(User).where(User.rfid_tag == tx.id_tag))
+        user = u_res.scalar_one_or_none()
+        if user:
+            d.user_username = user.username
+            d.user_email = user.email
+            d.user_role = user.role
+
+    return d

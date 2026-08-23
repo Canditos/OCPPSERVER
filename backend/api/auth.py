@@ -135,6 +135,15 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ActiveUserCharge(BaseModel):
+    transaction_id: int
+    charge_point_id: str
+    connector_id: int
+    start_time: Optional[str] = None
+    current_power_kw: float = 0.0
+    consumed_kwh: float = 0.0
+
+
 class UserOut(BaseModel):
     id: int
     username: str
@@ -145,6 +154,8 @@ class UserOut(BaseModel):
     created_at: Optional[str] = None
     total_kwh: Optional[float] = 0.0
     total_sessions: Optional[int] = 0
+    active_charge: Optional[ActiveUserCharge] = None
+    last_charge_time: Optional[str] = None
 
 
 class LoginResponse(BaseModel):
@@ -203,17 +214,49 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
     """Get profile of current logged-in user with personal consumption stats."""
     total_kwh = 0.0
     total_sessions = 0
+    last_charge_time = None
+    active_charge_data = None
     
     if current_user.rfid_tag:
-        # Calculate total energy and sessions for user's RFID
-        r_tx = await db.execute(select(Transaction).where(Transaction.id_tag == current_user.rfid_tag))
+        r_tx = await db.execute(
+            select(Transaction)
+            .where(Transaction.id_tag == current_user.rfid_tag)
+            .order_by(Transaction.start_time.desc())
+        )
         txs = r_tx.scalars().all()
         total_sessions = len(txs)
+        if txs and txs[0].start_time:
+            last_charge_time = txs[0].start_time.isoformat()
+            
         for tx in txs:
             if tx.meter_stop is not None and tx.meter_start is not None:
                 wh = tx.meter_stop - tx.meter_start
                 if wh > 0:
                     total_kwh += (wh / 1000.0)
+            elif tx.status == "Active" and active_charge_data is None:
+                mv_res = await db.execute(
+                    select(MeterValue)
+                    .where(MeterValue.transaction_id == tx.transaction_id)
+                    .order_by(MeterValue.timestamp.desc())
+                    .limit(6)
+                )
+                mvs = mv_res.scalars().all()
+                latest_p = 0.0
+                latest_e = tx.meter_start or 0
+                for mv in mvs:
+                    if mv.measurand and 'power' in mv.measurand.lower() and latest_p == 0.0:
+                        latest_p = float(mv.value)
+                    elif mv.measurand and 'energy' in mv.measurand.lower():
+                        latest_e = float(mv.value)
+                c_wh = max(0, latest_e - (tx.meter_start or 0))
+                active_charge_data = {
+                    "transaction_id": tx.transaction_id,
+                    "charge_point_id": tx.charge_point_id,
+                    "connector_id": tx.connector_id,
+                    "start_time": tx.start_time.isoformat() if tx.start_time else None,
+                    "current_power_kw": round(latest_p / 1000.0, 2),
+                    "consumed_kwh": round(c_wh / 1000.0, 2),
+                }
                     
     return {
         "id": current_user.id,
@@ -225,6 +268,8 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
         "total_kwh": round(total_kwh, 2),
         "total_sessions": total_sessions,
+        "active_charge": active_charge_data,
+        "last_charge_time": last_charge_time,
     }
 
 
@@ -233,29 +278,66 @@ async def list_users(
     admin_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """(Admin only) List all users with aggregated charging stats per RFID."""
+    """(Admin only) List all users with aggregated charging stats and real-time active charging info."""
     result = await db.execute(select(User).order_by(User.id.asc()))
     users = result.scalars().all()
     
     # Pre-fetch all transactions to calculate stats in memory
-    tx_result = await db.execute(select(Transaction))
+    tx_result = await db.execute(select(Transaction).order_by(Transaction.start_time.desc()))
     all_txs = tx_result.scalars().all()
     
     stats_by_tag: dict[str, dict] = {}
+    last_time_by_tag: dict[str, str] = {}
+    active_tx_by_tag: dict[str, Transaction] = {}
+
     for tx in all_txs:
         tag = tx.id_tag or ""
         if tag not in stats_by_tag:
             stats_by_tag[tag] = {"kwh": 0.0, "count": 0}
+            if tx.start_time:
+                last_time_by_tag[tag] = tx.start_time.isoformat()
+
         stats_by_tag[tag]["count"] += 1
         if tx.meter_stop is not None and tx.meter_start is not None:
             wh = tx.meter_stop - tx.meter_start
             if wh > 0:
                 stats_by_tag[tag]["kwh"] += (wh / 1000.0)
+        elif tx.status == "Active" and tag not in active_tx_by_tag:
+            active_tx_by_tag[tag] = tx
                 
     out = []
     for u in users:
         tag = u.rfid_tag or ""
         stats = stats_by_tag.get(tag, {"kwh": 0.0, "count": 0})
+        
+        active_charge_data = None
+        active_tx = active_tx_by_tag.get(tag)
+        if active_tx:
+            mv_res = await db.execute(
+                select(MeterValue)
+                .where(MeterValue.transaction_id == active_tx.transaction_id)
+                .order_by(MeterValue.timestamp.desc())
+                .limit(6)
+            )
+            mvs = mv_res.scalars().all()
+            latest_power_w = 0.0
+            latest_energy_wh = active_tx.meter_start or 0
+            for mv in mvs:
+                if mv.measurand and 'power' in mv.measurand.lower() and latest_power_w == 0.0:
+                    latest_power_w = float(mv.value)
+                elif mv.measurand and 'energy' in mv.measurand.lower():
+                    latest_energy_wh = float(mv.value)
+                    
+            consumed_wh = max(0, latest_energy_wh - (active_tx.meter_start or 0))
+            active_charge_data = {
+                "transaction_id": active_tx.transaction_id,
+                "charge_point_id": active_tx.charge_point_id,
+                "connector_id": active_tx.connector_id,
+                "start_time": active_tx.start_time.isoformat() if active_tx.start_time else None,
+                "current_power_kw": round(latest_power_w / 1000.0, 2),
+                "consumed_kwh": round(consumed_wh / 1000.0, 2),
+            }
+
         out.append({
             "id": u.id,
             "username": u.username,
@@ -266,6 +348,8 @@ async def list_users(
             "created_at": u.created_at.isoformat() if u.created_at else None,
             "total_kwh": round(stats["kwh"], 2),
             "total_sessions": stats["count"],
+            "active_charge": active_charge_data,
+            "last_charge_time": last_time_by_tag.get(tag),
         })
     return out
 

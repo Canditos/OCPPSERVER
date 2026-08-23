@@ -26,6 +26,15 @@ http.interceptors.response.use(
   }
 )
 
+export interface ActiveUserCharge {
+  transaction_id: number
+  charge_point_id: string
+  connector_id: number
+  start_time: string | null
+  current_power_kw: number
+  consumed_kwh: number
+}
+
 export interface UserProfile {
   id: number
   username: string
@@ -36,6 +45,8 @@ export interface UserProfile {
   created_at: string | null
   total_kwh?: number
   total_sessions?: number
+  active_charge?: ActiveUserCharge | null
+  last_charge_time?: string | null
 }
 
 export interface LoginResponse {

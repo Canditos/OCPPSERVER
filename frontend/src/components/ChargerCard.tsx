@@ -331,19 +331,46 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         </div>
       </div>
 
-      {/* Live charging telemetry card */}
+      {/* Live charging telemetry card with Driver info */}
       {isSessionActive && (
-        <div className="mb-4 p-3 rounded-xl bg-blue-500/5 border border-blue-500/15 space-y-3">
+        <div className="mb-4 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
               </span>
-              <span className="text-xs font-semibold text-blue-300">Sessão em Curso</span>
+              <span className="text-xs font-semibold text-blue-300">Carga em Curso</span>
             </div>
             {livePowerKw !== null && <LiveKw watts={livePower!} />}
           </div>
+
+          {/* Active User / Driver banner */}
+          {activeTransaction && (
+            <div className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-white/5 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded-md bg-blue-500/20 text-blue-400">
+                  <Tag className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <span className="font-bold text-slate-100 text-xs block">
+                    {activeTransaction.user_username ? `Condutor: ${activeTransaction.user_username}` : `Tag: ${activeTransaction.id_tag}`}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    TX #{activeTransaction.transaction_id} {activeTransaction.user_username ? `· ${activeTransaction.id_tag}` : ''}
+                  </span>
+                </div>
+              </div>
+
+              {activeTransaction.energy_kwh !== null && activeTransaction.energy_kwh !== undefined && (
+                <div className="text-right font-mono">
+                  <span className="text-emerald-400 font-bold text-xs">
+                    {activeTransaction.energy_kwh} kWh
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {liveSoC !== null && (
             <div className="pt-2 border-t border-blue-500/10">

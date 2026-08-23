@@ -3,6 +3,13 @@ export interface Connector {
   status: string
   error_code: string | null
   updated_at: string | null
+  active_transaction_id?: number | null
+  active_id_tag?: string | null
+  active_username?: string | null
+  active_user_role?: string | null
+  active_power_kw?: number | null
+  active_energy_kwh?: number | null
+  active_start_time?: string | null
 }
 
 export interface Charger {
@@ -47,6 +54,9 @@ export interface Transaction {
   stop_reason: string | null
   status: string
   energy_kwh: number | null
+  user_username?: string | null
+  user_email?: string | null
+  user_role?: string | null
 }
 
 export interface MeterValue {

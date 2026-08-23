@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database import get_db
 from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
-from schemas import ChargerOut, OcppMessageOut
+from models.transaction import Transaction, MeterValue
+from models.user import User
+from schemas import ChargerOut, ConnectorOut, OcppMessageOut
 
 
 from ocpp_server.central_system import CONNECTED
@@ -17,6 +19,52 @@ class AutochargeUpdate(BaseModel):
 router = APIRouter(prefix="/chargers", tags=["chargers"])
 
 
+async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut]:
+    r2 = await db.execute(select(Connector).where(Connector.charger_id == ch.id))
+    raw_connectors = list(r2.scalars().all())
+
+    # Get active transactions for this charger
+    r_tx = await db.execute(
+        select(Transaction)
+        .where(Transaction.charge_point_id == ch.charge_point_id, Transaction.status == "Active")
+    )
+    active_txs = {tx.connector_id: tx for tx in r_tx.scalars().all()}
+
+    # Get users map
+    r_u = await db.execute(select(User))
+    users_by_tag = {u.rfid_tag: u for u in r_u.scalars().all() if u.rfid_tag}
+
+    enriched = []
+    for conn in raw_connectors:
+        c_out = ConnectorOut.model_validate(conn)
+        tx = active_txs.get(conn.connector_id)
+        if tx:
+            c_out.active_transaction_id = tx.transaction_id
+            c_out.active_id_tag = tx.id_tag
+            c_out.active_start_time = tx.start_time
+            user = users_by_tag.get(tx.id_tag)
+            if user:
+                c_out.active_username = user.username
+                c_out.active_user_role = user.role
+
+            # Get latest power & energy
+            r_mv = await db.execute(
+                select(MeterValue)
+                .where(MeterValue.transaction_id == tx.transaction_id)
+                .order_by(MeterValue.timestamp.desc())
+                .limit(6)
+            )
+            mvs = r_mv.scalars().all()
+            for mv in mvs:
+                if mv.measurand and 'power' in mv.measurand.lower() and c_out.active_power_kw is None:
+                    c_out.active_power_kw = round(float(mv.value) / 1000.0, 2)
+                elif mv.measurand and 'energy' in mv.measurand.lower() and c_out.active_energy_kwh is None:
+                    consumed = max(0, float(mv.value) - (tx.meter_start or 0))
+                    c_out.active_energy_kwh = round(consumed / 1000.0, 2)
+        enriched.append(c_out)
+    return enriched
+
+
 @router.get("", response_model=list[ChargerOut])
 async def list_chargers(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Charger).order_by(Charger.charge_point_id))
@@ -24,8 +72,7 @@ async def list_chargers(db: AsyncSession = Depends(get_db)):
     out = []
     for ch in chargers:
         ch.is_online = ch.charge_point_id in CONNECTED
-        r2 = await db.execute(select(Connector).where(Connector.charger_id == ch.id))
-        ch.connectors = list(r2.scalars().all())
+        ch.connectors = await _enrich_connectors(ch, db)
         out.append(ch)
     return out
 
@@ -37,8 +84,7 @@ async def get_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
     if not charger:
         raise HTTPException(status_code=404, detail="Charger not found")
     charger.is_online = charger.charge_point_id in CONNECTED
-    r2 = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
-    charger.connectors = list(r2.scalars().all())
+    charger.connectors = await _enrich_connectors(charger, db)
     return charger
 
 
