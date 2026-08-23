@@ -21,6 +21,8 @@ from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
 from models.auth_token import AuthToken
 from models.authorized_tag import AuthorizedTag
+from models.user import User
+from services.email_service import notify_ac_suspended_ev, notify_dc_charging_completed
 from sqlalchemy import select, update, func
 
 logger = logging.getLogger(__name__)
@@ -304,6 +306,35 @@ class ChargePoint(OcppChargePoint):
                 db.add(avail)
                 await db.commit()
 
+                # Email notification for DC charging or transaction stop
+                if tx and tx.id_tag:
+                    try:
+                        r_user = await db.execute(select(User).where(User.rfid_tag == tx.id_tag))
+                        driver_user = r_user.scalar_one_or_none()
+                        if driver_user and driver_user.email:
+                            m = (charger.model or "").upper()
+                            v = (charger.vendor or "").upper()
+                            cpid = (charger.charge_point_id or "").upper()
+                            is_dc = "SICHARGE" in m or " DC" in m or m.endswith("-D") or "DC" in v or "DC" in cpid
+                            
+                            if is_dc:
+                                kwh = max(0, (meter_stop or 0) - (tx.meter_start or 0)) / 1000.0
+                                st_str = tx.start_time.strftime("%d/%m/%Y %H:%M") if tx.start_time else "—"
+                                et_str = tx.stop_time.strftime("%d/%m/%Y %H:%M") if tx.stop_time else _now().strftime("%d/%m/%Y %H:%M")
+                                notify_dc_charging_completed(
+                                    to_email=driver_user.email,
+                                    username=driver_user.username,
+                                    charge_point_id=self.id,
+                                    connector_id=stopped_connector_id,
+                                    transaction_id=transaction_id,
+                                    kwh=kwh,
+                                    start_time_str=st_str,
+                                    stop_time_str=et_str,
+                                    stop_reason=reason,
+                                )
+                    except Exception as e:
+                        logger.error(f"Error checking email notification on StopTransaction: {e}")
+
         await event_bus.publish("transaction_stopped", {
             "charge_point_id": self.id,
             "transaction_id": transaction_id,
@@ -423,6 +454,51 @@ class ChargePoint(OcppChargePoint):
             "status": status,
             "error_code": error_code,
         })
+
+        # Email notification for AC charging when reaching SuspendedEV (battery full)
+        if status == "SuspendedEV":
+            try:
+                async with AsyncSessionLocal() as email_db:
+                    r_tx = await email_db.execute(
+                        select(Transaction)
+                        .where(
+                            Transaction.charge_point_id == self.id,
+                            Transaction.connector_id == connector_id,
+                            Transaction.status == "Active"
+                        )
+                        .order_by(Transaction.start_time.desc())
+                        .limit(1)
+                    )
+                    active_tx = r_tx.scalar_one_or_none()
+                    if active_tx and active_tx.id_tag:
+                        r_user = await email_db.execute(select(User).where(User.rfid_tag == active_tx.id_tag))
+                        driver_user = r_user.scalar_one_or_none()
+                        if driver_user and driver_user.email:
+                            r_mv = await email_db.execute(
+                                select(MeterValue)
+                                .where(MeterValue.transaction_id == active_tx.transaction_id)
+                                .order_by(MeterValue.timestamp.desc())
+                                .limit(5)
+                            )
+                            mvs = r_mv.scalars().all()
+                            latest_e = active_tx.meter_start or 0
+                            for mv in mvs:
+                                if mv.measurand and 'energy' in mv.measurand.lower():
+                                    latest_e = float(mv.value)
+                                    break
+                            kwh = max(0, latest_e - (active_tx.meter_start or 0)) / 1000.0
+                            st_str = active_tx.start_time.strftime("%d/%m/%Y %H:%M") if active_tx.start_time else "—"
+                            notify_ac_suspended_ev(
+                                to_email=driver_user.email,
+                                username=driver_user.username,
+                                charge_point_id=self.id,
+                                connector_id=connector_id,
+                                transaction_id=active_tx.transaction_id,
+                                kwh=kwh,
+                                start_time_str=st_str,
+                            )
+            except Exception as e:
+                logger.error(f"Error checking email notification on SuspendedEV: {e}")
         return call_result.StatusNotificationPayload()
 
     @on(Action.DataTransfer)

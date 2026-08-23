@@ -121,6 +121,11 @@ export function UsersManagement() {
       return
     }
 
+    if (!email.trim() || !email.includes('@')) {
+      setFormError('O email é obrigatório e deve ser válido para receber notificações de carregamento.')
+      return
+    }
+
     if (!editingUser && (!password || password.length < 4)) {
       setFormError('A palavra-passe deve ter pelo menos 4 caracteres.')
       return
@@ -128,7 +133,7 @@ export function UsersManagement() {
 
     if (editingUser) {
       const payload: any = {
-        email: email.trim() || undefined,
+        email: email.trim(),
         role,
         rfid_tag: rfidTag.trim() || undefined,
       }
@@ -140,7 +145,7 @@ export function UsersManagement() {
       createMutation.mutate({
         username: username.trim(),
         password,
-        email: email.trim() || undefined,
+        email: email.trim(),
         role,
         rfid_tag: rfidTag.trim() || undefined,
       })
@@ -583,7 +588,7 @@ export function UsersManagement() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Email (Opcional)
+                  Email (Obrigatório para avisos de fim de carga) *
                 </label>
                 <input
                   type="email"
@@ -591,6 +596,7 @@ export function UsersManagement() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="ex: marco@canditos.com"
                   className="input w-full text-xs"
+                  required
                 />
               </div>
 

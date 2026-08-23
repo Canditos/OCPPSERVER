@@ -166,7 +166,7 @@ class LoginResponse(BaseModel):
 class CreateUserRequest(BaseModel):
     username: str = Field(..., min_length=3)
     password: str = Field(..., min_length=4)
-    email: Optional[str] = None
+    email: str = Field(..., min_length=5)
     role: str = "user"  # 'admin' or 'user'
     rfid_tag: Optional[str] = None
 
@@ -365,10 +365,13 @@ async def create_user(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Nome de utilizador já existe")
         
+    if not req.email or "@" not in req.email:
+        raise HTTPException(status_code=400, detail="O email é obrigatório e deve ser válido para notificações de carregamento")
+
     hashed = hash_password(req.password)
     user = User(
         username=req.username.strip(),
-        email=req.email.strip() if req.email else None,
+        email=req.email.strip(),
         hashed_password=hashed,
         role=req.role if req.role in ("admin", "user") else "user",
         rfid_tag=req.rfid_tag.strip() if req.rfid_tag else None,
@@ -405,7 +408,9 @@ async def update_user(
         raise HTTPException(status_code=404, detail="Utilizador não encontrado")
         
     if req.email is not None:
-        user.email = req.email.strip() if req.email else None
+        if not req.email.strip() or "@" not in req.email:
+            raise HTTPException(status_code=400, detail="O email é obrigatório e deve ser válido")
+        user.email = req.email.strip()
     if req.role is not None and req.role in ("admin", "user"):
         user.role = req.role
     if req.rfid_tag is not None:
