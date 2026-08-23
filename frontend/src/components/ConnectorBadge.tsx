@@ -1,3 +1,4 @@
+import React from 'react'
 import { Plug, Zap, AlertTriangle, Clock, XCircle, WrenchIcon } from 'lucide-react'
 
 interface Props {

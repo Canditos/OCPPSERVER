@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { safeFormatTime } from '../utils/date'
 import { Zap, Wifi, WifiOff, Activity, ToggleLeft, CreditCard, AlertTriangle, Info } from 'lucide-react'
 import { useChargerStore } from '../store/chargerStore'
