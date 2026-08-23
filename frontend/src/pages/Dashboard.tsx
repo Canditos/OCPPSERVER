@@ -121,6 +121,13 @@ export function Dashboard() {
   const online   = chargers.filter(isChargerOnline).length
   const charging = chargers.filter(isChargerCharging).length
   const faulted  = chargers.filter(isChargerFaulted).length
+  const available = Math.max(0, online - charging - faulted)
+
+  const totalChargingWatts = Object.values(liveState)
+    .flatMap((s) => Object.entries(s.meters ?? {}))
+    .filter(([measurand]) => measurand.toLowerCase().includes('power'))
+    .reduce((acc, [, m]) => acc + Number(m.value ?? 0), 0)
+  const totalChargingKw = totalChargingWatts / 1000
 
   const totalEnergyWh = Object.values(liveState)
     .flatMap((s) => Object.entries(s.meters ?? {}))
