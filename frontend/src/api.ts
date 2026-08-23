@@ -90,6 +90,10 @@ export const api = {
     http.get<Transaction[]>('/auth/my-transactions').then(r => r.data),
   getMyActiveCharge: () =>
     http.get<MyActiveCharge | null>('/auth/my-active-charge').then(r => r.data),
+  registerDriver: (data: { username: string; password: string; email: string; requested_rfid_tag?: string }) =>
+    http.post<{ status: string; message: string; username: string }>('/auth/register', data).then(r => r.data),
+  approveUser: (id: number, data: { rfid_tag: string }) =>
+    http.post<UserProfile>(`/auth/users/${id}/approve`, data).then(r => r.data),
   notifyMoveCar: (params: { user_id?: number; charge_point_id?: string; connector_id?: number }) =>
     http.post<{ status: string; recipient: string; username: string }>('/auth/notify-move-car', params).then(r => r.data),
 

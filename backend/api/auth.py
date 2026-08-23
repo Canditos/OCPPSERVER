@@ -163,6 +163,17 @@ class LoginResponse(BaseModel):
     user: UserOut
 
 
+class RegisterDriverRequest(BaseModel):
+    username: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=4)
+    email: str = Field(..., min_length=5)
+    requested_rfid_tag: Optional[str] = None
+
+
+class ApproveUserRequest(BaseModel):
+    rfid_tag: str = Field(..., min_length=1)
+
+
 class CreateUserRequest(BaseModel):
     username: str = Field(..., min_length=3)
     password: str = Field(..., min_length=4)
@@ -181,6 +192,44 @@ class UpdateUserRequest(BaseModel):
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 
+@router.post("/register")
+async def register_driver(req: RegisterDriverRequest, db: AsyncSession = Depends(get_db)):
+    """Public self-registration for new drivers (pending admin approval)."""
+    from services.email_service import notify_driver_registration_received
+
+    existing = await db.execute(select(User).where(User.username == req.username.strip()))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Este nome de utilizador já se encontra registado.")
+
+    if not req.email or "@" not in req.email:
+        raise HTTPException(status_code=400, detail="Email obrigatório e válido para contacto.")
+
+    hashed = hash_password(req.password)
+    user = User(
+        username=req.username.strip(),
+        email=req.email.strip(),
+        hashed_password=hashed,
+        role="user",
+        rfid_tag=req.requested_rfid_tag.strip().upper() if req.requested_rfid_tag else None,
+        is_active=False,  # Needs admin approval!
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    # Send confirmation email to driver
+    try:
+        notify_driver_registration_received(user.email, user.username, user.rfid_tag)
+    except Exception as e:
+        logger.error(f"Error sending registration email: {e}")
+
+    return {
+        "status": "pending_approval",
+        "message": "Pedido de registo submetido com sucesso! A tua conta aguarda aprovação pelo Administrador e atribuição de chave RFID.",
+        "username": user.username,
+    }
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate user with username and password, returning JWT token."""
@@ -191,7 +240,10 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nome de utilizador ou palavra-passe incorretos")
     
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Conta de utilizador desativada")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A tua conta de condutor ainda aguarda aprovação pelo Administrador e atribuição de chave RFID."
+        )
         
     token = create_access_token(user.id, user.username, user.role)
     
@@ -423,6 +475,65 @@ async def update_user(
     await db.commit()
     await db.refresh(user)
     
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "rfid_tag": user.rfid_tag,
+        "is_active": user.is_active,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "total_kwh": 0.0,
+        "total_sessions": 0,
+    }
+
+
+@router.post("/users/{user_id}/approve", response_model=UserOut)
+async def approve_user(
+    user_id: int,
+    req: ApproveUserRequest,
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """(Admin only) Approve a pending driver and assign them an active RFID tag."""
+    from services.email_service import notify_driver_approved
+    from models.charger import AuthorizedTag
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilizador não encontrado")
+
+    rfid = req.rfid_tag.strip().upper()
+    user.rfid_tag = rfid
+    user.is_active = True
+    user.role = "user"
+
+    # Automatically ensure the tag is registered in the charger's white-list
+    try:
+        r_tag = await db.execute(select(AuthorizedTag).where(AuthorizedTag.id_tag == rfid))
+        tag_row = r_tag.scalar_one_or_none()
+        if not tag_row:
+            new_tag = AuthorizedTag(
+                id_tag=rfid,
+                description=f"Condutor: {user.username}",
+                is_active=True
+            )
+            db.add(new_tag)
+        else:
+            tag_row.is_active = True
+    except Exception as e:
+        logger.warning(f"Could not auto-create AuthorizedTag: {e}")
+
+    await db.commit()
+    await db.refresh(user)
+
+    if user.email:
+        try:
+            notify_driver_approved(user.email, user.username, user.rfid_tag)
+        except Exception as e:
+            logger.error(f"Error sending approval email: {e}")
+
     return {
         "id": user.id,
         "username": user.username,

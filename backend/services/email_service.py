@@ -267,3 +267,66 @@ def notify_manual_move_car_reminder(
         tip_text="A mobilidade partilhada funciona melhor com cooperação. Obrigado pela atenção!",
     )
     return send_email(to_email, subject, html)
+
+
+def notify_driver_registration_received(
+    to_email: str,
+    username: str,
+    requested_rfid: Optional[str] = None,
+):
+    """Send confirmation to driver that their registration was received and is pending admin approval."""
+    subject = "📋 Registo de Condutor Recebido - A aguardar aprovação @Canditos OCPP"
+
+    html = _get_base_template(
+        title_badge="rgba(59, 130, 246, 0.2); color: #60a5fa;",
+        title_gradient="linear-gradient(90deg, #60a5fa, #38bdf8)",
+        headline="📋 REGISTO EM PROCESSAMENTO",
+        greeting_name=username,
+        intro_paragraphs=[
+            "O teu pedido de registo como <strong>Condutor Autorizado</strong> no sistema @Canditos OCPP foi recebido com sucesso!",
+            "A tua conta está atualmente em fase de validação pelo Administrador do sistema, que irá verificar os teus dados e atribuir/validar a tua chave RFID de carregamento.",
+        ],
+        kwh=0.0,
+        kwh_color="#60a5fa",
+        stats_rows=[
+            ("Utilizador:", username),
+            ("Email:", to_email),
+            ("Chave RFID Solicitada:", requested_rfid or "A atribuir pelo Admin"),
+            ("Estado:", "⏳ Aguarda Aprovação"),
+        ],
+        action_box_text="Assim que o Administrador aprovar a tua conta, receberás um email de confirmação com a tua chave RFID ativa para começares a carregar! ⚡",
+        tip_text="Caso precises de autorização urgente, contacta o administrador da infraestrutura de carregamento da empresa.",
+    )
+    return send_email(to_email, subject, html)
+
+
+def notify_driver_approved(
+    to_email: str,
+    username: str,
+    rfid_tag: str,
+):
+    """Send congratulations and RFID tag details when Admin approves driver."""
+    subject = "🎉 Conta Aprovada! A tua chave RFID está ativa no @Canditos OCPP ⚡"
+
+    html = _get_base_template(
+        title_badge="rgba(16, 185, 129, 0.2); color: #34d399;",
+        title_gradient="linear-gradient(90deg, #34d399, #10b981)",
+        headline="🎉 ACESSO APROVADO & ATIVO",
+        greeting_name=username,
+        intro_paragraphs=[
+            "Excelentes notícias! A tua conta de condutor foi <strong>aprovada com sucesso pelo Administrador</strong>.",
+            f"A tua chave RFID <strong>{rfid_tag}</strong> foi autorizada no sistema e já podes utilizar os postos de carregamento da empresa!",
+        ],
+        kwh=0.0,
+        kwh_color="#34d399",
+        stats_rows=[
+            ("Utilizador:", username),
+            ("Chave RFID Autorizada:", rfid_tag),
+            ("Portal do Condutor:", "Acesso Ativo"),
+            ("Estado:", "🟢 Pronto a Carregar"),
+        ],
+        action_box_text=f"Para iniciar uma carga, basta encostar o teu cartão RFID ({rfid_tag}) no leitor do posto ou usar o teu Portal do Condutor! 🚗⚡",
+        tip_text="Podes aceder ao teu portal a qualquer momento para ver o histórico dos teus consumos e sessões.",
+    )
+    return send_email(to_email, subject, html)
+
