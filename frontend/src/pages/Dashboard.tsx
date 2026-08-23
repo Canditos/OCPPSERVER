@@ -160,7 +160,7 @@ export function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-shimmer">Central System</h1>
-          <p className="text-sm text-gray-400 mt-1">OCPP 1.6 · Siemens VersiCharge</p>
+          <p className="text-sm text-gray-400 mt-1">OCPP 1.6 · @Canditos OCPP</p>
         </div>
         <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm">
           <Activity className="w-4 h-4 text-emerald-400 animate-pulse-slow" />
@@ -181,48 +181,47 @@ export function Dashboard() {
         <KpiCard
           label="Online"
           value={online}
+          sub={`${total > 0 ? Math.round((online / total) * 100) : 0}% disponibilidade`}
           icon={<Wifi className="w-5 h-5" />}
           color="emerald"
           glow={online > 0}
           delay={60}
-          onClick={() => scrollToFirstMatchingCard('online')}
+          onClick={() => scrollToSection('chargers-section')}
         />
         <KpiCard
-          label="A carregar"
+          label="A Carregar"
           value={charging}
+          sub={`${totalChargingKw.toFixed(1)} kW potência ativa total`}
           icon={<Zap className="w-5 h-5" />}
           color="blue"
           glow={charging > 0}
           delay={120}
-          onClick={() => scrollToFirstMatchingCard('charging')}
+          onClick={() => scrollToSection('chargers-section')}
         />
         <KpiCard
-          label="Avaria"
+          label="Disponíveis"
+          value={available}
+          icon={<Zap className="w-5 h-5" />}
+          color="amber"
+          delay={180}
+          onClick={() => scrollToSection('chargers-section')}
+        />
+        <KpiCard
+          label="Avarias"
           value={faulted}
           icon={<AlertTriangle className="w-5 h-5" />}
           color="red"
-          glow={faulted > 0}
-          delay={180}
-          onClick={() => scrollToFirstMatchingCard('faulted')}
-        />
-        <KpiCard
-          label="Energia live"
-          value={totalKwh}
-          sub="kWh acumulado"
-          icon={<TrendingUp className="w-5 h-5" />}
-          color="amber"
           delay={240}
-          onClick={() => scrollToSection('live-events-section')}
+          onClick={() => scrollToSection('chargers-section')}
         />
       </div>
 
-      {/* main content */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* charger grid */}
-        <div className="xl:col-span-2 space-y-6" id="chargers-section">
-          <div className="flex items-center justify-between mb-2">
+      {/* CHARGERS LIST WITH CONNECTORS & QUICK ACTIONS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="chargers-section">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Postos de Carga (EVSE)</h2>
-            <span className="text-xs text-gray-400">{total} registados</span>
+            <span className="text-xs text-gray-500 font-mono">{chargers.length} registados</span>
           </div>
 
           {isLoading && (
@@ -240,7 +239,7 @@ export function Dashboard() {
               </div>
               <div>
                 <p className="text-gray-400 font-medium">Sem chargers ligados</p>
-                <p className="text-gray-500 text-sm mt-1">Liga o VersiCharge a:</p>
+                <p className="text-gray-500 text-sm mt-1">Liga o posto de carga a:</p>
                 <p className="text-xs font-mono mt-2 px-3 py-1.5 rounded-lg bg-gray-800/80 text-blue-400 border border-blue-500/20">
                   wss://ocpp.gatoescondido.com/ocpp/&lt;charger-id&gt;
                 </p>

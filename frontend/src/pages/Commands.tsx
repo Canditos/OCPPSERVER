@@ -291,7 +291,7 @@ export function Commands() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-blue-400" />
-              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wider">Atalhos Siemens VersiCharge</h3>
+              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wider">Atalhos @Canditos OCPP</h3>
             </div>
             <span className="text-[11px] text-gray-500 font-mono">Preset rápido 1-clique</span>
           </div>
