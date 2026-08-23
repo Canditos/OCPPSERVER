@@ -63,7 +63,11 @@ class ChargingProfile(Base):
         if self.duration:
             charging_schedule["duration"] = int(self.duration)
         if self.start_schedule:
-            charging_schedule["startSchedule"] = self.start_schedule.isoformat() + "Z"
+            charging_schedule["startSchedule"] = self.start_schedule.strftime("%Y-%m-%dT%H:%M:%SZ") if hasattr(self.start_schedule, "strftime") else (str(self.start_schedule).rstrip("Z") + "Z")
+        elif self.kind in ("Recurring", "Absolute"):
+            # OCPP 1.6: Recurring and Absolute schedules require a valid anchor startSchedule
+            today_midnight = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            charging_schedule["startSchedule"] = today_midnight.strftime("%Y-%m-%dT%H:%M:%SZ")
         if self.min_charging_rate is not None:
             charging_schedule["minChargingRate"] = float(self.min_charging_rate)
 

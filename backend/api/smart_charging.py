@@ -400,10 +400,18 @@ async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get
         if status == "Accepted":
             profile.is_deployed = True
             await db.commit()
-        return {"status": status, "profile_id": profile.profile_id, "ocpp_payload": ocpp_payload}
+            return {"status": status, "profile_id": profile.profile_id, "ocpp_payload": ocpp_payload}
+        else:
+            profile.is_deployed = False
+            await db.commit()
+            raise HTTPException(status_code=400, detail=f"O posto recusou o perfil com status: {status}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error applying smart charging profile: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to apply profile: {str(e)}")
+        profile.is_deployed = False
+        await db.commit()
+        raise HTTPException(status_code=500, detail=f"Falha de comunicação/validação com o posto: {str(e)}")
 
 
 @router.post("/set")
