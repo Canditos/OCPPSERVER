@@ -18,6 +18,7 @@ from api.ws_events import router as ws_router
 from api.tags import router as tags_router
 from api.auth_tokens import router as auth_tokens_router
 from api.smart_charging import router as smart_charging_router
+from api.auth import router as auth_router, hash_password
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(chargers_router)
 app.include_router(transactions_router)
 app.include_router(commands_router)
@@ -71,6 +73,34 @@ async def startup():
     await init_db()
     from ocpp_server.charge_point import _init_tx_counter
     await _init_tx_counter()
+
+    # Seed default admin and user if users table is empty
+    from database import AsyncSessionLocal
+    from models.user import User
+    from sqlalchemy import select
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User).limit(1))
+        if not result.scalar_one_or_none():
+            admin = User(
+                username="admin",
+                email="admin@canditos.com",
+                hashed_password=hash_password("admin123"),
+                role="admin",
+                rfid_tag="ADMIN_MASTER",
+                is_active=True,
+            )
+            sample_user = User(
+                username="condutor",
+                email="condutor@canditos.com",
+                hashed_password=hash_password("user123"),
+                role="user",
+                rfid_tag="VERSICHARGE_TAG",
+                is_active=True,
+            )
+            session.add(admin)
+            session.add(sample_user)
+            await session.commit()
+            logging.info("Default admin ('admin') and user ('condutor') created successfully.")
 
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):

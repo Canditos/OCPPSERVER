@@ -4,6 +4,56 @@ import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, 
 
 const http = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' })
 
+// Attach Bearer token to all requests
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem('ocpp_auth_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// Intercept 401 Unauthorized to auto-redirect to /login
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && !window.location.pathname.startsWith('/login')) {
+      localStorage.removeItem('ocpp_auth_token')
+      localStorage.removeItem('ocpp_auth_user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
+export interface UserProfile {
+  id: number
+  username: string
+  email: string | null
+  role: 'admin' | 'user'
+  rfid_tag: string | null
+  is_active: boolean
+  created_at: string | null
+  total_kwh?: number
+  total_sessions?: number
+}
+
+export interface LoginResponse {
+  token: string
+  user: UserProfile
+}
+
+export interface MyActiveCharge {
+  transaction_id: number
+  charge_point_id: string
+  connector_id: number
+  start_time: string | null
+  meter_start: number | null
+  current_power_kw: number
+  consumed_kwh: number
+  status: string
+}
+
 export interface AuthorizedTag {
   id: number
   id_tag: string
@@ -12,6 +62,24 @@ export interface AuthorizedTag {
 }
 
 export const api = {
+  // Auth & User Portal
+  login: (credentials: { username: string; password: string }) =>
+    http.post<LoginResponse>('/auth/login', credentials).then(r => r.data),
+  getMe: () =>
+    http.get<UserProfile>('/auth/me').then(r => r.data),
+  getUsers: () =>
+    http.get<UserProfile[]>('/auth/users').then(r => r.data),
+  createUser: (data: { username: string; password: string; email?: string; role: string; rfid_tag?: string }) =>
+    http.post<UserProfile>('/auth/users', data).then(r => r.data),
+  updateUser: (id: number, data: Partial<{ email: string; role: string; rfid_tag: string; password?: string; is_active?: boolean }>) =>
+    http.patch<UserProfile>(`/auth/users/${id}`, data).then(r => r.data),
+  deleteUser: (id: number) =>
+    http.delete(`/auth/users/${id}`).then(r => r.data),
+  getMyTransactions: () =>
+    http.get<Transaction[]>('/auth/my-transactions').then(r => r.data),
+  getMyActiveCharge: () =>
+    http.get<MyActiveCharge | null>('/auth/my-active-charge').then(r => r.data),
+
   getChargers: () => http.get<Charger[]>('/chargers').then(r => r.data),
   getCharger: (id: string) => http.get<Charger>(`/chargers/${id}`).then(r => r.data),
   getChargerAvailability: (cpId: string) =>
