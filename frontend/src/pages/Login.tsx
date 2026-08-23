@@ -4,10 +4,12 @@ import { Zap, ShieldCheck, User, Lock, AlertCircle, ArrowRight, Sparkles } from 
 import { api } from '../api'
 import { useAuthStore } from '../store/authStore'
 import { ThemeToggle } from '../components/ThemeToggle'
+import { useTheme } from '../hooks/useTheme'
 
 export function Login() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
+  const { mode, resolved, setMode } = useTheme()
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -65,7 +67,7 @@ export function Login() {
           </div>
         </div>
 
-        <ThemeToggle />
+        <ThemeToggle value={mode} onChange={setMode} compact />
       </header>
 
       {/* Center Auth Card */}
