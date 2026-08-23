@@ -545,3 +545,72 @@ async def get_my_active_charge(
         "consumed_kwh": round(consumed_wh / 1000.0, 2),
         "status": "Charging"
     }
+
+
+class NotifyMoveCarRequest(BaseModel):
+    user_id: Optional[int] = None
+    charge_point_id: Optional[str] = None
+    connector_id: Optional[int] = 1
+
+
+@router.post("/notify-move-car")
+async def notify_move_car(
+    req: NotifyMoveCarRequest,
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """(Admin only) Send a friendly notification email asking a driver to move their car."""
+    from services.email_service import notify_manual_move_car_reminder
+    
+    target_user = None
+    charge_point_id = req.charge_point_id or "Posto de Carregamento"
+    connector_id = req.connector_id or 1
+    current_kwh = 0.0
+
+    if req.user_id:
+        r_u = await db.execute(select(User).where(User.id == req.user_id))
+        target_user = r_u.scalar_one_or_none()
+    elif req.charge_point_id:
+        # Find active transaction on this charge point
+        r_tx = await db.execute(
+            select(Transaction)
+            .where(
+                Transaction.charge_point_id == req.charge_point_id,
+                Transaction.connector_id == connector_id,
+                Transaction.status == "Active"
+            )
+            .order_by(Transaction.start_time.desc())
+            .limit(1)
+        )
+        tx = r_tx.scalar_one_or_none()
+        if tx and tx.id_tag:
+            r_u = await db.execute(select(User).where(User.rfid_tag == tx.id_tag))
+            target_user = r_u.scalar_one_or_none()
+            if tx.meter_start is not None:
+                r_mv = await db.execute(
+                    select(MeterValue).where(MeterValue.transaction_id == tx.transaction_id)
+                    .order_by(MeterValue.timestamp.desc()).limit(5)
+                )
+                for mv in r_mv.scalars().all():
+                    if mv.measurand and 'energy' in mv.measurand.lower():
+                        current_kwh = max(0, float(mv.value) - tx.meter_start) / 1000.0
+                        break
+
+    if not target_user or not target_user.email:
+        raise HTTPException(status_code=404, detail="Utilizador não encontrado ou sem email configurado")
+
+    sent = notify_manual_move_car_reminder(
+        to_email=target_user.email,
+        username=target_user.username,
+        charge_point_id=charge_point_id,
+        connector_id=connector_id,
+        requester_name=admin_user.username,
+        current_kwh=current_kwh,
+    )
+
+    return {
+        "status": "sent" if sent else "queued",
+        "recipient": target_user.email,
+        "username": target_user.username
+    }
+

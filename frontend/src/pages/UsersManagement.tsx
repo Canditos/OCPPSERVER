@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, UserPlus, Shield, Key, Zap,
   Edit2, Trash2, CheckCircle2, AlertCircle, RefreshCw, X, Search,
-  History, Clock, BatteryCharging, ArrowRight, User as UserIcon
+  History, Clock, BatteryCharging, ArrowRight, User as UserIcon, Mail, Send
 } from 'lucide-react'
 import { api, UserProfile, AuthorizedTag } from '../api'
 import { useAuthStore } from '../store/authStore'
@@ -109,6 +109,17 @@ export function UsersManagement() {
     },
     onError: (err: any) => {
       alert(`Erro ao eliminar: ${err?.response?.data?.detail || err.message}`)
+    },
+  })
+
+  const notifyMutation = useMutation({
+    mutationFn: (params: { user_id?: number; charge_point_id?: string; connector_id?: number }) =>
+      api.notifyMoveCar(params),
+    onSuccess: (data) => {
+      showSuccess(`Email de cortesia enviado para ${data.username} (${data.recipient})!`)
+    },
+    onError: (err: any) => {
+      alert(`Erro ao enviar aviso: ${err?.response?.data?.detail || err.message}`)
     },
   })
 
@@ -406,6 +417,17 @@ export function UsersManagement() {
                       </td>
                       <td className="text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {isCharging && (
+                            <button
+                              onClick={() => notifyMutation.mutate({ user_id: u.id, charge_point_id: u.active_charge?.charge_point_id, connector_id: u.active_charge?.connector_id })}
+                              disabled={notifyMutation.isPending}
+                              className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-semibold flex items-center gap-1 shadow-sm transition-all"
+                              title="Enviar email de cortesia a pedir para mover o carro"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                              <span>Pedir p/ Mover</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => setSelectedUserForHistory(u)}
                             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 text-blue-500 transition-colors"

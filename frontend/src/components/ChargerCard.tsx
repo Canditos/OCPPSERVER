@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock,
-  Loader2, CheckCircle2, AlertCircle, Tag, Plus, X, ShieldCheck
+  Loader2, CheckCircle2, AlertCircle, Tag, Plus, X, ShieldCheck, Mail
 } from 'lucide-react'
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
@@ -370,6 +370,26 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 </div>
               )}
             </div>
+          )}
+
+          {activeTransaction && (
+            <button
+              type="button"
+              onClick={async (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                try {
+                  const resp = await api.notifyMoveCar({ charge_point_id: charger.charge_point_id, connector_id: selectedConnectorId })
+                  setFeedback({ type: 'success', message: `Email enviado para ${resp.username}!` })
+                } catch (err: any) {
+                  setFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao enviar aviso.' })
+                }
+              }}
+              className="w-full py-1.5 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Pedir ao Condutor para Libertar Tomada</span>
+            </button>
           )}
 
           {liveSoC !== null && (

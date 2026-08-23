@@ -90,6 +90,8 @@ export const api = {
     http.get<Transaction[]>('/auth/my-transactions').then(r => r.data),
   getMyActiveCharge: () =>
     http.get<MyActiveCharge | null>('/auth/my-active-charge').then(r => r.data),
+  notifyMoveCar: (params: { user_id?: number; charge_point_id?: string; connector_id?: number }) =>
+    http.post<{ status: string; recipient: string; username: string }>('/auth/notify-move-car', params).then(r => r.data),
 
   getChargers: () => http.get<Charger[]>('/chargers').then(r => r.data),
   getCharger: (id: string) => http.get<Charger>(`/chargers/${id}`).then(r => r.data),
