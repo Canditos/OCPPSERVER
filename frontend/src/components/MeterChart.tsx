@@ -160,6 +160,30 @@ export function MeterChart({ cpId, connectorId = 1, transactionId }: Props) {
     return latest
   }, [raw])
 
+  // Find latest timestamp and check if fresh (last 2 minutes)
+  const latestTimestampMs = useMemo(() => {
+    if (!raw.length) return 0
+    let max = 0
+    for (const r of raw) {
+      if (r.timestamp) {
+        const d = new Date(r.timestamp.endsWith('Z') ? r.timestamp : (r.timestamp + 'Z'))
+        const ms = !isNaN(d.getTime()) ? d.getTime() : new Date(r.timestamp).getTime()
+        if (ms > max) max = ms
+      }
+    }
+    return max
+  }, [raw])
+
+  const isFreshLive = useMemo(() => {
+    if (!latestTimestampMs) return false
+    return (Date.now() - latestTimestampMs) < 120_000 // within 2 minutes
+  }, [latestTimestampMs])
+
+  const latestTimeStr = useMemo(() => {
+    if (!latestTimestampMs) return ''
+    return safeFormatTime(new Date(latestTimestampMs).toISOString())
+  }, [latestTimestampMs])
+
   if (isLoading) {
     return (
       <div className="card flex items-center justify-center h-44 gap-3 text-gray-400">
@@ -182,17 +206,23 @@ export function MeterChart({ cpId, connectorId = 1, transactionId }: Props) {
   return (
     <div className="card p-4 space-y-4">
       {/* Header with Title, Mode & Select All */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/8 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-white/8 pb-3">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/20">
             <Activity className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-xs font-bold text-gray-200 block">
-              {transactionId ? `Transação #${transactionId} · Histórico` : 'Telemetria Live · Gráfico Interativo'}
+            <span className="text-xs font-bold text-slate-900 dark:text-gray-200 block">
+              {transactionId
+                ? `Transação #${transactionId} · Histórico`
+                : isFreshLive
+                ? 'Telemetria Live · Gráfico Interativo'
+                : `Telemetria · Última Sessão (${latestTimeStr})`}
             </span>
-            <span className="text-[11px] text-gray-500">
-              Clique nas métricas abaixo para ligar/desligar séries no gráfico
+            <span className="text-[11px] text-slate-500 dark:text-gray-500">
+              {isFreshLive
+                ? 'A receber leituras OCPP em tempo real do posto'
+                : `Sem carga ativa. A exibir últimas leituras gravadas às ${latestTimeStr}`}
             </span>
           </div>
         </div>
@@ -201,20 +231,27 @@ export function MeterChart({ cpId, connectorId = 1, transactionId }: Props) {
           {activeMeasurands.length < allMeasurands.length && (
             <button
               onClick={selectAll}
-              className="text-[11px] px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 transition-colors"
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-gray-300 border border-slate-300 dark:border-white/10 transition-colors"
             >
               Mostrar Todas ({allMeasurands.length})
             </button>
           )}
 
           {!transactionId && (
-            <span className="live-pill">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+            isFreshLive ? (
+              <span className="live-pill">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                </span>
+                LIVE (5s)
               </span>
-              LIVE (5s)
-            </span>
+            ) : latestTimestampMs > 0 ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-gray-500" />
+                Última Sessão ({latestTimeStr})
+              </span>
+            ) : null
           )}
         </div>
       </div>
