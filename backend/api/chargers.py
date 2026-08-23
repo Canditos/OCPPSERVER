@@ -71,9 +71,24 @@ async def list_chargers(db: AsyncSession = Depends(get_db)):
     chargers = result.scalars().all()
     out = []
     for ch in chargers:
-        ch.is_online = ch.charge_point_id in CONNECTED
-        ch.connectors = await _enrich_connectors(ch, db)
-        out.append(ch)
+        conns = await _enrich_connectors(ch, db)
+        ch_out = ChargerOut(
+            id=ch.id,
+            charge_point_id=ch.charge_point_id,
+            vendor=ch.vendor,
+            model=ch.model,
+            serial_number=ch.serial_number,
+            firmware_version=ch.firmware_version,
+            iccid=ch.iccid,
+            imsi=ch.imsi,
+            status=ch.status,
+            is_online=ch.charge_point_id in CONNECTED,
+            last_seen=ch.last_seen,
+            registered_at=ch.registered_at,
+            client_ip=ch.client_ip,
+            connectors=conns,
+        )
+        out.append(ch_out)
     return out
 
 
@@ -83,9 +98,24 @@ async def get_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
     charger = result.scalar_one_or_none()
     if not charger:
         raise HTTPException(status_code=404, detail="Charger not found")
-    charger.is_online = charger.charge_point_id in CONNECTED
-    charger.connectors = await _enrich_connectors(charger, db)
-    return charger
+    
+    conns = await _enrich_connectors(charger, db)
+    return ChargerOut(
+        id=charger.id,
+        charge_point_id=charger.charge_point_id,
+        vendor=charger.vendor,
+        model=charger.model,
+        serial_number=charger.serial_number,
+        firmware_version=charger.firmware_version,
+        iccid=charger.iccid,
+        imsi=charger.imsi,
+        status=charger.status,
+        is_online=charger.charge_point_id in CONNECTED,
+        last_seen=charger.last_seen,
+        registered_at=charger.registered_at,
+        client_ip=charger.client_ip,
+        connectors=conns,
+    )
 
 
 @router.get("/{cp_id}/availability")
