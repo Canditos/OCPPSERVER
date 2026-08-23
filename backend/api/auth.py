@@ -497,7 +497,7 @@ async def approve_user(
 ):
     """(Admin only) Approve a pending driver and assign them an active RFID tag."""
     from services.email_service import notify_driver_approved
-    from models.charger import AuthorizedTag
+    from models.authorized_tag import AuthorizedTag
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
