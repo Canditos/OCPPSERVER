@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Settings, Lock, Edit2, Check, X, RefreshCw, Loader, Tag, Plus, Trash2, ShieldCheck, AlertCircle } from 'lucide-react'
 import { api, AuthorizedTag } from '../api'
 import type { Charger, ConfigurationItem } from '../types'
+import { useI18n } from '../i18n'
 
 export function Configuration() {
   const qc = useQueryClient()
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<'config' | 'tags'>('config')
 
   // Chargers
@@ -75,12 +77,12 @@ export function Configuration() {
       await api.createTag(newTagId.trim(), newTagDesc.trim() || undefined)
       setNewTagId('')
       setNewTagDesc('')
-      setTagFeedback('Tag autorizada criada com sucesso!')
+      setTagFeedback(t('configuration.tagCreated'))
       setTimeout(() => setTagFeedback(null), 4000)
       refetchTags()
       qc.invalidateQueries({ queryKey: ['tags'] })
     } catch (err: any) {
-      setTagFeedback('Erro ao adicionar tag.')
+      setTagFeedback(t('configuration.tagCreateError'))
     }
   }
 
@@ -98,8 +100,8 @@ export function Configuration() {
     <div className="space-y-6 animate-fade-up">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-100">Configuração & Acessos</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Parâmetros OCPP dos postos e controlo de tags RFID autorizadas</p>
+        <h1 className="text-2xl font-bold text-gray-100">{t('configuration.title')}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{t('configuration.subtitle')}</p>
       </div>
 
       {/* Tabs */}
@@ -113,7 +115,7 @@ export function Configuration() {
           }`}
         >
           <Settings className="w-4 h-4" />
-          Parâmetros OCPP
+          {t('configuration.ocppParameters')}
         </button>
 
         <button
@@ -125,7 +127,7 @@ export function Configuration() {
           }`}
         >
           <Tag className="w-4 h-4" />
-          Tags RFID & Autorizações
+          {t('configuration.tagsAccess')}
           <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
             {tags.length}
           </span>
@@ -137,9 +139,9 @@ export function Configuration() {
         <div className="space-y-4">
           <div className="flex gap-3 items-end flex-wrap">
             <div className="flex-1 max-w-xs">
-              <label className="label">Posto Alvo</label>
+              <label className="label">{t('configuration.targetStation')}</label>
               <select className="select" value={cpId} onChange={(e) => setCpId(e.target.value)}>
-                <option value="">— seleccionar —</option>
+                <option value="">{t('configuration.select')}</option>
                 {chargers.map((c) => <option key={c.id} value={c.charge_point_id}>{c.charge_point_id}</option>)}
               </select>
             </div>
@@ -149,14 +151,14 @@ export function Configuration() {
               onClick={handleSync}
             >
               {syncing ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              Sincronizar do charger
+              {t('configuration.syncFromCharger')}
             </button>
           </div>
 
           {config.length === 0 && cpId && (
             <div className="card flex flex-col items-center py-10 text-gray-500 text-sm gap-2">
               <Settings className="w-8 h-8 text-gray-700" />
-              Sem configuração em cache. Carrega em "Sincronizar do charger" para ler as chaves OCPP reais.
+              {t('configuration.noCachedConfig')}
             </div>
           )}
 
@@ -166,8 +168,8 @@ export function Configuration() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-white/6 bg-slate-100 dark:bg-gray-950/60">
-                      <th className="text-left px-5 py-3 text-slate-800 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">Chave</th>
-                      <th className="text-left px-5 py-3 text-slate-800 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">Valor</th>
+                      <th className="text-left px-5 py-3 text-slate-800 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">{t('configuration.key')}</th>
+                      <th className="text-left px-5 py-3 text-slate-800 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">{t('configuration.value')}</th>
                       <th className="px-5 py-3 w-24"></th>
                     </tr>
                   </thead>
@@ -232,15 +234,15 @@ export function Configuration() {
           <div className="card border border-emerald-500/20 bg-emerald-950/10 p-5">
             <div className="flex items-center gap-2.5 mb-4">
               <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              <h3 className="text-sm font-bold text-gray-100">Adicionar Nova Tag Autorizada</h3>
+              <h3 className="text-sm font-bold text-gray-100">{t('configuration.addAuthorizedTag')}</h3>
             </div>
 
             <form onSubmit={handleAddTag} className="flex flex-col sm:flex-row gap-3 items-end">
               <div className="flex-1 w-full">
-                <label className="label">ID Tag / Cartão RFID</label>
+                <label className="label">{t('configuration.tagId')}</label>
                 <input
                   className="input font-mono text-xs"
-                  placeholder="ex: VERSICHARGE_01 ou 04A1B2C3D4"
+                  placeholder={t('configuration.tagIdPlaceholder')}
                   value={newTagId}
                   onChange={(e) => setNewTagId(e.target.value)}
                   required
@@ -248,10 +250,10 @@ export function Configuration() {
               </div>
 
               <div className="flex-1 w-full">
-                <label className="label">Descrição / Utilizador</label>
+                <label className="label">{t('configuration.descriptionUser')}</label>
                 <input
                   className="input text-xs"
-                  placeholder="ex: Cartão Principal Siemens / BMW i3"
+                  placeholder={t('configuration.descriptionUserPlaceholder')}
                   value={newTagDesc}
                   onChange={(e) => setNewTagDesc(e.target.value)}
                 />
@@ -262,7 +264,7 @@ export function Configuration() {
                 className="btn bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs py-2.5 px-4 rounded-xl flex items-center gap-2 font-bold shrink-0 shadow-md"
               >
                 <Plus className="w-4 h-4" />
-                <span>Adicionar Tag</span>
+                <span>{t('configuration.addTag')}</span>
               </button>
             </form>
 
@@ -277,15 +279,15 @@ export function Configuration() {
           <div className="card p-0 overflow-hidden border border-white/8">
             <div className="px-5 py-3.5 border-b border-white/6 bg-gray-950/60 flex items-center justify-between">
               <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-                Lista de Tags Autorizadas no Servidor OCPP
+                {t('configuration.authorizedTagsTitle')}
               </span>
-              <span className="text-xs text-gray-500 font-mono">{tags.length} ativas</span>
+              <span className="text-xs text-gray-500 font-mono">{t('configuration.activeCount', { count: tags.length })}</span>
             </div>
 
             {tags.length === 0 ? (
               <div className="p-8 text-center text-xs text-gray-600 flex flex-col items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-gray-600" />
-                Sem tags registadas. Adiciona uma tag acima para permitir iniciar carregamentos.
+                {t('configuration.noTags')}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -293,36 +295,36 @@ export function Configuration() {
                   <thead>
                     <tr className="border-b border-white/6 text-gray-500 font-medium bg-gray-900/40">
                       <th className="text-left px-5 py-3">ID Tag</th>
-                      <th className="text-left px-5 py-3">Descrição</th>
-                      <th className="text-left px-5 py-3">Estado</th>
-                      <th className="text-right px-5 py-3">Ações</th>
+                      <th className="text-left px-5 py-3">{t('configuration.description')}</th>
+                      <th className="text-left px-5 py-3">{t('configuration.status')}</th>
+                      <th className="text-right px-5 py-3">{t('configuration.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {tags.map((t, idx) => (
-                      <tr key={t.id} className="border-b border-white/4 hover:bg-white/2 transition-colors">
+                    {tags.map((tag, idx) => (
+                      <tr key={tag.id} className="border-b border-white/4 hover:bg-white/2 transition-colors">
                         <td className="px-5 py-3 font-mono font-bold text-gray-200">
                           <div className="flex items-center gap-2">
                             <Tag className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>{t.id_tag}</span>
+                            <span>{tag.id_tag}</span>
                             {idx === 0 && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-sans font-medium">
-                                Tag Padrão Dashboard
+                                {t('configuration.defaultDashboardTag')}
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-gray-400">{t.description || '—'}</td>
+                        <td className="px-5 py-3 text-gray-400">{tag.description || '—'}</td>
                         <td className="px-5 py-3">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            Autorizado
+                            {t('configuration.authorized')}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right">
                           <button
-                            onClick={() => handleDeleteTag(t.id)}
+                            onClick={() => handleDeleteTag(tag.id)}
                             className="btn-ghost p-1.5 text-red-400 hover:text-red-300 rounded-lg inline-flex"
-                            title="Eliminar Tag"
+                            title={t('configuration.deleteTag')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

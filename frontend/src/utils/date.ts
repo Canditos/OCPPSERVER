@@ -1,4 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
+import { enUS, pt } from 'date-fns/locale'
 
 export function safeFormatDistance(dateInput?: string | number | Date | null): string | null {
   if (!dateInput) return null
@@ -14,7 +15,8 @@ export function safeFormatDistance(dateInput?: string | number | Date | null): s
       d = dateInput
     }
     if (isNaN(d.getTime())) return null
-    return formatDistanceToNow(d, { addSuffix: true })
+    const language = window.localStorage.getItem('ocpp-language') === 'en' ? 'en' : 'pt'
+    return formatDistanceToNow(d, { addSuffix: true, locale: language === 'en' ? enUS : pt })
   } catch {
     return null
   }
@@ -72,4 +74,3 @@ export function safeFormatDuration(seconds?: number | null): string {
   if (h > 0) return `${h}h`
   return `${m}m`
 }
-

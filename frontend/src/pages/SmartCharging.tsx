@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { api, SmartChargingPreset, SmartChargingProfile } from '../api'
 import type { Charger } from '../types'
+import { useI18n } from '../i18n'
 
 // Helper to convert seconds into HH:MM
 function secondsToHHMM(seconds: number): string {
@@ -23,6 +24,7 @@ function hhmmToSeconds(hhmm: string): number {
 
 export function SmartCharging() {
   const qc = useQueryClient()
+  const { t } = useI18n()
 
   const { data: chargers = [] } = useQuery<Charger[]>({
     queryKey: ['chargers'],
@@ -90,7 +92,7 @@ export function SmartCharging() {
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
 
   // Custom Profile Form State
-  const [profileName, setProfileName] = useState('Tarifa Noturna Personalizada')
+  const [profileName, setProfileName] = useState(t('smart.initialProfileName'))
   const [purpose, setPurpose] = useState<'TxDefaultProfile' | 'ChargePointMaxProfile' | 'TxProfile'>('TxDefaultProfile')
   const [kind, setKind] = useState<'Recurring' | 'Absolute' | 'Relative'>('Recurring')
   const [recurrencyKind, setRecurrencyKind] = useState<'Daily' | 'Weekly'>('Daily')
@@ -181,10 +183,10 @@ export function SmartCharging() {
 
       const profileId = (res as any).id || (res as any).data?.id
       await api.applySmartChargingProfile(profileId, selectedCpId)
-      showToast('success', `Perfil "${preset.name}" aplicado com sucesso no posto ${selectedCpId}!`)
+      showToast('success', t('smart.applyProfileSuccess', { name: preset.name, cp: selectedCpId }))
       await refetchProfiles()
     } catch (err: any) {
-      showToast('error', `Falha ao aplicar perfil: ${err?.response?.data?.detail || err.message}`)
+      showToast('error', t('smart.applyProfileError', { error: err?.response?.data?.detail || err.message }))
     } finally {
       setLoadingAction(null)
     }
@@ -204,7 +206,7 @@ export function SmartCharging() {
         phases: p.number_phases || 3,
       }))
     )
-    showToast('success', `Modelo "${preset.name}" carregado para o editor abaixo!`)
+    showToast('success', t('smart.loadModelSuccess', { name: preset.name }))
   }
 
   const handleAddPeriod = () => {
@@ -243,10 +245,10 @@ export function SmartCharging() {
 
       const profileId = (res as any).id || (res as any).data?.id
       await api.applySmartChargingProfile(profileId, selectedCpId)
-      showToast('success', `Perfil personalizado "${profileName}" enviado com sucesso!`)
+      showToast('success', t('smart.customProfileSuccess', { name: profileName }))
       await refetchProfiles()
     } catch (err: any) {
-      showToast('error', `Falha ao aplicar perfil personalizado: ${err?.response?.data?.detail || err.message}`)
+      showToast('error', t('smart.customProfileError', { error: err?.response?.data?.detail || err.message }))
     } finally {
       setLoadingAction(null)
     }
@@ -257,10 +259,10 @@ export function SmartCharging() {
     setLoadingAction('clear-all')
     try {
       await api.clearSmartChargingProfile({ charge_point_id: selectedCpId })
-      showToast('success', `Todos os perfis Smart Charging foram limpos do posto ${selectedCpId}!`)
+      showToast('success', t('smart.clearProfilesSuccess', { cp: selectedCpId }))
       await refetchProfiles()
     } catch (err: any) {
-      showToast('error', `Erro ao limpar perfis: ${err?.response?.data?.detail || err.message}`)
+      showToast('error', t('smart.clearProfilesError', { error: err?.response?.data?.detail || err.message }))
     } finally {
       setLoadingAction(null)
     }
@@ -277,9 +279,9 @@ export function SmartCharging() {
         rate_unit: rateUnit,
       })
       setCompositeData(data)
-      showToast('success', 'Horário composto calculado pelo posto recebido com sucesso!')
+      showToast('success', t('smart.compositeSuccess'))
     } catch (err: any) {
-      showToast('error', `Erro ao consultar horário composto: ${err?.response?.data?.detail || err.message}`)
+      showToast('error', t('smart.compositeError', { error: err?.response?.data?.detail || err.message }))
     } finally {
       setLoadingAction(null)
     }
@@ -302,12 +304,12 @@ export function SmartCharging() {
                 </span>
                 {isDC && (
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
-                    DC Fast Charger
+                    {t('smart.dcFastCharger')}
                   </span>
                 )}
               </h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                Perfis de modulação de potência, tarifas noturnas, bi-horárias e otimização solar
+                {t('smart.subtitle')}
               </p>
             </div>
           </div>
@@ -315,7 +317,7 @@ export function SmartCharging() {
 
         {/* Charger Selector */}
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-400 font-medium shrink-0">Posto Alvo:</label>
+          <label className="text-xs text-gray-400 font-medium shrink-0">{t('smart.targetStation')}</label>
           <div className="relative min-w-[220px]">
             <select
               className="select appearance-none pr-10 text-xs py-2 bg-gray-900/80 border-white/10"
@@ -324,7 +326,7 @@ export function SmartCharging() {
             >
               {chargers.map((c) => (
                 <option key={c.id} value={c.charge_point_id}>
-                  {c.is_online ? '🟢' : '⚫'} {c.charge_point_id} ({c.vendor || 'Posto'})
+                  {c.is_online ? '🟢' : '⚫'} {c.charge_point_id} ({c.vendor || t('smart.stationFallback')})
                 </option>
               ))}
             </select>
@@ -365,7 +367,7 @@ export function SmartCharging() {
                   <h3 className="text-base font-bold text-gray-100">{activeProfile.name}</h3>
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    Ativo e em Vigor no Posto
+                    {t('smart.activeAndInEffect')}
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded-lg border font-bold ${
                     activeProfile.charging_rate_unit === 'W'
@@ -376,7 +378,7 @@ export function SmartCharging() {
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  ID #{activeProfile.profile_id} · Finalidade: <span className="text-gray-200 font-mono">{activeProfile.purpose}</span> · {activeProfile.kind} {activeProfile.recurrency_kind ? `(${activeProfile.recurrency_kind})` : ''} · {activeProfile.connector_id === 0 ? 'Todas as Tomadas (Limite Geral)' : `Tomada #${activeProfile.connector_id}`}
+                  ID #{activeProfile.profile_id} · {t('smart.purpose')} <span className="text-gray-200 font-mono">{activeProfile.purpose}</span> · {activeProfile.kind} {activeProfile.recurrency_kind ? `(${activeProfile.recurrency_kind})` : ''} · {activeProfile.connector_id === 0 ? t('smart.allConnectors') : t('smart.connectorN', { n: activeProfile.connector_id })}
                 </p>
               </div>
             </div>
@@ -387,7 +389,7 @@ export function SmartCharging() {
               className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-2 px-3.5 rounded-xl flex items-center gap-1.5 self-start sm:self-auto shrink-0 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Desativar / Limpar Perfil</span>
+              <span>{t('smart.clearProfile')}</span>
             </button>
           </div>
 
@@ -395,34 +397,34 @@ export function SmartCharging() {
           {activePeriodInfo && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
-                <span className="text-[11px] text-gray-400 font-medium">⚡ Limite em Vigor Agora ({activePeriodInfo.currentTimeStr})</span>
+                <span className="text-[11px] text-gray-400 font-medium">{t('smart.currentLimitLabel', { time: activePeriodInfo.currentTimeStr })}</span>
                 <p className="text-xl font-bold text-emerald-400 font-mono">
                   {activePeriodInfo.formattedLimit}
                 </p>
                 <span className="text-[10px] text-gray-500 block truncate">
-                  {activePeriodInfo.active?.label || `Iniciado às ${secondsToHHMM(activePeriodInfo.active?.start_period || 0)}`}
+                  {activePeriodInfo.active?.label || t('smart.fromTime', { time: secondsToHHMM(activePeriodInfo.active?.start_period || 0) })}
                 </span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
-                <span className="text-[11px] text-gray-400 font-medium">🕒 Próxima Janela de Modulação</span>
+                <span className="text-[11px] text-gray-400 font-medium">{t('smart.nextWindowLabel')}</span>
                 <p className="text-base font-bold text-blue-300 font-mono">
-                  {activePeriodInfo.next ? `Às ${secondsToHHMM(activePeriodInfo.next.start_period)}` : 'Ciclo Contínuo'}
+                  {activePeriodInfo.next ? t('smart.atTime', { time: secondsToHHMM(activePeriodInfo.next.start_period) }) : t('smart.continuousCycle')}
                 </p>
                 <span className="text-[10px] text-gray-500 block truncate">
                   {activePeriodInfo.next
-                    ? `Passará para ${activeProfile.charging_rate_unit === 'W' && activePeriodInfo.next.limit >= 1000 ? `${(activePeriodInfo.next.limit / 1000).toLocaleString('pt-PT')} kW` : `${activePeriodInfo.next.limit} ${activeProfile.charging_rate_unit}`}`
-                    : 'Sem alterações agendadas'}
+                    ? `${t('smart.willChangeTo')} ${activeProfile.charging_rate_unit === 'W' && activePeriodInfo.next.limit >= 1000 ? `${(activePeriodInfo.next.limit / 1000).toLocaleString('pt-PT')} kW` : `${activePeriodInfo.next.limit} ${activeProfile.charging_rate_unit}`}`
+                    : t('smart.noScheduledChanges')}
                 </span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
-                <span className="text-[11px] text-gray-400 font-medium">📊 Total de Janelas Programadas</span>
+                <span className="text-[11px] text-gray-400 font-medium">{t('smart.totalWindowsLabel')}</span>
                 <p className="text-base font-bold text-gray-200 font-mono">
-                  {activeProfile.periods.length} {activeProfile.periods.length === 1 ? 'Janela' : 'Janelas Horárias'}
+                  {activeProfile.periods.length} {activeProfile.periods.length === 1 ? t('smart.window') : t('smart.hourlyWindows')}
                 </p>
                 <span className="text-[10px] text-gray-500 block">
-                  Duração: {activeProfile.duration ? `${activeProfile.duration / 3600}h (${activeProfile.recurrency_kind || 'Diário'})` : '24h'}
+                  Duração: {activeProfile.duration ? `${activeProfile.duration / 3600}h (${activeProfile.recurrency_kind || t('smart.daily')})` : '24h'}
                 </span>
               </div>
             </div>
@@ -432,10 +434,10 @@ export function SmartCharging() {
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between text-[11px] text-gray-400">
               <span className="flex items-center gap-1 font-medium">
-                <Clock className="w-3.5 h-3.5 text-emerald-400" /> Distribuição Horária do Perfil Ativo (24 Horas):
+                <Clock className="w-3.5 h-3.5 text-emerald-400" /> {t('smart.distributionLabel')}
               </span>
               <span className="text-xs font-mono text-emerald-300 font-bold">
-                Hora Atual: {activePeriodInfo?.currentTimeStr}
+                {t('smart.currentTime')} {activePeriodInfo?.currentTimeStr}
               </span>
             </div>
 
@@ -464,7 +466,7 @@ export function SmartCharging() {
                       </span>
                     </div>
                     <p className="text-[10px] text-gray-400 truncate mt-1">
-                      {p.label || (isActiveNow ? '⚡ Janela Ativa Agora' : 'Programada')}
+                      {p.label || (isActiveNow ? t('smart.activeWindowNow') : t('smart.scheduled'))}
                     </p>
                   </div>
                 )
@@ -481,10 +483,10 @@ export function SmartCharging() {
             <Sparkles className="w-4 h-4 text-amber-400" />
             <div>
               <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
-                Modelos Rápidos Pré-configurados (1-Clique)
+                {t('smart.quickPresetsTitle')}
               </h2>
               <p className="text-xs text-gray-500">
-                Modelos específicos para postos AC (Amperes) e postos DC Fast (kW)
+                {t('smart.quickPresetsSubtitle')}
               </p>
             </div>
           </div>
@@ -500,7 +502,7 @@ export function SmartCharging() {
                   : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
               }`}
             >
-              ⚡ Todos ({presets.length})
+              {t('smart.allFilter', { count: presets.length })}
             </button>
 
             <button
@@ -569,7 +571,7 @@ export function SmartCharging() {
                       </div>
 
                       <span className="text-[10px] text-gray-500 font-mono">
-                        {preset.purpose === 'ChargePointMaxProfile' ? 'Limite Geral Posto' : 'Por Conector'}
+                        {preset.purpose === 'ChargePointMaxProfile' ? t('smart.generalLimit') : t('smart.perConnector')}
                       </span>
                     </div>
 
@@ -583,7 +585,7 @@ export function SmartCharging() {
                     {/* Visual Periods Mini Timeline */}
                     <div className="mt-4 pt-3 border-t border-white/5 space-y-1.5">
                       <p className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-amber-400" /> Janelas Horárias:
+                        <Clock className="w-3 h-3 text-amber-400" /> {t('smart.hourlyWindowsLabel')}
                       </p>
                       <div className="space-y-1">
                         {preset.periods.map((p, idx) => {
@@ -599,7 +601,7 @@ export function SmartCharging() {
                               className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-white/3 border border-white/5 font-mono"
                             >
                               <span className="text-gray-300 truncate max-w-[70%]">
-                                {p.label || `A partir das ${secondsToHHMM(p.start_period)}`}
+                                {p.label || t('smart.fromTime', { time: secondsToHHMM(p.start_period) })}
                               </span>
                               <span className={`font-bold ${isPresetDC ? 'text-purple-300' : 'text-emerald-400'}`}>
                                 {formattedLimit}
@@ -623,12 +625,12 @@ export function SmartCharging() {
                       }`}
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>{loadingAction === `preset-${preset.id}` ? 'A enviar…' : 'Aplicar no Posto'}</span>
+                      <span>{loadingAction === `preset-${preset.id}` ? t('smart.sending') : t('smart.applyAtStation')}</span>
                     </button>
 
                     <button
                       onClick={() => handleLoadPresetToForm(preset)}
-                      title="Editar este modelo no construtor abaixo"
+                      title={t('smart.editInBuilder')}
                       className="btn-secondary text-xs p-2 text-gray-400 hover:text-white rounded-xl"
                     >
                       <Sliders className="w-3.5 h-3.5" />
@@ -649,10 +651,10 @@ export function SmartCharging() {
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-100">
-                Construtor de Perfis Smart Charging Avançado
+                {t('smart.builderTitle')}
               </h2>
               <p className="text-xs text-gray-500">
-                Cria e ajusta perfis com horários, potências, recorrências (Daily/Weekly) e finalidades OCPP 1.6
+                {t('smart.builderSubtitle')}
               </p>
             </div>
           </div>
@@ -662,7 +664,7 @@ export function SmartCharging() {
             className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-2 px-3 rounded-xl flex items-center gap-1.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Limpar Todos os Perfis do Posto</span>
+            <span>{t('smart.clearAllProfiles')}</span>
           </button>
         </div>
 
@@ -670,75 +672,75 @@ export function SmartCharging() {
           {/* Col 1: Config Parameters */}
           <div className="space-y-4">
             <div>
-              <label className="label">Nome do Perfil</label>
+              <label className="label">{t('smart.profileName')}</label>
               <input
                 className="input text-xs"
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
-                placeholder="ex: Tarifa Noturna Vazio 32A"
+                placeholder={t('smart.profileNamePlaceholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Finalidade (Purpose)</label>
+                <label className="label">{t('smart.purposeLabel')}</label>
                 <select
                   className="select text-xs"
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value as any)}
                 >
-                  <option value="TxDefaultProfile">TxDefaultProfile (Padrão Tomada)</option>
-                  <option value="ChargePointMaxProfile">ChargePointMaxProfile (Posto Total)</option>
-                  <option value="TxProfile">TxProfile (Sessão Ativa)</option>
+                  <option value="TxDefaultProfile">{t('smart.txDefaultProfile')}</option>
+                  <option value="ChargePointMaxProfile">{t('smart.chargePointMaxProfile')}</option>
+                  <option value="TxProfile">{t('smart.txProfile')}</option>
                 </select>
               </div>
 
               <div>
-                <label className="label">Tomada / Conector</label>
+                <label className="label">{t('smart.connectorLabel')}</label>
                 <select
                   className="select text-xs"
                   value={connectorId}
                   disabled={purpose === 'ChargePointMaxProfile'}
                   onChange={(e) => setConnectorId(Number(e.target.value))}
                 >
-                  <option value={0}>0 (Todas as Tomadas / Geral)</option>
-                  <option value={1}>1 (Tomada #1)</option>
-                  <option value={2}>2 (Tomada #2)</option>
+                  <option value={0}>{t('smart.allConnectorsOption')}</option>
+                  <option value={1}>{t('smart.connector1')}</option>
+                  <option value={2}>{t('smart.connector2')}</option>
                 </select>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Tipo de Perfil</label>
+                <label className="label">{t('smart.profileType')}</label>
                 <select
                   className="select text-xs"
                   value={kind}
                   onChange={(e) => setKind(e.target.value as any)}
                 >
-                  <option value="Recurring">Recurring (Recorrente)</option>
-                  <option value="Absolute">Absolute (Data/Hora Fixa)</option>
-                  <option value="Relative">Relative (Relativo à Carga)</option>
+                  <option value="Recurring">{t('smart.recurring')}</option>
+                  <option value="Absolute">{t('smart.absolute')}</option>
+                  <option value="Relative">{t('smart.relative')}</option>
                 </select>
               </div>
 
               <div>
-                <label className="label">Recorrência</label>
+                <label className="label">{t('smart.recurrence')}</label>
                 <select
                   className="select text-xs"
                   value={recurrencyKind}
                   disabled={kind !== 'Recurring'}
                   onChange={(e) => setRecurrencyKind(e.target.value as any)}
                 >
-                  <option value="Daily">Daily (Diária - 24 Horas)</option>
-                  <option value="Weekly">Weekly (Semanal - 7 Dias)</option>
+                  <option value="Daily">{t('smart.recurrenceDaily')}</option>
+                  <option value="Weekly">{t('smart.recurrenceWeekly')}</option>
                 </select>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Unidade de Medida</label>
+                <label className="label">{t('smart.rateUnit')}</label>
                 <div className="flex gap-2">
                   {(['A', 'W'] as const).map((unit) => (
                     <button
@@ -751,14 +753,14 @@ export function SmartCharging() {
                           : 'bg-white/4 border-white/8 text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      {unit === 'A' ? 'Amperes (A)' : 'Watts (W)'}
+                      {unit === 'A' ? t('smart.amperes') : t('smart.watts')}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="label">Stack Level (Prioridade)</label>
+                <label className="label">{t('smart.stackLevel')}</label>
                 <input
                   type="number"
                   min={0}
@@ -776,14 +778,14 @@ export function SmartCharging() {
             <div className="flex items-center justify-between">
               <label className="label mb-0 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
-                Intervalos Horários e Limites de Potência
+                {t('smart.periodsLabel')}
               </label>
               <button
                 type="button"
                 onClick={handleAddPeriod}
                 className="btn-secondary text-xs py-1 px-2.5 rounded-lg flex items-center gap-1 text-blue-400 hover:text-blue-300"
               >
-                <Plus className="w-3.5 h-3.5" /> Adicionar Intervalo
+                <Plus className="w-3.5 h-3.5" /> {t('smart.addInterval')}
               </button>
             </div>
 
@@ -798,7 +800,7 @@ export function SmartCharging() {
 
                   <div className="flex-1 grid grid-cols-3 gap-3">
                     <div>
-                      <span className="text-[10px] text-gray-500 block mb-1">Hora de Início</span>
+                      <span className="text-[10px] text-gray-500 block mb-1">{t('smart.startTime')}</span>
                       <input
                         type="time"
                         className="input py-1 text-xs font-mono"
@@ -813,7 +815,7 @@ export function SmartCharging() {
 
                     <div>
                       <span className="text-[10px] text-gray-500 block mb-1">
-                        Limite ({rateUnit === 'A' ? 'Amperes' : 'Watts'})
+                        {rateUnit === 'A' ? t('smart.limitAmperes') : t('smart.limitWatts')}
                       </span>
                       <input
                         type="number"
@@ -830,7 +832,7 @@ export function SmartCharging() {
                     </div>
 
                     <div>
-                      <span className="text-[10px] text-gray-500 block mb-1">Fases</span>
+                      <span className="text-[10px] text-gray-500 block mb-1">{t('smart.phases')}</span>
                       <select
                         className="select py-1 text-xs"
                         value={p.phases}
@@ -840,8 +842,8 @@ export function SmartCharging() {
                           setPeriods(updated)
                         }}
                       >
-                        <option value={1}>1 Fase (Mono)</option>
-                        <option value={3}>3 Fases (Trifásico)</option>
+                        <option value={1}>{t('smart.mono')}</option>
+                        <option value={3}>{t('smart.threePhase')}</option>
                       </select>
                     </div>
                   </div>
@@ -863,7 +865,7 @@ export function SmartCharging() {
               <div className="flex items-center justify-between text-[11px]">
                 <span className="flex items-center gap-1 text-slate-700 dark:text-gray-300 font-semibold">
                   <BarChart3 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                  Previsão Gráfica de 24 Horas:
+                  {t('smart.previewLabel')}
                 </span>
                 <span className="text-slate-500 dark:text-gray-400 font-mono font-medium">00:00 → 24:00</span>
               </div>
@@ -897,7 +899,7 @@ export function SmartCharging() {
               className="w-full btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-blue-500/20"
             >
               <Send className="w-4 h-4" />
-              <span>{loadingAction === 'custom' ? 'A enviar comando OCPP…' : 'Gravar e Ativar Perfil no Posto'}</span>
+              <span>{loadingAction === 'custom' ? t('smart.sendingOcpp') : t('smart.saveActivate')}</span>
             </button>
           </div>
         </div>
@@ -910,14 +912,14 @@ export function SmartCharging() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-bold text-gray-200">Perfis Gravados na Base de Dados</h3>
+              <h3 className="text-sm font-bold text-gray-200">{t('smart.savedProfiles')}</h3>
             </div>
-            <span className="text-xs text-gray-500 font-mono">{profiles.length} perfis</span>
+            <span className="text-xs text-gray-500 font-mono">{t('smart.profilesCount', { count: profiles.length })}</span>
           </div>
 
           {profiles.length === 0 ? (
             <div className="p-8 text-center text-xs text-gray-600 border border-dashed border-white/5 rounded-xl">
-              Nenhum perfil gravado para este posto. Aplica um dos modelos acima.
+              {t('smart.noSavedProfiles')}
             </div>
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
@@ -937,7 +939,7 @@ export function SmartCharging() {
                         {prof.is_deployed && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                            Ativo no Posto
+                            {t('smart.deployedBadge')}
                           </span>
                         )}
                         <span className={`text-[10px] px-1.5 py-0.2 rounded border font-semibold ${
@@ -950,13 +952,13 @@ export function SmartCharging() {
                       </div>
 
                       <p className="text-[11px] text-gray-400 font-mono">
-                        ID #{prof.profile_id} · Finalidade: <strong className="text-gray-300">{prof.purpose}</strong> · {prof.kind} {prof.recurrency_kind ? `(${prof.recurrency_kind})` : ''} · {prof.connector_id === 0 ? 'Geral (Posto)' : `Tomada #${prof.connector_id}`}
+                        ID #{prof.profile_id} · {t('smart.purposeMeta')} <strong className="text-gray-300">{prof.purpose}</strong> · {prof.kind} {prof.recurrency_kind ? `(${prof.recurrency_kind})` : ''} · {prof.connector_id === 0 ? t('smart.generalStation') : t('smart.connectorN', { n: prof.connector_id })}
                       </p>
 
                       {/* Scheduled Periods Breakdown */}
                       {prof.periods && prof.periods.length > 0 && (
                         <div className="pt-1">
-                          <span className="text-[10px] text-gray-500 font-medium block mb-1">Horários & Limites Programados:</span>
+                          <span className="text-[10px] text-gray-500 font-medium block mb-1">{t('smart.schedulesLabel')}</span>
                           <div className="flex flex-wrap gap-1.5">
                             {prof.periods.map((per: any, pIdx: number) => {
                               const isKw = prof.charging_rate_unit === 'W' && per.limit >= 1000
@@ -973,7 +975,7 @@ export function SmartCharging() {
                                   <span className="text-slate-600 dark:text-gray-400">{secondsToHHMM(per.start_period || 0)}:</span>
                                   <strong className="text-emerald-600 dark:text-emerald-300">{displayLimit}</strong>
                                   {per.number_phases && (
-                                    <span className="text-slate-500 dark:text-gray-500">({per.number_phases === 3 ? 'Trifásico' : '1F'})</span>
+                                    <span className="text-slate-500 dark:text-gray-500">({per.number_phases === 3 ? t('smart.threePhaseShort') : t('smart.onePhaseShort')})</span>
                                   )}
                                 </span>
                               )
@@ -1002,16 +1004,16 @@ export function SmartCharging() {
                             )
                           }
                           document.getElementById('custom-profile-builder')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                          showToast('success', `Perfil "${prof.name}" carregado no construtor acima! Podes editar e gravar.`)
+                          showToast('success', t('smart.loadedToBuilder', { name: prof.name }))
                         }}
-                        title="Carregar no Construtor para Editar"
+                        title={t('smart.loadToEdit')}
                         className="btn-ghost p-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg"
                       >
                         <Sliders className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => api.applySmartChargingProfile(prof.id, selectedCpId).then(() => {
-                          showToast('success', `Perfil #${prof.profile_id} reenviado ao posto!`)
+                          showToast('success', t('smart.profileRedeployed', { id: prof.profile_id }))
                           refetchProfiles()
                         })}
                         disabled={!isOnline}
@@ -1022,10 +1024,10 @@ export function SmartCharging() {
                       </button>
                       <button
                         onClick={() => api.deleteSmartChargingProfile(prof.id).then(() => {
-                          showToast('success', 'Perfil eliminado da base de dados.')
+                          showToast('success', t('smart.profileDeleted'))
                           refetchProfiles()
                         })}
-                        title="Eliminar perfil da base de dados"
+                        title={t('smart.deleteProfile')}
                         className="btn-ghost p-2 text-xs text-red-400 hover:text-red-300 rounded-lg"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1043,7 +1045,7 @@ export function SmartCharging() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-sm font-bold text-gray-200">Consultar Horário Composto (GetCompositeSchedule)</h3>
+              <h3 className="text-sm font-bold text-gray-200">{t('smart.compositeTitle')}</h3>
             </div>
             <button
               onClick={handleFetchCompositeSchedule}
@@ -1051,12 +1053,12 @@ export function SmartCharging() {
               className="btn-secondary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 text-cyan-300 hover:text-white"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>{loadingAction === 'composite' ? 'A consultar…' : 'Consultar Posto'}</span>
+              <span>{loadingAction === 'composite' ? t('smart.querying') : t('smart.queryStation')}</span>
             </button>
           </div>
 
           <p className="text-xs text-gray-500">
-            Pede ao posto para calcular e devolver o plano composto final das próximas 24h considerando todos os perfis ativos.
+            {t('smart.compositeDesc')}
           </p>
 
           {compositeData ? (
@@ -1072,7 +1074,7 @@ export function SmartCharging() {
           ) : (
             <div className="p-8 text-center text-xs text-gray-600 border border-dashed border-white/5 rounded-xl flex flex-col items-center gap-2">
               <Info className="w-5 h-5 text-gray-600" />
-              Clica em "Consultar Posto" para ler a curva de carga calculada pelo firmware do posto.
+              {t('smart.compositeEmpty')}
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { api } from '../api'
 import type { Charger, Transaction } from '../types'
+import { useI18n } from '../i18n'
 
 // ── types ──────────────────────────────────────────────────
 type Result = { ok: boolean; status: string } | null
@@ -73,6 +74,7 @@ function CmdCard({ icon, title, description, color, disabled, result, children, 
 
 // ── useCmd hook ─────────────────────────────────────────────
 function useCmd(fn: () => Promise<{ status: string }>) {
+  const { t } = useI18n()
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<Result>(null)
 
@@ -83,7 +85,7 @@ function useCmd(fn: () => Promise<{ status: string }>) {
       const r = await fn()
       setResult({ ok: r.status === 'Accepted', status: r.status })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro de rede'
+      const msg = e instanceof Error ? e.message : t('commands.networkError')
       setResult({ ok: false, status: msg })
     } finally {
       setLoading(false)
@@ -107,6 +109,7 @@ function scrollToAnchor(anchorId: string) {
 function ChargerSelector({
   chargers, value, onChange,
 }: { chargers: Charger[]; value: string; onChange: (v: string) => void }) {
+  const { t } = useI18n()
   const online = chargers.filter((c) => c.is_online)
   const offline = chargers.filter((c) => !c.is_online)
 
@@ -117,8 +120,8 @@ function ChargerSelector({
           <Terminal className="w-4 h-4 text-gray-400" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-200">Charger alvo</p>
-          <p className="text-xs text-gray-600">Selecciona o charger onde executar os comandos</p>
+          <p className="text-sm font-semibold text-gray-200">{t('commands.targetCharger')}</p>
+          <p className="text-xs text-gray-600">{t('commands.selectTargetCharger')}</p>
         </div>
         {value && (
           <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
@@ -137,7 +140,7 @@ function ChargerSelector({
           value={value}
           onChange={(e) => onChange(e.target.value)}
         >
-          <option value="">— seleccionar charger —</option>
+          <option value="">{t('commands.selectCharger')}</option>
           {online.length > 0 && (
             <optgroup label="🟢 Online">
               {online.map((c) => <option key={c.id} value={c.charge_point_id}>{c.charge_point_id}</option>)}
@@ -179,17 +182,19 @@ function ChargerSelector({
 function RunBtn({
   label, onClick, loading, variant = 'primary', disabled,
 }: { label: string; onClick: () => void; loading: boolean; variant?: 'primary' | 'danger' | 'secondary'; disabled?: boolean }) {
+  const { t } = useI18n()
   const cls = variant === 'danger' ? 'btn-danger' : variant === 'secondary' ? 'btn-secondary' : 'btn-primary'
   return (
     <button className={`${cls} w-full justify-center`} onClick={onClick} disabled={loading || disabled}>
       {loading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : null}
-      {loading ? 'A executar…' : label}
+      {loading ? t('commands.executing') : label}
     </button>
   )
 }
 
 // ── main ────────────────────────────────────────────────────
 export function Commands() {
+  const { t } = useI18n()
   const { data: chargers = [] } = useQuery<Charger[]>({ queryKey: ['chargers'], queryFn: api.getChargers, refetchInterval: 5000 })
   const [cpId, setCpId] = useState('')
 
@@ -245,20 +250,20 @@ export function Commands() {
       {/* header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Comandos Remotos</h1>
-          <p className="text-sm text-gray-600 mt-1">OCPP 1.6 — Central System → Charge Point</p>
+          <h1 className="text-2xl font-bold text-gray-100">{t('commands.title')}</h1>
+          <p className="text-sm text-gray-600 mt-1">{t('commands.subtitle')}</p>
         </div>
         {offline && cpId && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-medium animate-fade-up">
             <AlertTriangle className="w-3.5 h-3.5" />
-            Charger offline — comandos indisponíveis
+            {t('commands.offlineWarning')}
           </div>
         )}
       </div>
 
       <div className="card border border-white/8">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 mr-1">Atalhos:</span>
+          <span className="text-xs font-medium text-gray-500 mr-1">{t('commands.shortcuts')}</span>
           {[
             ['start-card', 'Remote Start'],
             ['stop-card', 'Remote Stop'],
@@ -291,9 +296,9 @@ export function Commands() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-blue-400" />
-              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wider">Atalhos @Canditos OCPP</h3>
+              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wider">@Canditos OCPP</h3>
             </div>
-            <span className="text-[11px] text-gray-500 font-mono">Preset rápido 1-clique</span>
+            <span className="text-[11px] text-gray-500 font-mono">{t('commands.quickPreset')}</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -307,7 +312,7 @@ export function Commands() {
               className="btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2 shadow-sm"
             >
               <Zap className="w-3.5 h-3.5" fill="currentColor" />
-              <span>Carga Rápida</span>
+              <span>{t('commands.quickCharge')}</span>
             </button>
 
             <button
@@ -319,7 +324,7 @@ export function Commands() {
               className="btn bg-gray-800 hover:bg-gray-700 text-amber-300 border border-amber-500/30 text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2"
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-              <span>Soft Reset</span>
+              <span>{t('commands.softReset')}</span>
             </button>
 
             <button
@@ -331,7 +336,7 @@ export function Commands() {
               className="btn bg-gray-800 hover:bg-gray-700 text-violet-300 border border-violet-500/30 text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2"
             >
               <Unlock className="w-3.5 h-3.5 text-violet-400" />
-              <span>Desbloquear Cabo</span>
+              <span>{t('commands.unlockCable')}</span>
             </button>
 
             <button
@@ -343,7 +348,7 @@ export function Commands() {
               className="btn bg-gray-800 hover:bg-gray-700 text-emerald-300 border border-emerald-500/30 text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-2"
             >
               <Bell className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Pedir Estado</span>
+              <span>{t('commands.requestStatus')}</span>
             </button>
           </div>
         </div>
@@ -356,8 +361,8 @@ export function Commands() {
             <Terminal className="w-8 h-8 text-gray-700" />
           </div>
           <div>
-            <p className="text-gray-400 font-medium">Selecciona um charger para continuar</p>
-            <p className="text-gray-600 text-sm mt-1">Os comandos ficam disponíveis assim que um charger estiver online</p>
+            <p className="text-gray-400 font-medium">{t('commands.selectChargerToContinue')}</p>
+            <p className="text-gray-600 text-sm mt-1">{t('commands.noChargersOnline')}</p>
           </div>
         </div>
       )}
@@ -366,29 +371,29 @@ export function Commands() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* remote start */}
-          <CmdCard anchorId="start-card" icon={<Zap className="w-5 h-5" fill="currentColor" />} title="Remote Start" description="Inicia uma sessão de carregamento remotamente" color="blue" disabled={noTarget} result={start.result}>
+          <CmdCard anchorId="start-card" icon={<Zap className="w-5 h-5" fill="currentColor" />} title="Remote Start" description={t('commands.remoteStartDesc')} color="blue" disabled={noTarget} result={start.result}>
             <div>
               <label className="label">ID Tag</label>
               <input className="input" value={idTag} onChange={(e) => setIdTag(e.target.value)} placeholder="ex: VERSICHARGE_TAG" />
             </div>
             <div>
-              <label className="label">Conector</label>
+              <label className="label">{t('commands.connectorLabel')}</label>
               <input className="input" type="number" min={1} value={connector} onChange={(e) => setConnector(e.target.value)} />
             </div>
             <RunBtn label="Remote Start" onClick={start.run} loading={start.loading} />
           </CmdCard>
 
           {/* remote stop */}
-          <CmdCard anchorId="stop-card" icon={<Square className="w-5 h-5" />} title="Remote Stop" description="Para uma sessão de carregamento activa" color="red" disabled={noTarget} result={stop.result}>
+          <CmdCard anchorId="stop-card" icon={<Square className="w-5 h-5" />} title="Remote Stop" description={t('commands.remoteStopDesc')} color="red" disabled={noTarget} result={stop.result}>
             <div>
-              <label className="label">Transação activa</label>
+              <label className="label">{t('commands.activeTransaction')}</label>
               {activeTxs.length > 0 ? (
                 <div className="relative">
                   <select className="select appearance-none pr-10" value={txId} onChange={(e) => setTxId(e.target.value)}>
-                    <option value="">— seleccionar —</option>
+                    <option value="">{t('commands.selectPlaceholder')}</option>
                     {activeTxs.map((tx) => (
                       <option key={tx.id} value={tx.transaction_id}>
-                        #{tx.transaction_id} · Conector {tx.connector_id} · {tx.id_tag}
+                        #{tx.transaction_id} · {t('commands.connectorOption')} {tx.connector_id} · {tx.id_tag}
                       </option>
                     ))}
                   </select>
@@ -397,7 +402,7 @@ export function Commands() {
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-800/40 border border-white/6 text-xs text-gray-600">
                   <Square className="w-3.5 h-3.5" />
-                  Sem transações activas
+                  {t('commands.noActiveTransactions')}
                 </div>
               )}
             </div>
@@ -405,23 +410,23 @@ export function Commands() {
           </CmdCard>
 
           {/* reset */}
-          <CmdCard anchorId="reset-card" icon={<RotateCcw className="w-5 h-5" />} title="Reset" description="Reinicia o charger (Soft não interrompe sessões activas)" color="amber" disabled={noTarget} result={reset.result}>
+          <CmdCard anchorId="reset-card" icon={<RotateCcw className="w-5 h-5" />} title="Reset" description={t('commands.resetDesc')} color="amber" disabled={noTarget} result={reset.result}>
             <div>
-              <label className="label">Tipo</label>
+              <label className="label">{t('commands.type')}</label>
               <div className="grid grid-cols-2 gap-2">
-                {['Soft', 'Hard'].map((t) => (
+                {['Soft', 'Hard'].map((typ) => (
                   <button
-                    key={t}
-                    onClick={() => setResetType(t)}
+                    key={typ}
+                    onClick={() => setResetType(typ)}
                     className={`py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                      resetType === t
-                        ? t === 'Hard'
+                      resetType === typ
+                        ? typ === 'Hard'
                           ? 'bg-red-500/20 border-red-500/40 text-red-400'
                           : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
                         : 'bg-white/4 border-white/8 text-gray-500 hover:text-gray-300'
                     }`}
                   >
-                    {t === 'Soft' ? '↻ Soft' : '⚡ Hard'}
+                    {typ === 'Soft' ? '↻ Soft' : '⚡ Hard'}
                   </button>
                 ))}
               </div>
@@ -430,36 +435,36 @@ export function Commands() {
           </CmdCard>
 
           {/* unlock connector */}
-          <CmdCard anchorId="unlock-card" icon={<Unlock className="w-5 h-5" />} title="Unlock Connector" description="Desbloqueia mecanicamente o conector do veículo" color="violet" disabled={noTarget} result={unlock.result}>
+          <CmdCard anchorId="unlock-card" icon={<Unlock className="w-5 h-5" />} title="Unlock Connector" description={t('commands.unlockDesc')} color="violet" disabled={noTarget} result={unlock.result}>
             <div>
-              <label className="label">Conector ID</label>
+              <label className="label">{t('commands.connectorId')}</label>
               <input className="input" type="number" min={1} value={unlockConn} onChange={(e) => setUnlockConn(e.target.value)} />
             </div>
             <RunBtn label="Unlock Connector" onClick={unlock.run} loading={unlock.loading} variant="secondary" />
           </CmdCard>
 
           {/* change availability */}
-          <CmdCard anchorId="availability-card" icon={<ToggleLeft className="w-5 h-5" />} title="Change Availability" description="Coloca um conector Operative ou Inoperative" color="emerald" disabled={noTarget} result={avail.result}>
+          <CmdCard anchorId="availability-card" icon={<ToggleLeft className="w-5 h-5" />} title="Change Availability" description={t('commands.availabilityDesc')} color="emerald" disabled={noTarget} result={avail.result}>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Conector (0 = todos)</label>
+                <label className="label">{t('commands.connectorZeroAll')}</label>
                 <input className="input" type="number" min={0} value={availConn} onChange={(e) => setAvailConn(e.target.value)} />
               </div>
               <div>
-                <label className="label">Tipo</label>
+                <label className="label">{t('commands.type')}</label>
                 <div className="grid grid-cols-1 gap-2">
-                  {['Operative', 'Inoperative'].map((t) => (
+                  {['Operative', 'Inoperative'].map((typ) => (
                     <button
-                      key={t}
-                      onClick={() => setAvailType(t)}
+                      key={typ}
+                      onClick={() => setAvailType(typ)}
                       className={`py-2 rounded-xl text-xs font-medium border transition-all ${
-                        availType === t
-                          ? t === 'Operative'
+                        availType === typ
+                          ? typ === 'Operative'
                             ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
                             : 'bg-red-500/20 border-red-500/40 text-red-400'
                           : 'bg-white/4 border-white/8 text-gray-500 hover:text-gray-300'
                       }`}
-                    >{t}</button>
+                    >{typ}</button>
                   ))}
                 </div>
               </div>
@@ -468,9 +473,9 @@ export function Commands() {
           </CmdCard>
 
           {/* trigger message */}
-          <CmdCard anchorId="trigger-card" icon={<Bell className="w-5 h-5" />} title="Trigger Message" description="Força o charger a enviar uma mensagem específica" color="violet" disabled={noTarget} result={trig.result}>
+          <CmdCard anchorId="trigger-card" icon={<Bell className="w-5 h-5" />} title="Trigger Message" description={t('commands.triggerDesc')} color="violet" disabled={noTarget} result={trig.result}>
             <div>
-              <label className="label">Mensagem</label>
+              <label className="label">{t('commands.message')}</label>
               <div className="relative">
                 <select className="select appearance-none pr-10" value={triggerMsg} onChange={(e) => setTriggerMsg(e.target.value)}>
                   {['BootNotification','DiagnosticsStatusNotification','FirmwareStatusNotification','Heartbeat','MeterValues','StatusNotification'].map((m) => (
@@ -484,30 +489,30 @@ export function Commands() {
           </CmdCard>
 
           {/* clear cache */}
-          <CmdCard anchorId="cache-card" icon={<Trash2 className="w-5 h-5" />} title="Clear Cache" description="Limpa a cache de autorização local do charger" color="red" disabled={noTarget} result={cache.result}>
+          <CmdCard anchorId="cache-card" icon={<Trash2 className="w-5 h-5" />} title="Clear Cache" description={t('commands.clearCacheDesc')} color="red" disabled={noTarget} result={cache.result}>
             <p className="text-xs text-gray-600 bg-red-500/6 border border-red-500/15 rounded-xl p-3">
-              ⚠️ O charger vai apagar todos os idTags em cache. Sessões activas não são interrompidas.
+              {t('commands.clearCacheWarning')}
             </p>
             <RunBtn label="Clear Cache" onClick={cache.run} loading={cache.loading} variant="danger" />
           </CmdCard>
 
           {/* change configuration */}
-          <CmdCard anchorId="config-card" icon={<Settings className="w-5 h-5" />} title="Change Configuration" description="Altera um parâmetro de configuração OCPP" color="gray" disabled={noTarget} result={cfg.result}>
+          <CmdCard anchorId="config-card" icon={<Settings className="w-5 h-5" />} title="Change Configuration" description={t('commands.changeConfigDesc')} color="gray" disabled={noTarget} result={cfg.result}>
             <div>
-              <label className="label">Chave</label>
+              <label className="label">{t('commands.configKey')}</label>
               <input className="input" value={cfgKey} onChange={(e) => setCfgKey(e.target.value)} placeholder="ex: HeartbeatInterval" />
             </div>
             <div>
-              <label className="label">Valor</label>
+              <label className="label">{t('commands.configValue')}</label>
               <input className="input" value={cfgVal} onChange={(e) => setCfgVal(e.target.value)} placeholder="ex: 60" />
             </div>
             <RunBtn label="Change Configuration" onClick={cfg.run} loading={cfg.loading} disabled={!cfgKey} />
           </CmdCard>
 
           {/* get configuration */}
-          <CmdCard anchorId="config-get-card" icon={<FileSearch className="w-5 h-5" />} title="Get Configuration" description="Lê e guarda toda a configuração na base de dados" color="gray" disabled={noTarget} result={getcfg.result}>
+          <CmdCard anchorId="config-get-card" icon={<FileSearch className="w-5 h-5" />} title="Get Configuration" description={t('commands.getConfigDesc')} color="gray" disabled={noTarget} result={getcfg.result}>
             <p className="text-xs text-gray-600 bg-gray-700/20 border border-white/6 rounded-xl p-3">
-              Faz GetConfiguration ao charger e actualiza a página de Configuração com os valores reais.
+              {t('commands.getConfigInfo')}
             </p>
             <RunBtn label="Get Configuration" onClick={getcfg.run} loading={getcfg.loading} variant="secondary" />
           </CmdCard>

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import type { OcppMessage } from '../types'
 import { safeFormatDate } from '../utils/date'
+import { useI18n } from '../i18n'
 
 interface Props {
   messages: OcppMessage[]
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
+  const { t } = useI18n()
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL')
   const [actionFilter, setActionFilter] = useState<string>('ALL')
   const [searchTerm, setSearchTerm] = useState<string>('')
@@ -98,7 +100,7 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
           <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400 dark:text-gray-500" />
           <input
             type="text"
-            placeholder="Pesquisar mensagens OCPP ou JSON..."
+            placeholder={t('logViewer.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="input pl-9 text-xs py-2 bg-white dark:bg-gray-950/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-500 focus:border-blue-500/50"
@@ -113,7 +115,7 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
               onClick={() => setDirectionFilter('ALL')}
               className={`px-2.5 py-1 rounded-lg transition-all ${directionFilter === 'ALL' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-200'}`}
             >
-              Todas
+              {t('logViewer.all')}
             </button>
             <button
               onClick={() => setDirectionFilter('IN')}
@@ -136,7 +138,7 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
               onChange={(e) => setActionFilter(e.target.value)}
               className="select text-xs py-1.5 px-3 bg-white dark:bg-gray-950/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-gray-300 cursor-pointer"
             >
-              <option value="ALL">Todas as Ações</option>
+              <option value="ALL">{t('logViewer.allActions')}</option>
               {uniqueActions.map((act) => (
                 <option key={act} value={act}>{act}</option>
               ))}
@@ -146,7 +148,7 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
           {/* Pause Feed Button */}
           <button
             onClick={() => setIsPaused(!isPaused)}
-            title={isPaused ? 'Continuar atualização live' : 'Pausar scroll live'}
+            title={isPaused ? t('logViewer.resumeLive') : t('logViewer.pauseLive')}
             className={`btn-secondary p-2 text-xs rounded-xl ${isPaused ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30' : 'text-slate-600 dark:text-gray-400'}`}
           >
             {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
@@ -155,7 +157,7 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
           {/* Export JSON Button */}
           <button
             onClick={exportLogsJson}
-            title="Exportar logs filtrados em formato JSON"
+            title={t('logViewer.exportJson')}
             className="btn-secondary p-2 text-xs text-slate-700 dark:text-gray-300 rounded-xl hover:text-slate-900 dark:hover:text-white"
           >
             <Download className="w-4 h-4" />
@@ -168,8 +170,8 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
         {filteredMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-gray-600 gap-2">
             <Code className="w-8 h-8 opacity-40 text-slate-400 dark:text-gray-500" />
-            <p className="text-sm font-medium text-slate-700 dark:text-gray-300">Sem registos de mensagens OCPP</p>
-            <p className="text-xs text-slate-400 dark:text-gray-600">Aguardar atividade no posto de carga...</p>
+            <p className="text-sm font-medium text-slate-700 dark:text-gray-300">{t('logViewer.noMessages')}</p>
+            <p className="text-xs text-slate-400 dark:text-gray-600">{t('logViewer.waitingActivity')}</p>
           </div>
         ) : (
           filteredMessages.map((m) => {
@@ -229,9 +231,9 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300 text-[11px] font-medium transition-all"
                       >
                         {copiedId === m.id ? (
-                          <><Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Copiado!</>
+                          <><Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> {t('logViewer.copied')}</>
                         ) : (
-                          <><Copy className="w-3 h-3 text-slate-500 dark:text-gray-400" /> Copiar JSON</>
+                          <><Copy className="w-3 h-3 text-slate-500 dark:text-gray-400" /> {t('logViewer.copyJson')}</>
                         )}
                       </button>
                     </div>
@@ -249,8 +251,8 @@ export function OcppLogViewer({ messages, cpId, maxHeight = '600px' }: Props) {
 
       {/* Footer bar */}
       <div className="px-4 py-2 bg-slate-100 dark:bg-gray-950/90 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[11px] text-slate-500 dark:text-gray-500">
-        <span>A mostrar {filteredMessages.length} de {messages.length} mensagens</span>
-        <span className="font-mono">{isPaused ? '⏸ SEGUIMENTO PAUSADO' : '● LIVE FEED ATIVO'}</span>
+        <span>{t('logViewer.showingOf', { filtered: filteredMessages.length, total: messages.length })}</span>
+        <span className="font-mono">{isPaused ? t('logViewer.pausedFeed') : t('logViewer.liveFeedActive')}</span>
       </div>
     </div>
   )

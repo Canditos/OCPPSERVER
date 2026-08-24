@@ -1,5 +1,6 @@
 import React from 'react'
 import { Plug, Zap, AlertTriangle, Clock, XCircle, WrenchIcon } from 'lucide-react'
+import { useI18n } from '../i18n'
 
 interface Props {
   connectorId: number
@@ -87,12 +88,24 @@ const STATUS_CONFIG: Record<string, {
 }
 
 export function ConnectorBadge({ connectorId, status, errorCode }: Props) {
+  const { t } = useI18n()
   const cfg = STATUS_CONFIG[status] ?? {
     label: status,
     bg: 'bg-gray-700/30', text: 'text-gray-500', border: 'border-gray-700/30',
     icon: <WrenchIcon className="w-3 h-3" />,
   }
-
+  const translatedLabel = ({
+    Available: t('connector.available'),
+    Charging: t('connector.charging'),
+    Preparing: t('connector.preparing'),
+    Finishing: t('connector.finishing'),
+    SuspendedEV: t('connector.suspendedEv'),
+    SuspendedEVSE: t('connector.suspendedEvse'),
+    Faulted: t('connector.faulted'),
+    Unavailable: t('connector.unavailable'),
+    Reserved: t('connector.reserved'),
+  } as Record<string, string>)[status] ?? cfg.label
+ 
   return (
     <div className={`relative inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-medium border transition-all ${cfg.bg} ${cfg.text} ${cfg.border} ${cfg.glow ?? ''}`}>
       {/* ping ring for active states */}
@@ -107,7 +120,7 @@ export function ConnectorBadge({ connectorId, status, errorCode }: Props) {
 
       <span>
         <span className="text-gray-500 mr-1">#{connectorId}</span>
-        {cfg.label}
+        {translatedLabel}
       </span>
 
       {errorCode && errorCode !== 'NoError' && (

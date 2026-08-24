@@ -10,10 +10,12 @@ import { api, UserProfile, AuthorizedTag } from '../api'
 import { useAuthStore } from '../store/authStore'
 import { safeFormatDate, safeFormatDuration } from '../utils/date'
 import type { Transaction } from '../types'
+import { useI18n } from '../i18n'
 
 export function UsersManagement() {
   const qc = useQueryClient()
   const currentAdmin = useAuthStore((s) => s.user)
+  const { t } = useI18n()
 
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'charging' | 'admin' | 'user'>('all')
@@ -107,7 +109,7 @@ export function UsersManagement() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
       setModalOpen(false)
-      showSuccess('Utilizador criado com sucesso!')
+      showSuccess(t('users.userCreated'))
     },
     onError: (err: any) => {
       setFormError(err?.response?.data?.detail || err.message)
@@ -120,7 +122,7 @@ export function UsersManagement() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
       setModalOpen(false)
-      showSuccess('Utilizador atualizado com sucesso!')
+      showSuccess(t('users.userUpdated'))
     },
     onError: (err: any) => {
       setFormError(err?.response?.data?.detail || err.message)
@@ -134,10 +136,10 @@ export function UsersManagement() {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
       qc.invalidateQueries({ queryKey: ['tags'] })
       setApproveModalOpen(false)
-      showSuccess(`Condutor ${data.full_name || data.username} aprovado com sucesso! Chave RFID "${data.rfid_tag}" ativada.`)
+      showSuccess(t('users.driverApproved', { name: data.full_name || data.username, tag: data.rfid_tag ?? '' }))
     },
     onError: (err: any) => {
-      alert(`Erro ao aprovar: ${err?.response?.data?.detail || err.message}`)
+      alert(t('users.approveError', { error: err?.response?.data?.detail || err.message }))
     },
   })
 
@@ -145,10 +147,10 @@ export function UsersManagement() {
     mutationFn: (id: number) => api.deleteUser(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
-      showSuccess('Utilizador eliminado.')
+      showSuccess(t('users.userDeleted'))
     },
     onError: (err: any) => {
-      alert(`Erro ao eliminar: ${err?.response?.data?.detail || err.message}`)
+      alert(t('users.deleteError', { error: err?.response?.data?.detail || err.message }))
     },
   })
 
@@ -156,10 +158,10 @@ export function UsersManagement() {
     mutationFn: (params: { user_id?: number; charge_point_id?: string; connector_id?: number }) =>
       api.notifyMoveCar(params),
     onSuccess: (data) => {
-      showSuccess(`Email de cortesia enviado para ${data.username} (${data.recipient})!`)
+      showSuccess(t('users.notifyEmailSent', { user: data.username, recipient: data.recipient }))
     },
     onError: (err: any) => {
-      alert(`Erro ao enviar aviso: ${err?.response?.data?.detail || err.message}`)
+      alert(t('users.notifyEmailError', { error: err?.response?.data?.detail || err.message }))
     },
   })
 
@@ -168,17 +170,17 @@ export function UsersManagement() {
     setFormError(null)
 
     if (!username.trim()) {
-      setFormError('O nome de utilizador é obrigatório.')
+      setFormError(t('users.usernameRequired'))
       return
     }
 
     if (!email.trim() || !email.includes('@')) {
-      setFormError('O email é obrigatório e deve ser válido para receber notificações de carregamento.')
+      setFormError(t('users.emailRequired'))
       return
     }
 
     if (!editingUser && (!password || password.length < 4)) {
-      setFormError('A palavra-passe deve ter pelo menos 4 caracteres.')
+      setFormError(t('users.passwordMin'))
       return
     }
 
@@ -207,10 +209,10 @@ export function UsersManagement() {
 
   const handleDelete = (u: UserProfile) => {
     if (u.id === currentAdmin?.id) {
-      alert('Não podes eliminar a tua própria conta de administrador!')
+      alert(t('users.cannotDeleteSelf'))
       return
     }
-    if (confirm(`Tens a certeza que desejas ${!u.is_active ? 'rejeitar/eliminar o pedido de registo' : 'eliminar o utilizador'} "${u.username}"?`)) {
+    if (confirm(t('users.confirmAction', { action: !u.is_active ? t('users.rejectDeleteRequest') : t('users.deleteUser'), name: u.username }))) {
       deleteMutation.mutate(u.id)
     }
   }
@@ -255,16 +257,16 @@ export function UsersManagement() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Gestão de Utilizadores & Condutores
+              {t('users.title')}
             </h1>
             {pendingCount > 0 && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
-                {pendingCount} {pendingCount === 1 ? 'Pendente' : 'Pendentes'}
+                {pendingCount} {pendingCount === 1 ? t('users.pendingSingle') : t('users.pendingPlural')}
               </span>
             )}
           </div>
           <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
-            Aprovação de novos registos, associação de chaves RFID e histórico de consumos em tempo real
+            {t('users.subtitle')}
           </p>
         </div>
 
@@ -274,7 +276,7 @@ export function UsersManagement() {
             className="btn btn-secondary flex items-center gap-2 text-xs"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Atualizar</span>
+            <span>{t('users.refresh')}</span>
           </button>
 
           <button
@@ -282,7 +284,7 @@ export function UsersManagement() {
             className="btn btn-primary flex items-center gap-2 text-xs shadow-md shadow-blue-500/20"
           >
             <UserPlus className="w-4 h-4" />
-            <span>Novo Utilizador</span>
+            <span>{t('users.newUser')}</span>
           </button>
         </div>
       </div>
@@ -307,15 +309,17 @@ export function UsersManagement() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  🔔 {pendingCount} {pendingCount === 1 ? 'Novo Pedido de Registo a Aguardar Aprovação' : 'Novos Pedidos de Registo a Aguardar Aprovação'}
+                  {pendingCount === 1
+                    ? t('users.pendingBannerSingle', { count: pendingCount })
+                    : t('users.pendingBannerPlural', { count: pendingCount })}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-gray-400">
-                  Condutores que se registaram na página de login e aguardam validação de acesso e chave RFID
+                  {t('users.pendingBannerSubtitle')}
                 </p>
               </div>
             </div>
             <span className="text-xs font-bold text-amber-500 dark:text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-              Ação Requerida
+              {t('users.actionRequired')}
             </span>
           </div>
 
@@ -336,7 +340,7 @@ export function UsersManagement() {
                       </span>
                     </div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
-                      Pendente
+                      {t('users.pending')}
                     </span>
                   </div>
                   <div className="text-xs text-slate-500 dark:text-gray-400 mt-1.5 flex items-center gap-1.5">
@@ -346,11 +350,11 @@ export function UsersManagement() {
                   {pu.rfid_tag && (
                     <div className="text-xs text-slate-600 dark:text-gray-300 mt-1 flex items-center gap-1.5 font-mono">
                       <Key className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Tag Solicitada: <strong>{pu.rfid_tag}</strong></span>
+                      <span>{t('users.requestedTag')}: <strong>{pu.rfid_tag}</strong></span>
                     </div>
                   )}
                   <div className="text-[10px] text-slate-400 mt-1">
-                    Registado em: {pu.created_at ? safeFormatDate(pu.created_at, 'dd/MM/yyyy HH:mm') : 'Hoje'}
+                    {t('users.registeredAt')}: {pu.created_at ? safeFormatDate(pu.created_at, 'dd/MM/yyyy HH:mm') : t('users.today')}
                   </div>
                 </div>
 
@@ -360,12 +364,12 @@ export function UsersManagement() {
                     className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm shadow-emerald-600/20"
                   >
                     <UserCheck className="w-3.5 h-3.5" />
-                    <span>Aprovar & Atribuir RFID</span>
+                    <span>{t('users.approveAssign')}</span>
                   </button>
                   <button
                     onClick={() => handleDelete(pu)}
                     className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-500 transition-colors"
-                    title="Rejeitar pedido de registo"
+                    title={t('users.rejectRequest')}
                   >
                     <UserX className="w-4 h-4" />
                   </button>
@@ -382,9 +386,9 @@ export function UsersManagement() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-5 border border-slate-200 dark:border-white/10 flex items-center justify-between hover:border-blue-500/30 transition-all">
           <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">Utilizadores Totais</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">{t('users.totalUsers')}</span>
             <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-1">
-              {users.length} <span className="text-xs font-normal text-slate-500">({totalAdmins} Admin · {totalDrivers} Condutores)</span>
+              {users.length} <span className="text-xs font-normal text-slate-500">{t('users.adminAndDrivers', { admins: totalAdmins, drivers: totalDrivers })}</span>
             </div>
           </div>
           <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
@@ -394,7 +398,7 @@ export function UsersManagement() {
 
         <div className="card p-5 border border-slate-200 dark:border-white/10 flex items-center justify-between hover:border-emerald-500/30 transition-all">
           <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">A Carregar Agora</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">{t('users.chargingNow')}</span>
             <div className="text-2xl font-bold font-mono mt-1 flex items-center gap-2">
               <span className={usersChargingNow > 0 ? "text-emerald-500 font-extrabold" : "text-slate-900 dark:text-white"}>
                 {usersChargingNow}
@@ -414,7 +418,7 @@ export function UsersManagement() {
 
         <div className="card p-5 border border-slate-200 dark:border-white/10 flex items-center justify-between hover:border-amber-500/30 transition-all">
           <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">Chaves RFID Atribuídas</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">{t('users.assignedRfid')}</span>
             <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-1">
               {users.filter((u) => !!u.rfid_tag && u.is_active).length}
             </div>
@@ -426,7 +430,7 @@ export function UsersManagement() {
 
         <div className="card p-5 border border-slate-200 dark:border-white/10 flex items-center justify-between hover:border-violet-500/30 transition-all">
           <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">Consumo Global</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase">{t('users.globalConsumption')}</span>
             <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-1">
               {totalKwh.toFixed(1)} <span className="text-xs font-normal text-slate-500">kWh</span>
             </div>
@@ -441,10 +445,10 @@ export function UsersManagement() {
       {/* Users Management Table Card                                 */}
       {/* ──────────────────────────────────────────────────────────── */}
       <div className="card p-6 border border-slate-200 dark:border-white/10 space-y-5">
-        
+
         {/* Controls: Search and Filter Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-4">
-          
+
           {/* Filter Pills */}
           <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-white/5 overflow-x-auto">
             <button
@@ -455,7 +459,7 @@ export function UsersManagement() {
                   : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Todos ({users.length})
+              {t('users.allFilter', { count: users.length })}
             </button>
 
             {pendingCount > 0 && (
@@ -467,7 +471,7 @@ export function UsersManagement() {
                     : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10'
                 }`}
               >
-                <span>⏳ Pendentes</span>
+                <span>{t('users.pendingFilter')}</span>
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
                   {pendingCount}
                 </span>
@@ -482,7 +486,7 @@ export function UsersManagement() {
                   : 'text-slate-500 dark:text-gray-400 hover:text-emerald-500'
               }`}
             >
-              <span>⚡ A Carregar</span>
+              <span>{t('users.chargingFilter')}</span>
               {usersChargingNow > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-bold">
                   {usersChargingNow}
@@ -498,7 +502,7 @@ export function UsersManagement() {
                   : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Admins ({totalAdmins})
+              {t('users.adminsFilter', { count: totalAdmins })}
             </button>
 
             <button
@@ -509,7 +513,7 @@ export function UsersManagement() {
                   : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Condutores ({totalDrivers})
+              {t('users.driversFilter', { count: totalDrivers })}
             </button>
           </div>
 
@@ -520,7 +524,7 @@ export function UsersManagement() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Pesquisar por nome, email ou RFID…"
+              placeholder={t('users.searchPlaceholder')}
               className="input pl-9 w-full text-xs"
             />
           </div>
@@ -529,25 +533,25 @@ export function UsersManagement() {
         {/* Table Content */}
         {isLoading ? (
           <div className="py-12 text-center text-slate-400 text-sm animate-pulse">
-            A carregar lista de utilizadores…
+            {t('users.loadingUsers')}
           </div>
         ) : filteredUsers.length === 0 ? (
           <div className="py-12 text-center text-slate-400 dark:text-gray-500 text-sm">
-            Nenhum utilizador encontrado para os filtros selecionados.
+            {t('users.noUsersFound')}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="table w-full text-left whitespace-nowrap">
               <thead>
                 <tr>
-                  <th>Utilizador / Email</th>
-                  <th>Cargo</th>
-                  <th>Chave RFID</th>
-                  <th>Estado / Sessão Live</th>
-                  <th>Consumo Acumulado</th>
-                  <th>Sessões</th>
-                  <th>Última Carga</th>
-                  <th className="text-right">Ações</th>
+                  <th>{t('users.colUserEmail')}</th>
+                  <th>{t('users.colRole')}</th>
+                  <th>{t('users.colRfid')}</th>
+                  <th>{t('users.colStatus')}</th>
+                  <th>{t('users.colConsumption')}</th>
+                  <th>{t('users.colSessions')}</th>
+                  <th>{t('users.colLastCharge')}</th>
+                  <th className="text-right">{t('users.colActions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -600,12 +604,12 @@ export function UsersManagement() {
                         {u.role === 'admin' ? (
                           <span className="badge badge-blue flex items-center gap-1 text-[11px] w-fit">
                             <Shield className="w-3 h-3" />
-                            <span>Administrador</span>
+                            <span>{t('users.roleAdmin')}</span>
                           </span>
                         ) : (
                           <span className="badge badge-green flex items-center gap-1 text-[11px] w-fit">
                             <UserIcon className="w-3 h-3" />
-                            <span>Condutor</span>
+                            <span>{t('users.roleDriver')}</span>
                           </span>
                         )}
                       </td>
@@ -618,10 +622,10 @@ export function UsersManagement() {
                           </span>
                         ) : isPending ? (
                           <span className="text-[11px] text-amber-500 font-medium italic">
-                            Aguardando atribuição
+                            {t('users.rfidPendingAssign')}
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400 font-mono">Sem RFID</span>
+                          <span className="text-xs text-slate-400 font-mono">{t('users.rfidNone')}</span>
                         )}
                       </td>
 
@@ -633,7 +637,7 @@ export function UsersManagement() {
                             className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1.5 hover:bg-amber-500/25 transition-all"
                             title="Clique para aprovar este condutor"
                           >
-                            <span>⏳ Pendente de Aprovação</span>
+                            <span>{t('users.pendingApproval')}</span>
                           </button>
                         ) : isCharging && u.active_charge ? (
                           <div className="space-y-0.5">
@@ -651,7 +655,7 @@ export function UsersManagement() {
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                            Disponível
+                            {t('users.userAvailable')}
                           </span>
                         )}
                       </td>
@@ -669,9 +673,9 @@ export function UsersManagement() {
                           type="button"
                           onClick={() => setSelectedUserForHistory(u)}
                           className="font-mono text-xs text-slate-700 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 underline decoration-dotted flex items-center gap-1"
-                          title="Ver transações deste utilizador"
+                          title={t('users.viewTransactions')}
                         >
-                          <span>{u.total_sessions ?? 0} cargas</span>
+                          <span>{t('users.chargesCount', { count: u.total_sessions ?? 0 })}</span>
                           <History className="w-3 h-3 opacity-60" />
                         </button>
                       </td>
@@ -691,7 +695,7 @@ export function UsersManagement() {
                               title="Aprovar e atribuir RFID"
                             >
                               <Check className="w-3.5 h-3.5" />
-                              <span>Aprovar</span>
+                              <span>{t('users.approve')}</span>
                             </button>
                           )}
 
@@ -703,21 +707,21 @@ export function UsersManagement() {
                               title="Enviar email de cortesia a pedir para mover o carro"
                             >
                               <Mail className="w-3.5 h-3.5" />
-                              <span>Pedir p/ Mover</span>
+                              <span>{t('users.askToMove')}</span>
                             </button>
                           )}
 
                           <button
                             onClick={() => setSelectedUserForHistory(u)}
                             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 text-blue-500 transition-colors"
-                            title="Histórico de Cargas"
+                            title={t('users.chargeHistoryBtn')}
                           >
                             <History className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => openEditModal(u)}
                             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 text-slate-600 dark:text-gray-300 transition-colors"
-                            title="Editar Utilizador"
+                            title={t('users.editUser')}
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
@@ -725,7 +729,7 @@ export function UsersManagement() {
                             onClick={() => handleDelete(u)}
                             disabled={u.id === currentAdmin?.id}
                             className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            title={isPending ? "Rejeitar Pedido" : "Eliminar Utilizador"}
+                            title={isPending ? t('users.rejectDeleteRequest') : t('users.deleteUser')}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -753,10 +757,10 @@ export function UsersManagement() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Aprovar Condutor & Atribuir RFID
+                    {t('users.approveDriverTitle')}
                   </h2>
                   <span className="text-xs text-slate-500 dark:text-gray-400">
-                    Utilizador: <strong>{userToApprove.username}</strong>
+                    {t('users.userLabel')} <strong>{userToApprove.username}</strong>
                   </span>
                 </div>
               </div>
@@ -769,14 +773,14 @@ export function UsersManagement() {
             </div>
 
             <p className="text-xs text-slate-600 dark:text-gray-300 leading-relaxed">
-              Ao aprovar, a conta será ativada no sistema, a chave RFID será registada e será enviado automaticamente um email de confirmação para <strong>{userToApprove.email}</strong>.
+              {t('users.approveExplanation')} <strong>{userToApprove.email}</strong>.
             </p>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault()
                 if (!approveRfid.trim()) {
-                  alert('Por favor introduz ou seleciona uma chave RFID.')
+                  alert(t('users.rfidRequired'))
                   return
                 }
                 approveMutation.mutate({ id: userToApprove.id, rfid_tag: approveRfid.trim() })
@@ -785,7 +789,7 @@ export function UsersManagement() {
             >
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Chave RFID a Atribuir *
+                  {t('users.rfidAssignLabel')}
                 </label>
                 <input
                   type="text"
@@ -799,16 +803,16 @@ export function UsersManagement() {
                 {/* Quick suggestions from White-list */}
                 {tags.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    <span className="text-[11px] text-slate-500 block">Sugestões da White-list existente:</span>
+                    <span className="text-[11px] text-slate-500 block">{t('users.whitelistSuggestions')}</span>
                     <div className="flex flex-wrap gap-1.5">
-                      {tags.slice(0, 6).map((t) => (
+                      {tags.slice(0, 6).map((tagItem) => (
                         <button
-                          key={t.id_tag}
+                          key={tagItem.id_tag}
                           type="button"
-                          onClick={() => setApproveRfid(t.id_tag)}
+                          onClick={() => setApproveRfid(tagItem.id_tag)}
                           className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500/15 hover:text-emerald-400 border border-slate-200 dark:border-white/10 text-[11px] font-mono transition-colors"
                         >
-                          {t.id_tag}
+                          {tagItem.id_tag}
                         </button>
                       ))}
                     </div>
@@ -822,7 +826,7 @@ export function UsersManagement() {
                   onClick={() => setApproveModalOpen(false)}
                   className="btn btn-secondary text-xs"
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
@@ -830,7 +834,7 @@ export function UsersManagement() {
                   className="btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>{approveMutation.isPending ? 'A aprovar…' : 'Confirmar e Ativar Acesso'}</span>
+                  <span>{approveMutation.isPending ? t('users.approving') : t('users.confirmActivate')}</span>
                 </button>
               </div>
             </form>
@@ -846,7 +850,7 @@ export function UsersManagement() {
           <div className="card max-w-md w-full p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                {editingUser ? `Editar Utilizador: ${editingUser.username}` : 'Novo Utilizador'}
+                {editingUser ? t('users.editUserTitle', { username: editingUser.username }) : t('users.newUserTitle')}
               </h2>
               <button
                 onClick={() => setModalOpen(false)}
@@ -866,7 +870,7 @@ export function UsersManagement() {
             <form onSubmit={handleSave} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Nome Completo (ex: Hugo Santos)
+                  {t('users.fullName')}
                 </label>
                 <input
                   type="text"
@@ -879,7 +883,7 @@ export function UsersManagement() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Nome de Utilizador / Username *
+                  {t('users.usernameLabel')}
                 </label>
                 <input
                   type="text"
@@ -894,7 +898,7 @@ export function UsersManagement() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Email (Obrigatório para avisos de fim de carga) *
+                  {t('users.emailLabel')}
                 </label>
                 <input
                   type="email"
@@ -908,13 +912,13 @@ export function UsersManagement() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  {editingUser ? 'Nova Palavra-passe (Deixar em branco para manter)' : 'Palavra-passe *'}
+                  {editingUser ? t('users.newPasswordLabel') : t('users.passwordLabel')}
                 </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={editingUser ? '••••••••' : 'Mínimo 4 caracteres'}
+                  placeholder={editingUser ? '••••••••' : t('users.passwordPlaceholder')}
                   className="input w-full text-xs"
                   required={!editingUser}
                 />
@@ -922,21 +926,21 @@ export function UsersManagement() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Cargo / Permissão
+                  {t('users.roleLabel')}
                 </label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value as any)}
                   className="select w-full text-xs"
                 >
-                  <option value="user">Condutor Comum (Portal do Condutor)</option>
-                  <option value="admin">Administrador (Acesso Total ao Sistema)</option>
+                  <option value="user">{t('users.driverOption')}</option>
+                  <option value="admin">{t('users.adminOption')}</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Chave RFID Associada (id_tag)
+                  {t('users.rfidLabel')}
                 </label>
                 <div className="space-y-1.5">
                   <input
@@ -948,15 +952,15 @@ export function UsersManagement() {
                   />
                   {tags.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-slate-500">
-                      <span>Sugestões:</span>
-                      {tags.slice(0, 5).map((t) => (
+                      <span>{t('users.suggestions')}</span>
+                      {tags.slice(0, 5).map((tagItem) => (
                         <button
-                          key={t.id_tag}
+                          key={tagItem.id_tag}
                           type="button"
-                          onClick={() => setRfidTag(t.id_tag)}
+                          onClick={() => setRfidTag(tagItem.id_tag)}
                           className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-500/20 hover:text-blue-400 font-mono text-[10px] transition-colors"
                         >
-                          {t.id_tag}
+                          {tagItem.id_tag}
                         </button>
                       ))}
                     </div>
@@ -970,14 +974,14 @@ export function UsersManagement() {
                   onClick={() => setModalOpen(false)}
                   className="btn btn-secondary text-xs"
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending}
                   className="btn btn-primary text-xs"
                 >
-                  {createMutation.isPending || updateMutation.isPending ? 'A guardar…' : 'Guardar'}
+                  {createMutation.isPending || updateMutation.isPending ? t('users.saving') : t('users.save')}
                 </button>
               </div>
             </form>
@@ -998,10 +1002,10 @@ export function UsersManagement() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Histórico de Cargas: {selectedUserForHistory.username}
+                    {t('users.historyTitle', { username: selectedUserForHistory.username })}
                   </h2>
                   <span className="text-xs text-slate-500 dark:text-gray-400 font-mono">
-                    Tag RFID: {selectedUserForHistory.rfid_tag || 'Nenhuma'} · Total: {selectedUserForHistory.total_kwh || 0} kWh ({selectedUserForHistory.total_sessions || 0} sessões)
+                    {t('users.historySubtitle', { tag: selectedUserForHistory.rfid_tag || t('users.noTagRfid') })} {selectedUserForHistory.total_kwh || 0} kWh ({selectedUserForHistory.total_sessions || 0} sessões)
                   </span>
                 </div>
               </div>
@@ -1016,7 +1020,7 @@ export function UsersManagement() {
             <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
               {userTransactions.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
-                  Nenhuma transação registada para esta chave RFID.
+                  {t('users.noTransactions')}
                 </div>
               ) : (
                 userTransactions.map((tx) => {
@@ -1034,24 +1038,24 @@ export function UsersManagement() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-900 dark:text-white">
-                            {tx.charge_point_id} (Tomada #{tx.connector_id})
+                            {t('users.connectorStation', { cp: tx.charge_point_id, connector: tx.connector_id })}
                           </span>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
                             tx.status === 'Active'
                               ? 'bg-emerald-500/20 text-emerald-400 animate-pulse'
                               : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-gray-300'
                           }`}>
-                            {tx.status === 'Active' ? 'Em curso' : 'Concluída'}
+                            {tx.status === 'Active' ? t('users.inProgress') : t('users.completed')}
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                          <span>Início: {tx.start_time ? safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm') : '—'}</span>
+                          <span>{t('users.startLabel')} {tx.start_time ? safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm') : '—'}</span>
                           {tx.stop_time && (
                             <>
                               <span>·</span>
-                              <span>Fim: {safeFormatDate(tx.stop_time, 'HH:mm')}</span>
+                              <span>{t('users.endLabel')} {safeFormatDate(tx.stop_time, 'HH:mm')}</span>
                               <span>·</span>
-                              <span>Duração: {getDurationLabel(tx.start_time, tx.stop_time)}</span>
+                              <span>{t('users.durationLabel')} {getDurationLabel(tx.start_time, tx.stop_time)}</span>
                             </>
                           )}
                         </div>
@@ -1076,7 +1080,7 @@ export function UsersManagement() {
                 onClick={() => setSelectedUserForHistory(null)}
                 className="btn btn-secondary text-xs"
               >
-                Fechar
+                {t('users.close')}
               </button>
             </div>
           </div>

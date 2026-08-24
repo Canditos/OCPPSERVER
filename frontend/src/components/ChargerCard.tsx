@@ -11,6 +11,7 @@ import { ConnectorBadge } from './ConnectorBadge'
 import { BatteryIndicator } from './BatteryIndicator'
 import { api } from '../api'
 import type { Charger } from '../types'
+import { useI18n } from '../i18n'
 
 function LiveKw({ watts }: { watts: number }) {
   if (watts >= 1000) {
@@ -34,6 +35,7 @@ const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV'
 
 export function ChargerCard({ charger }: { charger: Charger }) {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
   const live = useChargerStore((s) => s.liveState[charger.charge_point_id])
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -188,10 +190,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     try {
       await api.remoteStart(charger.charge_point_id, effectiveTag, selectedConnectorId)
       setOptimisticStatus('Preparing')
-      setFeedback({ type: 'success', message: `Aceite! Tag "${effectiveTag}" na tomada #${selectedConnectorId}` })
+      setFeedback({ type: 'success', message: t('chargerCard.accepted', { tag: effectiveTag, connector: selectedConnectorId }) })
       setTimeout(() => refetchActiveTx(), 2000)
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: `Falha ao ligar tomada #${selectedConnectorId}` })
+      setFeedback({ type: 'error', message: t('chargerCard.startFailed', { connector: selectedConnectorId }) })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 4000)
@@ -206,17 +208,17 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       await queryClient.invalidateQueries({ queryKey: ['tags'] })
       setSelectedTag(tagToSave.trim())
       setShowTagModal(false)
-      setFeedback({ type: 'success', message: `Tag "${tagToSave.trim()}" autorizada com sucesso!` })
+      setFeedback({ type: 'success', message: t('chargerCard.tagAuthorized', { tag: tagToSave.trim() }) })
 
       if (startImmediately) {
         setLoadingAction('start')
         await api.remoteStart(charger.charge_point_id, tagToSave.trim(), selectedConnectorId)
         setOptimisticStatus('Preparing')
-        setFeedback({ type: 'success', message: `Carga iniciada na tomada #${selectedConnectorId} com tag "${tagToSave.trim()}"!` })
+        setFeedback({ type: 'success', message: t('chargerCard.chargeStarted', { connector: selectedConnectorId, tag: tagToSave.trim() }) })
         setTimeout(() => refetchActiveTx(), 2000)
       }
     } catch (err) {
-      setFeedback({ type: 'error', message: 'Erro ao registar a tag RFID.' })
+      setFeedback({ type: 'error', message: t('chargerCard.tagRegisterError') })
     } finally {
       setIsSavingTag(false)
       setLoadingAction(null)
@@ -233,10 +235,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       const txId = activeTransaction?.transaction_id ?? null
       const resp = await api.remoteStop(charger.charge_point_id, txId)
       setOptimisticStatus('Available')
-      setFeedback({ type: 'success', message: `Paragem enviada! Transação #${resp.transaction_id ?? txId}` })
+      setFeedback({ type: 'success', message: t('chargerCard.stopSent', { txId: resp.transaction_id ?? txId }) })
       setTimeout(() => refetchActiveTx(), 2000)
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: 'Falha ao parar — sem transação ativa encontrada' })
+      setFeedback({ type: 'error', message: t('chargerCard.stopNoTx') })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 4000)
@@ -250,9 +252,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setFeedback(null)
     try {
       await api.reset(charger.charge_point_id, 'Soft')
-      setFeedback({ type: 'success', message: 'Comando Reset enviado!' })
+      setFeedback({ type: 'success', message: t('chargerCard.resetSent') })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: 'Falha ao fazer Reset' })
+      setFeedback({ type: 'error', message: t('chargerCard.resetFailed') })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 3500)
@@ -266,9 +268,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setFeedback(null)
     try {
       await api.unlockConnector(charger.charge_point_id, selectedConnectorId)
-      setFeedback({ type: 'success', message: `Desbloqueio da tomada #${selectedConnectorId} enviado!` })
+      setFeedback({ type: 'success', message: t('chargerCard.unlockSent', { connector: selectedConnectorId }) })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: `Falha ao desbloquear tomada #${selectedConnectorId}` })
+      setFeedback({ type: 'error', message: t('chargerCard.unlockFailed', { connector: selectedConnectorId }) })
     } finally {
       setLoadingAction(null)
       setTimeout(() => setFeedback(null), 3500)
@@ -321,7 +323,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               )}
             </div>
             <p className="text-xs text-gray-500 truncate mt-0.5">
-              {[charger.model, charger.vendor].filter(Boolean).join(' · ') || 'Posto OCPP'}
+              {[charger.model, charger.vendor].filter(Boolean).join(' · ') || t('chargerCard.defaultStation')}
             </p>
           </div>
         </div>
@@ -353,12 +355,12 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               {!isOnline
                 ? 'Offline'
                 : isSessionActive
-                ? 'A Carregar'
+                ? t('common.charging')
                 : isPreparing
-                ? 'A Preparar'
+                ? t('chargerCard.preparing')
                 : isFaulted
-                ? 'Avaria'
-                : 'Disponível'}
+                ? t('chargerCard.fault')
+                : t('common.available')}
             </span>
           </span>
 
@@ -366,7 +368,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             to={`/chargers/${charger.charge_point_id}`}
             className="btn-ghost text-xs text-gray-400 hover:text-gray-200 py-1 px-2 rounded-lg"
           >
-            Detalhes
+            {t('common.details')}
           </Link>
         </div>
       </div>
@@ -380,7 +382,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
               </span>
-              <span className="text-xs font-semibold text-blue-300">Carga em Curso</span>
+              <span className="text-xs font-semibold text-blue-300">{t('chargerCard.chargingNow')}</span>
             </div>
             {livePowerKw !== null && <LiveKw watts={livePower!} />}
           </div>
@@ -394,7 +396,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 </div>
                 <div>
                   <span className="font-bold text-slate-100 text-xs block">
-                    {activeTransactionForSelectedConnector.user_username ? `Condutor: ${activeTransactionForSelectedConnector.user_username}` : `Tag: ${activeTransactionForSelectedConnector.id_tag}`}
+                    {activeTransactionForSelectedConnector.user_username ? `${t('chargerCard.driver')}: ${activeTransactionForSelectedConnector.user_username}` : `${t('chargerCard.tag')} ${activeTransactionForSelectedConnector.id_tag}`}
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">
                     TX #{activeTransactionForSelectedConnector.transaction_id} {activeTransactionForSelectedConnector.user_username ? `· ${activeTransactionForSelectedConnector.id_tag}` : ''}
@@ -428,7 +430,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               className="w-full py-1.5 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <Mail className="w-3.5 h-3.5" />
-              <span>Pedir ao Condutor para Libertar Tomada</span>
+              <span>{t('chargerCard.askDriverToMove')}</span>
             </button>
           )}
 
@@ -443,8 +445,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       {/* Plugs / Connectors selector */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Selecionar Tomada / Plug</span>
-          <span className="text-[11px] text-blue-400 font-mono font-semibold">Ativa: #{selectedConnectorId}</span>
+          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">{t('chargerCard.selectPlug')}</span>
+          <span className="text-[11px] text-blue-400 font-mono font-semibold">{t('chargerCard.activePlug', { id: selectedConnectorId })}</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {rawConnectors.map((c) => {
@@ -473,7 +475,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 {/* Success Rate Tooltip */}
                 {successRate && (
                   <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-gray-900/95 text-gray-200 px-2 py-1 rounded whitespace-nowrap border border-gray-700/50 pointer-events-none">
-                    {successRate.success_rate.toFixed(1)}% sucesso
+                    {t('chargerCard.successRateTooltip', { value: successRate.success_rate.toFixed(1) })}
                   </div>
                 )}
               </button>
@@ -485,12 +487,12 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       {/* Charging Success Rate Cards */}
       {Object.keys(successRates).length > 0 && (
         <div className="mb-3">
-          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1.5">Taxa de Sucesso por Tomada</span>
+          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1.5">{t('chargerCard.successRateByPlug')}</span>
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(successRates).map(([connectorId, data]) => (
               <div key={connectorId} className="p-2.5 rounded-lg bg-gray-800/40 border border-gray-700/50 hover:border-gray-600/50 transition-colors">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">Tomada {connectorId}</span>
+                  <span className="text-xs text-gray-400">{t('chargerCard.plugNumber', { id: connectorId })}</span>
                   <span className={`text-sm font-bold ${data.success_rate >= 90 ? 'text-emerald-400' : data.success_rate >= 70 ? 'text-amber-400' : 'text-red-400'}`}>
                     {data.success_rate.toFixed(1)}%
                   </span>
@@ -519,7 +521,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         <div className="flex items-center gap-1.5 flex-wrap">
           {hasAuthorizedTag ? (
             <div className="flex items-center gap-1">
-              <span className="text-gray-500 text-[10px]">Tag:</span>
+              <span className="text-gray-500 text-[10px]">{t('chargerCard.tag')}</span>
               <select
                 value={effectiveTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
@@ -541,7 +543,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium hover:bg-amber-500/25 transition-colors"
             >
               <Plus className="w-3 h-3" />
-              <span>+ Registar Tag RFID</span>
+              <span>{t('chargerCard.registerTag')}</span>
             </button>
           )}
 
@@ -552,7 +554,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 setShowTagModal(true)
               }}
               className="p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/5"
-              title="Adicionar nova tag"
+              title={t('chargerCard.addNewTag')}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -576,7 +578,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             className="flex-1 btn bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all"
           >
             {loadingAction === 'stop' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>Parar {activeTransaction ? `TX #${activeTransaction.transaction_id}` : `Tomada #${selectedConnectorId}`}</span>
+            <span>{t('chargerCard.stop', { target: activeTransaction ? `TX #${activeTransaction.transaction_id}` : t('remoteStart.connectorLabel', { id: selectedConnectorId }) })}</span>
           </button>
         ) : (
           <button
@@ -587,7 +589,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           >
             {loadingAction === 'start' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
             <span>
-              {hasAuthorizedTag ? `Iniciar Carga (Tomada #${selectedConnectorId})` : 'Adicionar Tag & Iniciar'}
+              {hasAuthorizedTag ? t('chargerCard.startChargePlug', { id: selectedConnectorId }) : t('chargerCard.addTagAndStart')}
             </span>
           </button>
         )}
@@ -596,7 +598,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           type="button"
           onClick={handleUnlock}
           disabled={!isOnline || loadingAction !== null}
-          title={`Desbloquear Tomada #${selectedConnectorId}`}
+          title={t('chargerCard.unlockPlug', { id: selectedConnectorId })}
           className="btn-secondary p-2 text-xs text-gray-300 rounded-xl hover:text-white hover:bg-white/10"
         >
           {loadingAction === 'unlock' ? <Loader2 className="w-4 h-4 animate-spin text-blue-400" /> : <Unlock className="w-4 h-4" />}
@@ -606,7 +608,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           type="button"
           onClick={handleReset}
           disabled={!isOnline || loadingAction !== null}
-          title="Reiniciar Posto (Soft Reset)"
+          title={t('chargerCard.softReset')}
           className="btn-secondary p-2 text-xs text-gray-300 rounded-xl hover:text-amber-400 hover:bg-amber-500/10"
         >
           {loadingAction === 'reset' ? <Loader2 className="w-4 h-4 animate-spin text-amber-400" /> : <RotateCcw className="w-4 h-4" />}
@@ -617,7 +619,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       {lastSeen && (
         <div className="flex items-center gap-1 mt-3 pt-2 text-[11px] text-gray-400 font-medium">
           <Clock className="w-3 h-3 text-gray-400" />
-          <span>Visto {lastSeen}</span>
+          <span>{t('chargerCard.seen', { time: lastSeen })}</span>
         </div>
       )}
 
@@ -637,8 +639,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                   <Tag className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-100">Registar Tag RFID Autorizada</h3>
-                  <p className="text-xs text-gray-500">Permite autorizar arranques remotos e no posto</p>
+                  <h3 className="text-sm font-bold text-gray-100">{t('chargerCard.authorizedTagTitle')}</h3>
+                  <p className="text-xs text-gray-500">{t('chargerCard.authorizedTagSubtitle')}</p>
                 </div>
               </div>
               <button
@@ -651,7 +653,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
             {/* Presets */}
             <div className="space-y-1.5">
-              <span className="text-xs text-gray-400 font-medium">Sugestões rápidas (1 clique):</span>
+              <span className="text-xs text-gray-400 font-medium">{t('chargerCard.quickSuggestions')}</span>
               <div className="flex flex-wrap gap-1.5">
                 {['VERSICHARGE_TAG', 'ADMIN_TAG', 'MASTER_RFID', 'TAG_001'].map((preset) => (
                   <button
@@ -672,24 +674,24 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             {/* Inputs */}
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">ID da Tag RFID / Cartão</label>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">{t('chargerCard.tagIdLabel')}</label>
                 <input
                   type="text"
                   value={newTagId}
                   onChange={(e) => setNewTagId(e.target.value)}
-                  placeholder="Ex: VERSICHARGE_TAG ou 04A1B2C3D4"
+                  placeholder={t('chargerCard.tagIdPlaceholder')}
                   className="input w-full font-mono text-sm uppercase"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">Descrição (opcional)</label>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">{t('chargerCard.descriptionLabel')}</label>
                 <input
                   type="text"
                   value={newTagDesc}
                   onChange={(e) => setNewTagDesc(e.target.value)}
-                  placeholder="Ex: Cartão Siemens Principal / Utilizador"
+                  placeholder={t('chargerCard.descriptionPlaceholder')}
                   className="input w-full text-sm"
                 />
               </div>
@@ -703,7 +705,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 disabled={isSavingTag || !newTagId.trim()}
                 className="flex-1 btn-secondary text-xs py-2 rounded-xl text-gray-300 hover:text-white"
               >
-                {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Apenas Guardar Tag'}
+                {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t('chargerCard.saveTag')}
               </button>
 
               <button
@@ -713,7 +715,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 className="flex-1 btn bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-md font-semibold"
               >
                 {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
-                <span>Guardar & Iniciar Carga</span>
+                <span>{t('chargerCard.saveAndStart')}</span>
               </button>
             </div>
           </div>

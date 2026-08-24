@@ -9,8 +9,10 @@ import { safeFormatDate } from '../utils/date'
 import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
 import type { Charger, Transaction } from '../types'
+import { useI18n } from '../i18n'
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n()
   const cls = status === 'Active'
     ? 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse flex items-center gap-1.5'
     : 'px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-gray-700'
@@ -18,12 +20,13 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={cls}>
       {status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />}
-      {status === 'Active' ? 'A Carregar' : 'Concluído'}
+      {status === 'Active' ? t('transactions.charging') : t('transactions.completed')}
     </span>
   )
 }
 
 export function Transactions() {
+  const { t } = useI18n()
   const { data: chargers = [] } = useQuery<Charger[]>({ queryKey: ['chargers'], queryFn: api.getChargers })
   const [filterCp, setFilterCp] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -45,30 +48,30 @@ export function Transactions() {
           <div className="flex items-center gap-2">
             <ArrowLeftRight className="w-6 h-6 text-blue-500" />
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Transações e Consumos
+              {t('transactions.title')}
             </h1>
           </div>
           <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
-            Histórico completo de carregamentos por utilizador, posto e chave RFID
+            {t('transactions.subtitle')}
           </p>
         </div>
 
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-gray-800/80 border border-slate-200 dark:border-gray-700 text-xs font-mono text-slate-700 dark:text-gray-300">
           <Activity className="w-3.5 h-3.5 text-blue-500" />
-          <span>{txs.length} registadas</span>
+          <span>{t('transactions.registered', { count: txs.length })}</span>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <select className="select max-w-[220px] text-xs" value={filterCp} onChange={(e) => setFilterCp(e.target.value)}>
-          <option value="">Todos os Postos</option>
+          <option value="">{t('transactions.allStations')}</option>
           {chargers.map((c) => <option key={c.id} value={c.charge_point_id}>{c.charge_point_id}</option>)}
         </select>
         <select className="select max-w-[180px] text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="">Todos os Estados</option>
-          <option value="Active">Apenas Ativas (A carregar)</option>
-          <option value="Completed">Apenas Concluídas</option>
+          <option value="">{t('transactions.allStatuses')}</option>
+          <option value="Active">{t('transactions.activeOnly')}</option>
+          <option value="Completed">{t('transactions.completedOnly')}</option>
         </select>
       </div>
 
@@ -77,14 +80,14 @@ export function Transactions() {
         {txs.length === 0 && (
           <div className="card flex flex-col items-center justify-center py-16 text-slate-400 dark:text-gray-500 text-sm border border-slate-200 dark:border-white/5 space-y-2">
             <Clock className="w-8 h-8 opacity-40" />
-            <p>Nenhuma transação encontrada com os filtros selecionados.</p>
+            <p>{t('transactions.noneFound')}</p>
           </div>
         )}
 
         {txs.map((tx) => {
           const duration = tx.stop_time
             ? formatDuration(intervalToDuration({ start: new Date(tx.start_time), end: new Date(tx.stop_time) }), { format: ['hours', 'minutes', 'seconds'] })
-            : tx.status === 'Active' ? 'Em curso…' : null
+            : tx.status === 'Active' ? t('transactions.inProgress') : null
 
           const isOpen = expanded === tx.id
 
@@ -134,7 +137,7 @@ export function Transactions() {
                       <div className="flex items-center gap-1.5">
                         <CreditCard className="w-3.5 h-3.5 text-slate-400" />
                         <span className="font-mono text-slate-700 dark:text-gray-300 text-xs">
-                          {tx.id_tag || 'Sem Tag'}
+                          {tx.id_tag || t('transactions.noTag')}
                         </span>
                       </div>
                     )}
@@ -146,7 +149,7 @@ export function Transactions() {
                       {safeFormatDate(tx.start_time, 'dd/MM HH:mm')}
                     </span>
                     <span className="text-[10px] text-slate-500 dark:text-gray-400">
-                      {tx.stop_time ? safeFormatDate(tx.stop_time, 'dd/MM HH:mm') : 'Em curso…'}
+                      {tx.stop_time ? safeFormatDate(tx.stop_time, 'dd/MM HH:mm') : t('transactions.inProgress')}
                     </span>
                   </div>
 
@@ -178,27 +181,27 @@ export function Transactions() {
                   {/* Detailed summary pills */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3 text-xs mb-3">
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Utilizador</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.user')}</span>
                       <span className="font-bold text-slate-900 dark:text-white">
-                        {tx.user_username ? `${tx.user_username} (${tx.user_role || 'user'})` : 'Não registado'}
+                        {tx.user_username ? `${tx.user_username} (${tx.user_role || 'user'})` : t('transactions.notRegistered')}
                       </span>
                       {tx.user_email && <span className="text-[10px] text-slate-400 block">{tx.user_email}</span>}
                     </div>
 
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Início / Fim</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.startEnd')}</span>
                       <span className="font-mono text-slate-800 dark:text-gray-200 text-[11px] block">
-                        Início: {safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm:ss')}
+                        {t('transactions.start')}: {safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm:ss')}
                       </span>
                       {tx.stop_time && (
                         <span className="font-mono text-slate-500 text-[11px] block">
-                          Fim: {safeFormatDate(tx.stop_time, 'dd/MM/yyyy HH:mm:ss')}
+                          {t('transactions.end')}: {safeFormatDate(tx.stop_time, 'dd/MM/yyyy HH:mm:ss')}
                         </span>
                       )}
                     </div>
 
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Leitura Contadores</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.meterReadings')}</span>
                       <span className="font-mono text-slate-800 dark:text-gray-200 text-[11px] block">
                         Start: {tx.meter_start} Wh
                       </span>
@@ -210,9 +213,9 @@ export function Transactions() {
                     </div>
 
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Motivo Paragem</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.stopReason')}</span>
                       <span className="font-medium text-slate-700 dark:text-gray-300">
-                        {tx.stop_reason || (tx.status === 'Active' ? 'Em carregamento…' : 'Normal')}
+                        {tx.stop_reason || (tx.status === 'Active' ? t('transactions.chargingNow') : t('transactions.normal'))}
                       </span>
                     </div>
                   </div>
@@ -220,7 +223,7 @@ export function Transactions() {
                   {/* MeterValues Chart */}
                   <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
                     <span className="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-2 block">
-                      Curva de Telemetria e Potência da Sessão
+                      {t('transactions.telemetryCurve')}
                     </span>
                     <MeterChart cpId={tx.charge_point_id} transactionId={tx.id} />
                   </div>
