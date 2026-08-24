@@ -114,7 +114,7 @@ async def get_live_power(tx_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/charger/{cp_id}/meter-values/live", response_model=list[MeterValueOut])
-async def live_meter_values(cp_id: str, connector_id: int = 1, limit: int = 60, db: AsyncSession = Depends(get_db)):
+async def live_meter_values(cp_id: str, connector_id: int = Query(1), limit: int = Query(60), db: AsyncSession = Depends(get_db)):
     from models.charger import Charger
     result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
     charger = result.scalar_one_or_none()

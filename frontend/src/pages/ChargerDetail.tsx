@@ -215,7 +215,7 @@ export function ChargerDetail() {
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">MeterValues</h3>
               <span className="text-xs text-gray-600 font-mono">Conector #{selectedConnectorId}</span>
             </div>
-            <MeterChart cpId={charger.charge_point_id} connectorId={selectedConnectorId} />
+            <MeterChart key={`${charger.charge_point_id}-${selectedConnectorId}`} cpId={charger.charge_point_id} connectorId={selectedConnectorId} />
           </div>
 
           {/* events */}
