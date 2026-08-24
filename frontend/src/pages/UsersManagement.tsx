@@ -529,7 +529,7 @@ export function UsersManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="table w-full text-left">
+            <table className="table w-full text-left whitespace-nowrap">
               <thead>
                 <tr>
                   <th>Utilizador / Email</th>
