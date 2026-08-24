@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Zap, Wifi, AlertTriangle, Server, Activity, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
-import { EventLog } from '../components/EventLog'
 import { useChargerStore } from '../store/chargerStore'
 import { useChargerUiStore } from '../store/chargerUiStore'
 import type { Charger } from '../types'
@@ -249,9 +248,9 @@ export function Dashboard() {
         />
       </div>
 
-      {/* CHARGERS + EVENT LOG */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="chargers-section">
-        <div className="lg:col-span-2 space-y-6">
+      {/* CHARGERS */}
+      <div id="chargers-section">
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.chargingStations')}</h2>
             <span className="text-xs text-gray-500 font-mono">{t('dashboard.registered', { count: chargers.length })}</span>
@@ -304,20 +303,6 @@ export function Dashboard() {
           )}
         </div>
 
-        {/* event log sidebar */}
-        <div className="space-y-4" id="live-events-section">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.liveEvents')}</h2>
-            <span className="live-pill">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
-              </span>
-              LIVE
-            </span>
-          </div>
-          <EventLog maxHeight="520px" />
-        </div>
       </div>
     </div>
   )
