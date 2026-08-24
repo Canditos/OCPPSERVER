@@ -1,16 +1,18 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Zap, CreditCard, BatteryCharging, Clock, History,
-  Activity, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw
+  Activity, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Play
 } from 'lucide-react'
 import { api, MyActiveCharge } from '../api'
 import { useAuthStore } from '../store/authStore'
 import { safeFormatDateTime, safeFormatDuration } from '../utils/date'
+import { RemoteStartModal } from '../components/RemoteStartModal'
 import type { Transaction } from '../types'
 
 export function UserPortal() {
   const { user } = useAuthStore()
+  const [showRemoteStartModal, setShowRemoteStartModal] = useState(false)
 
   // Profile data with personal stats
   const { data: profile, refetch: refetchProfile } = useQuery({
@@ -93,9 +95,13 @@ export function UserPortal() {
 
           <div className="flex items-center justify-between text-xs text-slate-300 relative z-10 pt-2 border-t border-white/10">
             <span>{profile?.username || user?.username}</span>
-            <span className="text-[11px] text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Autorizado
-            </span>
+            <button
+              onClick={() => setShowRemoteStartModal(true)}
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-emerald-500 text-white text-[11px] font-semibold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              Iniciar Carga
+            </button>
           </div>
         </div>
 
@@ -304,6 +310,14 @@ export function UserPortal() {
             </table>
           </div>
         )}
+
+        {/* Remote Start Modal */}
+        <RemoteStartModal
+          isOpen={showRemoteStartModal}
+          onClose={() => setShowRemoteStartModal(false)}
+          rfidTag={rfidTag}
+          username={profile?.username || user?.username}
+        />
       </div>
     </div>
   )
