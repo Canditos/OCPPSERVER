@@ -37,6 +37,14 @@ export function UsersManagement() {
   const [formError, setFormError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
+  const getDurationLabel = (startTime?: string | null, stopTime?: string | null) => {
+    if (!startTime || !stopTime) return '0m'
+    const startMs = new Date(startTime).getTime()
+    const stopMs = new Date(stopTime).getTime()
+    if (isNaN(startMs) || isNaN(stopMs) || stopMs <= startMs) return '0m'
+    return safeFormatDuration(Math.floor((stopMs - startMs) / 1000))
+  }
+
   // Fetch all users
   const { data: users = [], isLoading, refetch } = useQuery<UserProfile[]>({
     queryKey: ['admin-users'],
@@ -1043,7 +1051,7 @@ export function UsersManagement() {
                               <span>·</span>
                               <span>Fim: {safeFormatDate(tx.stop_time, 'HH:mm')}</span>
                               <span>·</span>
-                              <span>Duração: {safeFormatDuration(tx.start_time, tx.stop_time)}</span>
+                              <span>Duração: {getDurationLabel(tx.start_time, tx.stop_time)}</span>
                             </>
                           )}
                         </div>

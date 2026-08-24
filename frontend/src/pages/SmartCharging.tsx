@@ -102,6 +102,24 @@ export function SmartCharging() {
     { startHHMM: '07:00', limit: 10, phases: 3 },
   ])
 
+  const normalizePurpose = (value: string): 'TxDefaultProfile' | 'ChargePointMaxProfile' | 'TxProfile' => {
+    if (value === 'ChargePointMaxProfile' || value === 'TxProfile') return value
+    return 'TxDefaultProfile'
+  }
+
+  const normalizeKind = (value: string): 'Recurring' | 'Absolute' | 'Relative' => {
+    if (value === 'Absolute' || value === 'Relative') return value
+    return 'Recurring'
+  }
+
+  const normalizeRecurrencyKind = (value?: string | null): 'Daily' | 'Weekly' => {
+    return value === 'Weekly' ? 'Weekly' : 'Daily'
+  }
+
+  const normalizeRateUnit = (value?: string | null): 'A' | 'W' => {
+    return value === 'W' ? 'W' : 'A'
+  }
+
   // Composite schedule query results
   const [compositeData, setCompositeData] = useState<any | null>(null)
 
@@ -969,10 +987,10 @@ export function SmartCharging() {
                       <button
                         onClick={() => {
                           setProfileName(prof.name + ' (Edição)')
-                          setPurpose(prof.purpose)
-                          setKind(prof.kind)
-                          setRecurrencyKind(prof.recurrency_kind || 'Daily')
-                          setRateUnit(prof.charging_rate_unit || 'A')
+                          setPurpose(normalizePurpose(prof.purpose))
+                          setKind(normalizeKind(prof.kind))
+                          setRecurrencyKind(normalizeRecurrencyKind(prof.recurrency_kind))
+                          setRateUnit(normalizeRateUnit(prof.charging_rate_unit))
                           setConnectorId(prof.connector_id)
                           if (prof.periods && prof.periods.length > 0) {
                             setPeriods(
