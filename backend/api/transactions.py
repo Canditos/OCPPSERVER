@@ -157,11 +157,16 @@ async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db))
 async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_db)):
     """Get charging success rate per connector for a charger."""
     from models.charger import Charger
-    from sqlalchemy import func
+    from sqlalchemy import func, cast, Integer, case
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"[SUCCESS_RATE] Fetching for charger: {cp_id}")
     
     result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
     charger = result.scalar_one_or_none()
     if not charger:
+        logger.info(f"[SUCCESS_RATE] Charger not found: {cp_id}")
         return {}
     
     # Get all transactions grouped by connector
@@ -169,7 +174,7 @@ async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_d
         select(
             Transaction.connector_id,
             func.count(Transaction.id).label('total'),
-            func.sum(func.cast(Transaction.status == 'Completed', type_=func.Integer())).label('completed')
+            func.sum(case((Transaction.status == 'Completed', 1), else_=0)).label('completed')
         )
         .where(Transaction.charge_point_id == cp_id)
         .group_by(Transaction.connector_id)
@@ -187,4 +192,5 @@ async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_d
             'success_rate': round(success_rate, 1)
         }
     
+    logger.info(f"[SUCCESS_RATE] Result for {cp_id}: {rates}")
     return rates
