@@ -397,7 +397,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             </button>
           )}
 
-          {liveSoC !== null && (
+          {(liveSoC !== null || isSessionActive) && (
             <div className="pt-2 border-t border-blue-500/10">
               <BatteryIndicator soc={liveSoC} isCharging={isSessionActive} powerKw={livePowerKw} />
             </div>
