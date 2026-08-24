@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { useState } from 'react'
 import { safeFormatDate, safeFormatDistance } from '../utils/date'
-import { ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap } from 'lucide-react'
+import { ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap, CheckCircle2 } from 'lucide-react'
 
 import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
@@ -177,20 +177,48 @@ export function ChargerDetail() {
                   <button
                     key={c.connector_id}
                     onClick={() => setSelectedConnectorId(c.connector_id)}
-                    className={`cursor-pointer transition-all ${
+                    className={`cursor-pointer transition-all relative group ${
                       selectedConnectorId === c.connector_id
                         ? 'ring-2 ring-blue-400 shadow-md shadow-blue-500/30 scale-105'
                         : 'opacity-70 hover:opacity-100'
                     }`}
                   >
                     <ConnectorBadge connectorId={c.connector_id} status={c.status} errorCode={(c as { error_code?: string }).error_code} />
+                    {successRates[String(c.connector_id)] && (
+                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-gray-900/95 text-gray-200 px-2 py-1 rounded whitespace-nowrap border border-gray-700/50 pointer-events-none">
+                        {successRates[String(c.connector_id)].success_rate.toFixed(1)}% sucesso
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* live meters snapshot */}
+          {/* Charging Success Rate Cards */}
+          {Object.keys(successRates).length > 0 && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Taxa de Sucesso por Tomada</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(successRates).map(([connectorId, data]) => (
+                  <div key={connectorId} className="p-2.5 rounded-lg bg-gray-800/40 border border-gray-700/50 hover:border-gray-600/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400">Tomada {connectorId}</span>
+                      <span className={`text-sm font-bold ${data.success_rate >= 90 ? 'text-emerald-400' : data.success_rate >= 70 ? 'text-amber-400' : 'text-red-400'}`}>
+                        {data.success_rate.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-1">
+                      {data.completed_transactions}/{data.total_transactions}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {displayedLiveMeters.length > 0 && (
             <div className="card">
               <div className="flex items-center gap-2 mb-3">
