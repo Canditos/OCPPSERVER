@@ -1,724 +1,1065 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Zap, BatteryCharging, Clock, Leaf, Gauge, Trash2,
-  CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronUp, Info,
+  Zap, Calendar, Clock, Sun, Moon, Sparkles,
+  Plus, Trash2, Send, RotateCcw, AlertTriangle, CheckCircle2,
+  ChevronDown, Activity, Info, BarChart3, Layers, Sliders, BatteryCharging
 } from 'lucide-react'
-import { api } from '../api'
-import { useChargerStore } from '../store/chargerStore'
+import { api, SmartChargingPreset, SmartChargingProfile } from '../api'
+import type { Charger } from '../types'
 
-// ── Types ────────────────────────────────────────────────────────────────
-
-interface ChargingProfile {
-  id: number
-  charge_point_id: string
-  connector_id: number
-  profile_id: number
-  stack_level: number
-  limit_amps: number
-  label: string
-  purpose: string
-  active: boolean
-  created_at: string
-  schedule: { start_period: number; limit: number }[] | null
+// Helper to convert seconds into HH:MM
+function secondsToHHMM(seconds: number): string {
+  const h = Math.floor(seconds / 3600) % 24
+  const m = Math.floor((seconds % 3600) / 60)
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
 }
 
-interface ChargerInfo {
-  charge_point_id: string
-  model: string | null
-  vendor: string | null
-  is_online: boolean
+// Helper to convert HH:MM to seconds
+function hhmmToSeconds(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number)
+  return ((h || 0) * 3600) + ((m || 0) * 60)
 }
 
-// ── Charger capability detection ─────────────────────────────────────────
+export function SmartCharging() {
+  const qc = useQueryClient()
 
-type ChargerType = 'dc' | 'ac3' | 'ac1'
+  const { data: chargers = [] } = useQuery<Charger[]>({
+    queryKey: ['chargers'],
+    queryFn: api.getChargers,
+    refetchInterval: 5000,
+  })
 
-interface ChargerCapability {
-  type: ChargerType
-  maxKw: number       // physical max of the charger
-  label: string       // "DC 400 kW", "AC 22 kW", "AC 7.4 kW"
-  rateUnit: 'W' | 'A'
-  // For AC: amps range; for DC: kW range
-  minVal: number
-  maxVal: number
-  stepVal: number
-}
+  const [selectedCpId, setSelectedCpId] = useState<string>('')
 
-function detectCharger(model: string | null, vendor: string | null): ChargerCapability {
-  const m = (model ?? '').toUpperCase()
-  const v = (vendor ?? '').toUpperCase()
-
-  // ── DC chargers ──────────────────────────────────────────────────────
-  if (
-    m.includes('SICHARGE D') || m.includes('VEEFIL') ||
-    m.includes('TERRA') || m.includes('ALPITRONIC') ||
-    m.endsWith('-D') || m.includes(' DC') ||
-    v.includes('ABB') && m.includes('DC') ||
-    v.includes('ALPITRONIC') || v.includes('EFACEC') ||
-    v.includes('TRITIUM')
-  ) {
-    // Try to infer max power from model name numbers e.g. "HPC400" → 400kW
-    const kw = Number(m.match(/(\d{2,3})\s*KW/)?.[1] ?? m.match(/HPC\s*(\d+)/)?.[1] ?? '150')
-    const maxKw = kw >= 10 && kw <= 1000 ? kw : 150
-    return {
-      type: 'dc',
-      maxKw,
-      label: `DC ${maxKw} kW`,
-      rateUnit: 'W',
-      minVal: 10,      // kW
-      maxVal: maxKw,
-      stepVal: maxKw >= 200 ? 20 : maxKw >= 100 ? 10 : 5,
+  // Automatically select first connected or online charger if none selected
+  React.useEffect(() => {
+    if (!selectedCpId && chargers.length > 0) {
+      const firstOnline = chargers.find((c) => c.is_online) || chargers[0]
+      setSelectedCpId(firstOnline.charge_point_id)
     }
-  }
+  }, [chargers, selectedCpId])
 
-  // ── AC 3-phase ────────────────────────────────────────────────────────
-  if (
-    m.includes('22KW') || m.includes('22 KW') || m.includes('3P') ||
-    m.includes('3-PHASE') || m.includes('TRIO') ||
-    v.includes('MENNEKES') || v.includes('SCHNEIDER') ||
-    v.includes('WALLBOX') && m.includes('22')
-  ) {
-    return {
-      type: 'ac3',
-      maxKw: 22,
-      label: 'AC 22 kW (3×)',
-      rateUnit: 'A',
-      minVal: 6,    // A
-      maxVal: 32,
-      stepVal: 1,
+  const currentCharger = chargers.find((c) => c.charge_point_id === selectedCpId)
+  const isOnline = currentCharger?.is_online ?? false
+
+  // Detect charger capabilities (DC Fast vs AC)
+  const isDC = Boolean(
+    currentCharger?.model?.toLowerCase().includes('sicharge') ||
+    currentCharger?.model?.toLowerCase().includes('dc') ||
+    currentCharger?.model?.toUpperCase().endsWith('-D') ||
+    currentCharger?.vendor?.toLowerCase().includes('dc')
+  )
+
+  const [presetFilter, setPresetFilter] = useState<'ALL' | 'AC' | 'DC'>('ALL')
+
+  // Fetch presets
+  const { data: presets = [] } = useQuery<SmartChargingPreset[]>({
+    queryKey: ['smartChargingPresets'],
+    queryFn: api.getSmartChargingPresets,
+  })
+
+  // Fetch saved profiles for charger
+  const { data: profiles = [], refetch: refetchProfiles } = useQuery<SmartChargingProfile[]>({
+    queryKey: ['smartChargingProfiles', selectedCpId],
+    queryFn: () => api.getSmartChargingProfiles(selectedCpId),
+    enabled: !!selectedCpId,
+  })
+
+  // Auto-switch filter when selecting a DC or AC charger
+  React.useEffect(() => {
+    if (isDC) {
+      setPresetFilter('DC')
+      setRateUnit('W')
+      setPeriods([
+        { startHHMM: '00:00', limit: 150000, phases: 3 },
+        { startHHMM: '07:00', limit: 50000, phases: 3 },
+      ])
+    } else if (currentCharger) {
+      setPresetFilter('AC')
+      setRateUnit('A')
+      setPeriods([
+        { startHHMM: '00:00', limit: 32, phases: 3 },
+        { startHHMM: '07:00', limit: 10, phases: 3 },
+      ])
     }
-  }
+  }, [selectedCpId, isDC])
 
-  // ── Default: AC single-phase 7.4 kW ──────────────────────────────────
-  return {
-    type: 'ac1',
-    maxKw: 7.4,
-    label: 'AC 7.4 kW',
-    rateUnit: 'A',
-    minVal: 6,
-    maxVal: 32,
-    stepVal: 1,
-  }
-}
-
-// ── Preset builder ────────────────────────────────────────────────────────
-
-interface Preset {
-  id: string
-  label: string
-  description: string
-  icon: React.ReactNode
-  color: string
-  purpose: string
-  badge: string
-  // What to send
-  limit_amps?: number
-  limit_watts?: number
-  rate_unit: 'A' | 'W'
-  schedule_periods?: { start_period: number; limit: number }[]
-}
-
-function buildPresets(cap: ChargerCapability): Preset[] {
-  if (cap.type === 'dc') {
-    const max = cap.maxKw
-    const half = Math.round(max / 2 / 10) * 10 || 50
-    const eco  = Math.round(max * 0.15 / 5) * 5 || 30
-    return [
-      {
-        id: 'full',
-        label: 'Potência Máxima',
-        description: `Carrega à velocidade máxima do posto (${max} kW).`,
-        icon: <Zap className="w-5 h-5" fill="currentColor" />,
-        color: 'from-blue-600 to-cyan-500',
-        limit_watts: max * 1000,
-        rate_unit: 'W',
-        purpose: 'TxDefaultProfile',
-        badge: `${max} kW`,
-      },
-      {
-        id: 'eco',
-        label: 'Poupança',
-        description: `Limita a ${eco} kW para reduzir stress na bateria e rede.`,
-        icon: <Leaf className="w-5 h-5" />,
-        color: 'from-emerald-600 to-green-500',
-        limit_watts: eco * 1000,
-        rate_unit: 'W',
-        purpose: 'ChargePointMaxProfile',
-        badge: `${eco} kW`,
-      },
-      {
-        id: 'half',
-        label: 'Meia Potência',
-        description: `${half} kW — equilibra velocidade e desgaste da bateria.`,
-        icon: <BatteryCharging className="w-5 h-5" />,
-        color: 'from-violet-600 to-purple-500',
-        limit_watts: half * 1000,
-        rate_unit: 'W',
-        purpose: 'TxDefaultProfile',
-        badge: `${half} kW`,
-      },
-      {
-        id: 'boost',
-        label: 'Boost 80%',
-        description: 'Carga rápida até ~80% SoC depois reduz para preservar bateria.',
-        icon: <Clock className="w-5 h-5" />,
-        color: 'from-orange-600 to-amber-500',
-        limit_watts: max * 1000,
-        rate_unit: 'W',
-        purpose: 'TxDefaultProfile',
-        badge: `${max}→${eco} kW`,
-        schedule_periods: [
-          { start_period: 0,    limit: max * 1000 },   // fast until ~80% (≈20min)
-          { start_period: 1200, limit: eco * 1000 },   // slow finish
-        ],
-      },
-    ]
-  }
-
-  // AC — same as before but correct kW display
-  const phases = cap.type === 'ac3' ? 3 : 1
-  const toKw = (a: number) => ((a * 230 * phases) / 1000).toFixed(1)
-  return [
-    {
-      id: 'full',
-      label: 'Carga Máxima',
-      description: `Carrega o mais rápido possível (${toKw(32)} kW).`,
-      icon: <Zap className="w-5 h-5" fill="currentColor" />,
-      color: 'from-blue-600 to-cyan-500',
-      limit_amps: 32,
-      rate_unit: 'A',
-      purpose: 'TxDefaultProfile',
-      badge: `${toKw(32)} kW`,
-    },
-    {
-      id: 'eco',
-      label: 'Economia',
-      description: 'Reduz para 6A para evitar sobrecarregar o quadro elétrico.',
-      icon: <Leaf className="w-5 h-5" />,
-      color: 'from-emerald-600 to-green-500',
-      limit_amps: 6,
-      rate_unit: 'A',
-      purpose: 'ChargePointMaxProfile',
-      badge: `${toKw(6)} kW`,
-    },
-    {
-      id: 'half',
-      label: 'Meia Potência',
-      description: `${toKw(16)} kW — equilíbrio entre velocidade e consumo.`,
-      icon: <BatteryCharging className="w-5 h-5" />,
-      color: 'from-violet-600 to-purple-500',
-      limit_amps: 16,
-      rate_unit: 'A',
-      purpose: 'TxDefaultProfile',
-      badge: `${toKw(16)} kW`,
-    },
-    {
-      id: 'night',
-      label: 'Noturno Inteligente',
-      description: 'Lento de dia, máximo das 22h–6h (tarifa baixa).',
-      icon: <Clock className="w-5 h-5" />,
-      color: 'from-indigo-600 to-blue-800',
-      limit_amps: 6,
-      rate_unit: 'A',
-      purpose: 'TxDefaultProfile',
-      badge: `${toKw(6)}→${toKw(32)} kW`,
-      schedule_periods: [
-        { start_period: 0,     limit: 6  },
-        { start_period: 28800, limit: 32 },
-      ],
-    },
-  ]
-}
-
-// ── Slider ────────────────────────────────────────────────────────────────
-
-function PowerSlider({
-  value, onChange, cap,
-}: { value: number; onChange: (v: number) => void; cap: ChargerCapability }) {
-  const { minVal, maxVal } = cap
-  const pct = ((value - minVal) / (maxVal - minVal)) * 100
-
-  const isDC = cap.type === 'dc'
-  // Color: green=low, amber=mid, blue=full
-  const color = pct < 30 ? '#10b981' : pct < 65 ? '#f59e0b' : '#3b82f6'
-
-  const displayLabel = isDC
-    ? `${value} kW`
-    : `${value}A · ${((value * 230 * (cap.type === 'ac3' ? 3 : 1)) / 1000).toFixed(1)} kW`
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
-          {isDC ? 'Potência DC' : 'Corrente AC'}
-        </span>
-        <span className="font-black text-lg tabular-nums" style={{ color }}>
-          {displayLabel}
-        </span>
-      </div>
-      <div className="relative h-6 flex items-center">
-        <div className="absolute inset-x-0 h-2 rounded-full bg-gray-700" />
-        <div
-          className="absolute left-0 h-2 rounded-full transition-all"
-          style={{ width: `${pct}%`, background: `linear-gradient(90deg, #10b981, ${color})` }}
-        />
-        <input
-          type="range"
-          min={minVal}
-          max={maxVal}
-          step={cap.stepVal}
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          className="absolute inset-x-0 w-full h-2 opacity-0 cursor-pointer z-10"
-          style={{ height: '24px', margin: 0 }}
-        />
-        <div
-          className="absolute w-5 h-5 rounded-full border-2 border-white shadow-lg pointer-events-none transition-all"
-          style={{
-            left: `calc(${pct}% - 10px)`,
-            background: color,
-          }}
-        />
-      </div>
-      <div className="flex justify-between text-xs text-gray-500 mt-2">
-        {isDC ? (
-          <>
-            <span>{minVal} kW</span>
-            <span>{Math.round((minVal + maxVal) / 2)} kW</span>
-            <span>{maxVal} kW</span>
-          </>
-        ) : (
-          <>
-            <span>{minVal}A</span>
-            <span>{Math.round((minVal + maxVal) / 2)}A</span>
-            <span>{maxVal}A</span>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Active profile badge ──────────────────────────────────────────────────
-
-function ActiveProfileBadge({
-  profile, onClear, clearing,
-}: { profile: ChargingProfile; onClear: () => void; clearing: boolean }) {
-  const isLimit = profile.limit_amps <= 8
-  const isFull = profile.limit_amps >= 32
-
-  return (
-    <div className={`flex items-center justify-between gap-3 p-3 rounded-2xl border ${
-      isLimit ? 'bg-emerald-500/10 border-emerald-500/30' :
-      isFull  ? 'bg-blue-500/10 border-blue-500/30' :
-                'bg-violet-500/10 border-violet-500/30'
-    }`}>
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-          isLimit ? 'bg-emerald-500/20 text-emerald-400' :
-          isFull  ? 'bg-blue-500/20 text-blue-400' :
-                    'bg-violet-500/20 text-violet-400'
-        }`}>
-          <Zap className="w-4 h-4" fill="currentColor" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-gray-100 truncate">{profile.label}</p>
-          <p className="text-xs text-gray-400">{profile.purpose}</p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onClear}
-        disabled={clearing}
-        className="shrink-0 p-2 rounded-xl hover:bg-red-500/15 text-gray-500 hover:text-red-400 transition-colors"
-        title="Remover perfil"
-      >
-        {clearing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-      </button>
-    </div>
-  )
-}
-
-// ── Main Page ─────────────────────────────────────────────────────────────
-
-export default function SmartCharging() {
-  const liveState = useChargerStore(s => s.liveState)
-  const [chargers, setChargers] = useState<ChargerInfo[]>([])
-  const [selectedCp, setSelectedCp] = useState<string>('')
-  const [profiles, setProfiles] = useState<ChargingProfile[]>([])
-  const [loading, setLoading] = useState(false)
-  const [clearing, setClearing] = useState(false)
+  // Action status state
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [showCustom, setShowCustom] = useState(false)
-  const [customPurpose, setCustomPurpose] = useState('TxDefaultProfile')
+  const [loadingAction, setLoadingAction] = useState<string | null>(null)
 
-  const flashFeedback = (type: 'success' | 'error', message: string) => {
+  // Custom Profile Form State
+  const [profileName, setProfileName] = useState('Tarifa Noturna Personalizada')
+  const [purpose, setPurpose] = useState<'TxDefaultProfile' | 'ChargePointMaxProfile' | 'TxProfile'>('TxDefaultProfile')
+  const [kind, setKind] = useState<'Recurring' | 'Absolute' | 'Relative'>('Recurring')
+  const [recurrencyKind, setRecurrencyKind] = useState<'Daily' | 'Weekly'>('Daily')
+  const [connectorId, setConnectorId] = useState<number>(0)
+  const [rateUnit, setRateUnit] = useState<'A' | 'W'>('A')
+  const [stackLevel, setStackLevel] = useState<number>(0)
+  const [periods, setPeriods] = useState<Array<{ startHHMM: string; limit: number; phases: number }>>([
+    { startHHMM: '00:00', limit: 32, phases: 3 },
+    { startHHMM: '07:00', limit: 10, phases: 3 },
+  ])
+
+  // Composite schedule query results
+  const [compositeData, setCompositeData] = useState<any | null>(null)
+
+  // Find currently deployed active profile
+  const activeProfile = profiles.find((p) => p.is_deployed)
+
+  // Calculate current active period limit in real-time
+  const getCurrentPeriodInfo = (periods: Array<{ start_period: number; limit: number; number_phases?: number; label?: string }>, rateUnit: string = 'A') => {
+    if (!periods || periods.length === 0) return null
+    const now = new Date()
+    const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+    const sorted = [...periods].sort((a, b) => a.start_period - b.start_period)
+    let active = sorted[0]
+    let next = sorted.length > 1 ? sorted[1] : null
+
+    for (let i = 0; i < sorted.length; i++) {
+      if (currentSeconds >= sorted[i].start_period) {
+        active = sorted[i]
+        next = sorted[(i + 1) % sorted.length]
+      }
+    }
+
+    const formattedLimit = rateUnit === 'W'
+      ? (active.limit >= 1000 ? `${(active.limit / 1000).toLocaleString('pt-PT')} kW` : `${active.limit} W`)
+      : `${active.limit} A`
+
+    return {
+      active,
+      next,
+      formattedLimit,
+      currentTimeStr: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+    }
+  }
+
+  const activePeriodInfo = activeProfile ? getCurrentPeriodInfo(activeProfile.periods, activeProfile.charging_rate_unit) : null
+
+  const showToast = (type: 'success' | 'error', message: string) => {
     setFeedback({ type, message })
-    setTimeout(() => setFeedback(null), 4000)
+    setTimeout(() => setFeedback(null), 6000)
   }
 
-  const loadChargers = async () => {
+  // Apply Preset Mutation
+  const handleApplyPreset = async (preset: SmartChargingPreset) => {
+    if (!selectedCpId) return
+    setLoadingAction(`preset-${preset.id}`)
     try {
-      const data = await api.getChargers()
-      setChargers(data.map(c => ({
-        charge_point_id: c.charge_point_id,
-        model: c.model,
-        vendor: c.vendor,
-        is_online: c.is_online,
-      })))
-      if (data.length > 0 && !selectedCp) setSelectedCp(data[0].charge_point_id)
-    } catch {}
-  }
-
-  const loadProfiles = useCallback(async () => {
-    if (!selectedCp) return
-    try {
-      const data = await api.getChargingProfiles(selectedCp)
-      setProfiles(data)
-    } catch {}
-  }, [selectedCp])
-
-  useEffect(() => { loadChargers() }, [])
-  useEffect(() => { loadProfiles() }, [loadProfiles])
-
-  // Compute charger capability for the selected charger
-  const selectedCharger = chargers.find(c => c.charge_point_id === selectedCp) ?? null
-  const cap = selectedCharger
-    ? detectCharger(selectedCharger.model, selectedCharger.vendor)
-    : detectCharger(null, null)
-
-  const PRESETS = buildPresets(cap)
-
-  // Custom value state — initialize to mid range when charger changes
-  const [customVal, setCustomVal] = useState<number>(cap.minVal)
-  useEffect(() => {
-    setCustomVal(Math.round((cap.minVal + cap.maxVal) / 2))
-  }, [selectedCp, cap.minVal, cap.maxVal])
-
-  const selectedLive = selectedCp ? liveState[selectedCp] : null
-  const isOnline = selectedLive?.isOnline ?? selectedCharger?.is_online ?? false
-  const isCharging = selectedLive?.status === 'Charging'
-  const livePowerKw = selectedLive?.meters
-    ? Object.entries(selectedLive.meters)
-        .filter(([k]) => k.toLowerCase().includes('power'))
-        .map(([, m]) => Number(m.value ?? 0) / 1000)
-        .reduce((a, b) => a + b, 0)
-    : null
-
-  const applyPreset = async (preset: Preset) => {
-    if (!selectedCp) return
-    setLoading(true)
-    try {
-      await api.setChargingProfile({
-        charge_point_id: selectedCp,
-        connector_id: 0,
-        limit_amps: preset.limit_amps,
-        limit_watts: preset.limit_watts,
-        rate_unit: preset.rate_unit,
+      const res = await api.createSmartChargingProfile({
+        charge_point_id: selectedCpId,
+        connector_id: preset.purpose === 'ChargePointMaxProfile' ? 0 : 1,
+        name: preset.name,
+        stack_level: 0,
         purpose: preset.purpose,
-        label: preset.label,
-        schedule_periods: preset.schedule_periods,
+        kind: preset.kind,
+        recurrency_kind: preset.recurrency_kind || 'Daily',
+        charging_rate_unit: preset.charging_rate_unit,
+        duration: preset.duration,
+        periods: preset.periods,
       })
-      flashFeedback('success', `✓ "${preset.label}" aplicado a ${selectedCp}`)
-      loadProfiles()
-    } catch (e: any) {
-      flashFeedback('error', e?.response?.data?.detail || 'Erro ao aplicar perfil')
+
+      const profileId = (res as any).id || (res as any).data?.id
+      await api.applySmartChargingProfile(profileId, selectedCpId)
+      showToast('success', `Perfil "${preset.name}" aplicado com sucesso no posto ${selectedCpId}!`)
+      await refetchProfiles()
+    } catch (err: any) {
+      showToast('error', `Falha ao aplicar perfil: ${err?.response?.data?.detail || err.message}`)
     } finally {
-      setLoading(false)
+      setLoadingAction(null)
     }
   }
 
-  const applyCustom = async () => {
-    if (!selectedCp) return
-    setLoading(true)
+  // Load Preset into Builder Form
+  const handleLoadPresetToForm = (preset: SmartChargingPreset) => {
+    setProfileName(preset.name)
+    setPurpose(preset.purpose as any)
+    setKind(preset.kind as any)
+    if (preset.recurrency_kind) setRecurrencyKind(preset.recurrency_kind as any)
+    setRateUnit(preset.charging_rate_unit as any)
+    setPeriods(
+      preset.periods.map((p) => ({
+        startHHMM: secondsToHHMM(p.start_period),
+        limit: p.limit,
+        phases: p.number_phases || 3,
+      }))
+    )
+    showToast('success', `Modelo "${preset.name}" carregado para o editor abaixo!`)
+  }
+
+  const handleAddPeriod = () => {
+    setPeriods([...periods, { startHHMM: '18:00', limit: 16, phases: 3 }])
+  }
+
+  const handleRemovePeriod = (index: number) => {
+    if (periods.length <= 1) return
+    setPeriods(periods.filter((_, i) => i !== index))
+  }
+
+  const handleSaveAndApplyCustom = async () => {
+    if (!selectedCpId) return
+    setLoadingAction('custom')
     try {
-      const isDC = cap.type === 'dc'
-      await api.setChargingProfile({
-        charge_point_id: selectedCp,
-        connector_id: 0,
-        limit_amps: isDC ? undefined : customVal,
-        limit_watts: isDC ? customVal * 1000 : undefined,
-        rate_unit: cap.rateUnit,
-        purpose: customPurpose,
-        label: isDC ? `Custom ${customVal} kW` : `Custom ${customVal}A`,
+      const sortedPeriods = [...periods]
+        .map((p) => ({
+          start_period: hhmmToSeconds(p.startHHMM),
+          limit: Number(p.limit),
+          number_phases: Number(p.phases),
+        }))
+        .sort((a, b) => a.start_period - b.start_period)
+
+      const res = await api.createSmartChargingProfile({
+        charge_point_id: selectedCpId,
+        connector_id: purpose === 'ChargePointMaxProfile' ? 0 : connectorId,
+        name: profileName,
+        stack_level: stackLevel,
+        purpose,
+        kind,
+        recurrency_kind: kind === 'Recurring' ? recurrencyKind : undefined,
+        duration: kind === 'Recurring' ? (recurrencyKind === 'Weekly' ? 604800 : 86400) : 86400,
+        charging_rate_unit: rateUnit,
+        periods: sortedPeriods,
       })
-      const label = isDC
-        ? `${customVal} kW`
-        : `${customVal}A · ${((customVal * 230 * (cap.type === 'ac3' ? 3 : 1)) / 1000).toFixed(1)} kW`
-      flashFeedback('success', `✓ Limite de ${label} aplicado`)
-      loadProfiles()
-    } catch (e: any) {
-      flashFeedback('error', e?.response?.data?.detail || 'Erro ao aplicar')
+
+      const profileId = (res as any).id || (res as any).data?.id
+      await api.applySmartChargingProfile(profileId, selectedCpId)
+      showToast('success', `Perfil personalizado "${profileName}" enviado com sucesso!`)
+      await refetchProfiles()
+    } catch (err: any) {
+      showToast('error', `Falha ao aplicar perfil personalizado: ${err?.response?.data?.detail || err.message}`)
     } finally {
-      setLoading(false)
+      setLoadingAction(null)
     }
   }
 
-  const clearAll = async () => {
-    if (!selectedCp) return
-    setClearing(true)
+  const handleClearAllProfiles = async () => {
+    if (!selectedCpId) return
+    setLoadingAction('clear-all')
     try {
-      await api.clearChargingProfile({ charge_point_id: selectedCp })
-      flashFeedback('success', `✓ Perfis removidos de ${selectedCp}`)
-      loadProfiles()
-    } catch (e: any) {
-      flashFeedback('error', e?.response?.data?.detail || 'Erro ao remover perfis')
+      await api.clearSmartChargingProfile({ charge_point_id: selectedCpId })
+      showToast('success', `Todos os perfis Smart Charging foram limpos do posto ${selectedCpId}!`)
+      await refetchProfiles()
+    } catch (err: any) {
+      showToast('error', `Erro ao limpar perfis: ${err?.response?.data?.detail || err.message}`)
     } finally {
-      setClearing(false)
+      setLoadingAction(null)
     }
   }
 
-  const clearOne = async (p: ChargingProfile) => {
-    setClearing(true)
+  const handleFetchCompositeSchedule = async () => {
+    if (!selectedCpId) return
+    setLoadingAction('composite')
     try {
-      await api.clearChargingProfile({
-        charge_point_id: p.charge_point_id,
-        purpose: p.purpose,
-        stack_level: p.stack_level,
+      const data = await api.getCompositeSchedule({
+        charge_point_id: selectedCpId,
+        connector_id: connectorId || 1,
+        duration: 86400,
+        rate_unit: rateUnit,
       })
-      flashFeedback('success', `✓ Perfil "${p.label}" removido`)
-      loadProfiles()
-    } catch (e: any) {
-      flashFeedback('error', e?.response?.data?.detail || 'Erro ao remover')
+      setCompositeData(data)
+      showToast('success', 'Horário composto calculado pelo posto recebido com sucesso!')
+    } catch (err: any) {
+      showToast('error', `Erro ao consultar horário composto: ${err?.response?.data?.detail || err.message}`)
     } finally {
-      setClearing(false)
+      setLoadingAction(null)
     }
   }
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 animate-fade-up pb-12">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-100 flex items-center gap-2">
-            <Gauge className="w-6 h-6 text-violet-400" />
-            Smart Charging
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">Gestão inteligente de potência por posto</p>
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400">
+              <Zap className="w-6 h-6" fill="currentColor" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
+                Smart Charging
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                  OCPP 1.6-J
+                </span>
+                {isDC && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+                    DC Fast Charger
+                  </span>
+                )}
+              </h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Perfis de modulação de potência, tarifas noturnas, bi-horárias e otimização solar
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Charger Selector */}
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-400 font-medium shrink-0">Posto Alvo:</label>
+          <div className="relative min-w-[220px]">
+            <select
+              className="select appearance-none pr-10 text-xs py-2 bg-gray-900/80 border-white/10"
+              value={selectedCpId}
+              onChange={(e) => setSelectedCpId(e.target.value)}
+            >
+              {chargers.map((c) => (
+                <option key={c.id} value={c.charge_point_id}>
+                  {c.is_online ? '🟢' : '⚫'} {c.charge_point_id} ({c.vendor || 'Posto'})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+          </div>
         </div>
       </div>
 
-      {/* Charger selector */}
-      <div className="card">
-        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2 block">
-          Posto de Carga
-        </label>
-        <div className="flex items-center gap-3">
-          <select
-            value={selectedCp}
-            onChange={e => setSelectedCp(e.target.value)}
-            className="select flex-1"
-          >
-            <option value="">Selecionar posto...</option>
-            {chargers.map(c => {
-              const info = detectCharger(c.model, c.vendor)
+      {/* Global Toast */}
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl text-sm flex items-center gap-3 font-medium animate-fade-up border ${
+            feedback.type === 'success'
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10'
+              : 'bg-red-500/15 text-red-300 border-red-500/30 shadow-lg shadow-red-500/10'
+          }`}
+        >
+          {feedback.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 shrink-0 text-red-400" />
+          )}
+          <span>{feedback.message}</span>
+        </div>
+      )}
+
+      {/* ── ACTIVE DEPLOYED PROFILE LIVE STATUS HERO BANNER ─────────────────── */}
+      {activeProfile && (
+        <div className="card p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-gray-900/80 to-blue-950/40 border border-emerald-500/30 shadow-xl space-y-4 animate-fade-up">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center justify-center p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <Zap className="w-6 h-6 animate-pulse" fill="currentColor" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-gray-100">{activeProfile.name}</h3>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Ativo e em Vigor no Posto
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-lg border font-bold ${
+                    activeProfile.charging_rate_unit === 'W'
+                      ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  }`}>
+                    {activeProfile.charging_rate_unit === 'W' ? 'DC FAST (Watts / kW)' : 'AC (Amperes)'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  ID #{activeProfile.profile_id} · Finalidade: <span className="text-gray-200 font-mono">{activeProfile.purpose}</span> · {activeProfile.kind} {activeProfile.recurrency_kind ? `(${activeProfile.recurrency_kind})` : ''} · {activeProfile.connector_id === 0 ? 'Todas as Tomadas (Limite Geral)' : `Tomada #${activeProfile.connector_id}`}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClearAllProfiles}
+              disabled={!isOnline || loadingAction !== null}
+              className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-2 px-3.5 rounded-xl flex items-center gap-1.5 self-start sm:self-auto shrink-0 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Desativar / Limpar Perfil</span>
+            </button>
+          </div>
+
+          {/* Real-time active window & limit metric */}
+          {activePeriodInfo && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
+                <span className="text-[11px] text-gray-400 font-medium">⚡ Limite em Vigor Agora ({activePeriodInfo.currentTimeStr})</span>
+                <p className="text-xl font-bold text-emerald-400 font-mono">
+                  {activePeriodInfo.formattedLimit}
+                </p>
+                <span className="text-[10px] text-gray-500 block truncate">
+                  {activePeriodInfo.active?.label || `Iniciado às ${secondsToHHMM(activePeriodInfo.active?.start_period || 0)}`}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
+                <span className="text-[11px] text-gray-400 font-medium">🕒 Próxima Janela de Modulação</span>
+                <p className="text-base font-bold text-blue-300 font-mono">
+                  {activePeriodInfo.next ? `Às ${secondsToHHMM(activePeriodInfo.next.start_period)}` : 'Ciclo Contínuo'}
+                </p>
+                <span className="text-[10px] text-gray-500 block truncate">
+                  {activePeriodInfo.next
+                    ? `Passará para ${activeProfile.charging_rate_unit === 'W' && activePeriodInfo.next.limit >= 1000 ? `${(activePeriodInfo.next.limit / 1000).toLocaleString('pt-PT')} kW` : `${activePeriodInfo.next.limit} ${activeProfile.charging_rate_unit}`}`
+                    : 'Sem alterações agendadas'}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/4 border border-white/8 space-y-1">
+                <span className="text-[11px] text-gray-400 font-medium">📊 Total de Janelas Programadas</span>
+                <p className="text-base font-bold text-gray-200 font-mono">
+                  {activeProfile.periods.length} {activeProfile.periods.length === 1 ? 'Janela' : 'Janelas Horárias'}
+                </p>
+                <span className="text-[10px] text-gray-500 block">
+                  Duração: {activeProfile.duration ? `${activeProfile.duration / 3600}h (${activeProfile.recurrency_kind || 'Diário'})` : '24h'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* 24-Hour Visual Schedule Bar with current hour marker */}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-[11px] text-gray-400">
+              <span className="flex items-center gap-1 font-medium">
+                <Clock className="w-3.5 h-3.5 text-emerald-400" /> Distribuição Horária do Perfil Ativo (24 Horas):
+              </span>
+              <span className="text-xs font-mono text-emerald-300 font-bold">
+                Hora Atual: {activePeriodInfo?.currentTimeStr}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+              {activeProfile.periods.map((p, idx) => {
+                const isActiveNow = activePeriodInfo?.active?.start_period === p.start_period
+                const formattedLimit = activeProfile.charging_rate_unit === 'W'
+                  ? (p.limit >= 1000 ? `${(p.limit / 1000).toLocaleString('pt-PT')} kW` : `${p.limit} W`)
+                  : `${p.limit} A`
+
+                return (
+                  <div
+                    key={idx}
+                    className={`p-2.5 rounded-xl border text-xs font-mono transition-all ${
+                      isActiveNow
+                        ? 'bg-emerald-500/20 border-emerald-500/50 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-400/50'
+                        : 'bg-white/3 border-white/5 opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300 font-bold">
+                        {secondsToHHMM(p.start_period)}
+                      </span>
+                      <span className={`font-bold text-sm ${isActiveNow ? 'text-emerald-300' : 'text-gray-300'}`}>
+                        {formattedLimit}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 truncate mt-1">
+                      {p.label || (isActiveNow ? '⚡ Janela Ativa Agora' : 'Programada')}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SECTION 1: 1-CLICK PRESETS ────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <div>
+              <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">
+                Modelos Rápidos Pré-configurados (1-Clique)
+              </h2>
+              <p className="text-xs text-gray-500">
+                Modelos específicos para postos AC (Amperes) e postos DC Fast (kW)
+              </p>
+            </div>
+          </div>
+
+          {/* Category Filter Tabs */}
+          <div className="inline-flex rounded-xl bg-white/5 border border-white/10 p-1 gap-1">
+            <button
+              type="button"
+              onClick={() => setPresetFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                presetFilter === 'ALL'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              ⚡ Todos ({presets.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPresetFilter('AC')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                presetFilter === 'AC'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+              <span>AC (Amperes 6A-32A)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPresetFilter('DC')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                presetFilter === 'DC'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />
+              <span>DC Fast (Potência 30-300 kW)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Presets Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {presets
+            .filter((p) => {
+              if (presetFilter === 'ALL') return true
+              if (p.category) return p.category === presetFilter
+              return presetFilter === 'DC' ? p.charging_rate_unit === 'W' : p.charging_rate_unit === 'A'
+            })
+            .map((preset) => {
+              const isPresetDC = preset.category === 'DC' || preset.charging_rate_unit === 'W'
+              const matchesSelectedCharger = isDC ? isPresetDC : !isPresetDC
+
               return (
-                <option key={c.charge_point_id} value={c.charge_point_id}>
-                  {c.charge_point_id}
-                  {c.model ? ` — ${c.model}` : ''}
-                  {` (${info.label})`}
-                </option>
+                <div
+                  key={preset.id}
+                  className={`card border transition-all duration-300 flex flex-col justify-between group ${
+                    isPresetDC
+                      ? 'border-purple-500/20 hover:border-purple-500/50 bg-gradient-to-b from-purple-950/20 to-transparent'
+                      : 'border-emerald-500/20 hover:border-emerald-500/50 bg-gradient-to-b from-emerald-950/20 to-transparent'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${
+                          isPresetDC
+                            ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {isPresetDC ? '⚡ DC FAST (kW)' : '🔌 AC (Amperes)'}
+                        </span>
+
+                        <span className="text-xs font-semibold text-gray-400 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10">
+                          {preset.recurrency_kind || preset.kind}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        {preset.purpose === 'ChargePointMaxProfile' ? 'Limite Geral Posto' : 'Por Conector'}
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-gray-100 group-hover:text-amber-300 transition-colors">
+                      {preset.name}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                      {preset.description}
+                    </p>
+
+                    {/* Visual Periods Mini Timeline */}
+                    <div className="mt-4 pt-3 border-t border-white/5 space-y-1.5">
+                      <p className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-400" /> Janelas Horárias:
+                      </p>
+                      <div className="space-y-1">
+                        {preset.periods.map((p, idx) => {
+                          const formattedLimit = isPresetDC
+                            ? p.limit >= 1000
+                              ? `${(p.limit / 1000).toLocaleString('pt-PT')} kW`
+                              : `${p.limit} W`
+                            : `${p.limit} A`
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-white/3 border border-white/5 font-mono"
+                            >
+                              <span className="text-gray-300 truncate max-w-[70%]">
+                                {p.label || `A partir das ${secondsToHHMM(p.start_period)}`}
+                              </span>
+                              <span className={`font-bold ${isPresetDC ? 'text-purple-300' : 'text-emerald-400'}`}>
+                                {formattedLimit}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4 pt-3 border-t border-white/5 flex items-center gap-2">
+                    <button
+                      onClick={() => handleApplyPreset(preset)}
+                      disabled={!isOnline || loadingAction !== null}
+                      className={`flex-1 btn text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-50 ${
+                        isPresetDC
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'
+                          : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
+                      }`}
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{loadingAction === `preset-${preset.id}` ? 'A enviar…' : 'Aplicar no Posto'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleLoadPresetToForm(preset)}
+                      title="Editar este modelo no construtor abaixo"
+                      className="btn-secondary text-xs p-2 text-gray-400 hover:text-white rounded-xl"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               )
             })}
-          </select>
-          {selectedCp && (
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 ${
-              isCharging ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
-              isOnline   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
-                           'bg-gray-800 text-gray-500 border border-gray-700/30'
-            }`}>
-              <span className="relative flex h-2 w-2">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  isCharging ? 'bg-blue-400' : isOnline ? 'bg-emerald-400' : 'bg-gray-500'
-                }`} />
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                  isCharging ? 'bg-blue-400' : isOnline ? 'bg-emerald-400' : 'bg-gray-500'
-                }`} />
-              </span>
-              {isCharging
-                ? `A carregar · ${livePowerKw ? livePowerKw.toFixed(1) + ' kW' : '...'}`
-                : isOnline ? 'Online' : 'Offline'}
+        </div>
+      </div>
+
+      {/* ── SECTION 2: CUSTOM PROFILE BUILDER ─────────────────────────────────── */}
+      <div id="custom-profile-builder" className="card border border-white/10 bg-gray-900/60 p-6 space-y-6 scroll-mt-20">
+        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-100">
+                Construtor de Perfis Smart Charging Avançado
+              </h2>
+              <p className="text-xs text-gray-500">
+                Cria e ajusta perfis com horários, potências, recorrências (Daily/Weekly) e finalidades OCPP 1.6
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleClearAllProfiles}
+            disabled={!isOnline || loadingAction !== null}
+            className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-2 px-3 rounded-xl flex items-center gap-1.5"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Limpar Todos os Perfis do Posto</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Col 1: Config Parameters */}
+          <div className="space-y-4">
+            <div>
+              <label className="label">Nome do Perfil</label>
+              <input
+                className="input text-xs"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="ex: Tarifa Noturna Vazio 32A"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Finalidade (Purpose)</label>
+                <select
+                  className="select text-xs"
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value as any)}
+                >
+                  <option value="TxDefaultProfile">TxDefaultProfile (Padrão Tomada)</option>
+                  <option value="ChargePointMaxProfile">ChargePointMaxProfile (Posto Total)</option>
+                  <option value="TxProfile">TxProfile (Sessão Ativa)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Tomada / Conector</label>
+                <select
+                  className="select text-xs"
+                  value={connectorId}
+                  disabled={purpose === 'ChargePointMaxProfile'}
+                  onChange={(e) => setConnectorId(Number(e.target.value))}
+                >
+                  <option value={0}>0 (Todas as Tomadas / Geral)</option>
+                  <option value={1}>1 (Tomada #1)</option>
+                  <option value={2}>2 (Tomada #2)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Tipo de Perfil</label>
+                <select
+                  className="select text-xs"
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as any)}
+                >
+                  <option value="Recurring">Recurring (Recorrente)</option>
+                  <option value="Absolute">Absolute (Data/Hora Fixa)</option>
+                  <option value="Relative">Relative (Relativo à Carga)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Recorrência</label>
+                <select
+                  className="select text-xs"
+                  value={recurrencyKind}
+                  disabled={kind !== 'Recurring'}
+                  onChange={(e) => setRecurrencyKind(e.target.value as any)}
+                >
+                  <option value="Daily">Daily (Diária - 24 Horas)</option>
+                  <option value="Weekly">Weekly (Semanal - 7 Dias)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Unidade de Medida</label>
+                <div className="flex gap-2">
+                  {(['A', 'W'] as const).map((unit) => (
+                    <button
+                      key={unit}
+                      type="button"
+                      onClick={() => setRateUnit(unit)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                        rateUnit === unit
+                          ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                          : 'bg-white/4 border-white/8 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      {unit === 'A' ? 'Amperes (A)' : 'Watts (W)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Stack Level (Prioridade)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={999}
+                  className="input text-xs"
+                  value={stackLevel}
+                  onChange={(e) => setStackLevel(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Col 2 & 3: Schedule Periods Editor & Step Preview */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="label mb-0 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                Intervalos Horários e Limites de Potência
+              </label>
+              <button
+                type="button"
+                onClick={handleAddPeriod}
+                className="btn-secondary text-xs py-1 px-2.5 rounded-lg flex items-center gap-1 text-blue-400 hover:text-blue-300"
+              >
+                <Plus className="w-3.5 h-3.5" /> Adicionar Intervalo
+              </button>
+            </div>
+
+            {/* Periods Table */}
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {periods.map((p, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/6"
+                >
+                  <span className="text-xs font-mono text-gray-500 w-6 shrink-0">#{idx + 1}</span>
+
+                  <div className="flex-1 grid grid-cols-3 gap-3">
+                    <div>
+                      <span className="text-[10px] text-gray-500 block mb-1">Hora de Início</span>
+                      <input
+                        type="time"
+                        className="input py-1 text-xs font-mono"
+                        value={p.startHHMM}
+                        onChange={(e) => {
+                          const updated = [...periods]
+                          updated[idx].startHHMM = e.target.value
+                          setPeriods(updated)
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-gray-500 block mb-1">
+                        Limite ({rateUnit === 'A' ? 'Amperes' : 'Watts'})
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={rateUnit === 'A' ? 1 : 100}
+                        className="input py-1 text-xs font-mono font-bold text-amber-400"
+                        value={p.limit}
+                        onChange={(e) => {
+                          const updated = [...periods]
+                          updated[idx].limit = Number(e.target.value)
+                          setPeriods(updated)
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-gray-500 block mb-1">Fases</span>
+                      <select
+                        className="select py-1 text-xs"
+                        value={p.phases}
+                        onChange={(e) => {
+                          const updated = [...periods]
+                          updated[idx].phases = Number(e.target.value)
+                          setPeriods(updated)
+                        }}
+                      >
+                        <option value={1}>1 Fase (Mono)</option>
+                        <option value={3}>3 Fases (Trifásico)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePeriod(idx)}
+                    disabled={periods.length <= 1}
+                    className="btn-ghost p-2 text-gray-500 hover:text-red-400 disabled:opacity-20 shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Visual 24-hour Preview Bar */}
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-gray-950/60 border border-slate-200 dark:border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1 text-slate-700 dark:text-gray-300 font-semibold">
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                  Previsão Gráfica de 24 Horas:
+                </span>
+                <span className="text-slate-500 dark:text-gray-400 font-mono font-medium">00:00 → 24:00</span>
+              </div>
+              <div className="h-6 w-full rounded-lg bg-slate-200 dark:bg-gray-900 flex overflow-hidden border border-slate-300 dark:border-white/10">
+                {periods.map((p, idx) => {
+                  const widthPercent = Math.max(10, 100 / periods.length)
+                  return (
+                    <div
+                      key={idx}
+                      style={{ width: `${widthPercent}%` }}
+                      className={`h-full flex items-center justify-center text-[10px] font-mono font-bold text-white transition-all ${
+                        p.limit >= 25
+                          ? 'bg-gradient-to-r from-blue-600 to-cyan-500'
+                          : p.limit >= 16
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-500'
+                          : 'bg-gradient-to-r from-amber-600 to-orange-500'
+                      }`}
+                      title={`${p.startHHMM}: ${p.limit} ${rateUnit}`}
+                    >
+                      {p.startHHMM} · {p.limit}{rateUnit}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Submit Action */}
+            <button
+              onClick={handleSaveAndApplyCustom}
+              disabled={!isOnline || loadingAction !== null}
+              className="w-full btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-blue-500/20"
+            >
+              <Send className="w-4 h-4" />
+              <span>{loadingAction === 'custom' ? 'A enviar comando OCPP…' : 'Gravar e Ativar Perfil no Posto'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECTION 3: DEPLOYED PROFILES & COMPOSITE SCHEDULE ─────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Saved Profiles List */}
+        <div className="card border border-white/8 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-gray-200">Perfis Gravados na Base de Dados</h3>
+            </div>
+            <span className="text-xs text-gray-500 font-mono">{profiles.length} perfis</span>
+          </div>
+
+          {profiles.length === 0 ? (
+            <div className="p-8 text-center text-xs text-gray-600 border border-dashed border-white/5 rounded-xl">
+              Nenhum perfil gravado para este posto. Aplica um dos modelos acima.
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {profiles.map((prof) => (
+                <div
+                  key={prof.id}
+                  className={`p-4 rounded-xl border transition-all ${
+                    prof.is_deployed
+                      ? 'bg-emerald-950/20 border-emerald-500/30 shadow-md shadow-emerald-950/40'
+                      : 'bg-white/3 border-white/6 hover:border-white/15'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-gray-100">{prof.name}</span>
+                        {prof.is_deployed && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                            Ativo no Posto
+                          </span>
+                        )}
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded border font-semibold ${
+                          prof.charging_rate_unit === 'W'
+                            ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                        }`}>
+                          {prof.charging_rate_unit === 'W' ? 'DC (kW/W)' : 'AC (A)'}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-gray-400 font-mono">
+                        ID #{prof.profile_id} · Finalidade: <strong className="text-gray-300">{prof.purpose}</strong> · {prof.kind} {prof.recurrency_kind ? `(${prof.recurrency_kind})` : ''} · {prof.connector_id === 0 ? 'Geral (Posto)' : `Tomada #${prof.connector_id}`}
+                      </p>
+
+                      {/* Scheduled Periods Breakdown */}
+                      {prof.periods && prof.periods.length > 0 && (
+                        <div className="pt-1">
+                          <span className="text-[10px] text-gray-500 font-medium block mb-1">Horários & Limites Programados:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {prof.periods.map((per: any, pIdx: number) => {
+                              const isKw = prof.charging_rate_unit === 'W' && per.limit >= 1000
+                              const displayLimit = isKw
+                                ? `${(per.limit / 1000).toLocaleString('pt-PT')} kW`
+                                : `${per.limit} ${prof.charging_rate_unit || 'A'}`
+
+                              return (
+                                <span
+                                  key={pIdx}
+                                  className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-200 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-800 dark:text-gray-300"
+                                >
+                                  <Clock className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
+                                  <span className="text-slate-600 dark:text-gray-400">{secondsToHHMM(per.start_period || 0)}:</span>
+                                  <strong className="text-emerald-600 dark:text-emerald-300">{displayLimit}</strong>
+                                  {per.number_phases && (
+                                    <span className="text-slate-500 dark:text-gray-500">({per.number_phases === 3 ? 'Trifásico' : '1F'})</span>
+                                  )}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 self-start">
+                      <button
+                        onClick={() => {
+                          setProfileName(prof.name + ' (Edição)')
+                          setPurpose(prof.purpose)
+                          setKind(prof.kind)
+                          setRecurrencyKind(prof.recurrency_kind || 'Daily')
+                          setRateUnit(prof.charging_rate_unit || 'A')
+                          setConnectorId(prof.connector_id)
+                          if (prof.periods && prof.periods.length > 0) {
+                            setPeriods(
+                              prof.periods.map((per: any) => ({
+                                startHHMM: secondsToHHMM(per.start_period || 0),
+                                limit: prof.charging_rate_unit === 'W' && per.limit >= 1000 ? per.limit / 1000 : per.limit,
+                                phases: per.number_phases || 3,
+                              }))
+                            )
+                          }
+                          document.getElementById('custom-profile-builder')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          showToast('success', `Perfil "${prof.name}" carregado no construtor acima! Podes editar e gravar.`)
+                        }}
+                        title="Carregar no Construtor para Editar"
+                        className="btn-ghost p-2 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => api.applySmartChargingProfile(prof.id, selectedCpId).then(() => {
+                          showToast('success', `Perfil #${prof.profile_id} reenviado ao posto!`)
+                          refetchProfiles()
+                        })}
+                        disabled={!isOnline}
+                        title="Reenviar e Ativar este perfil no posto"
+                        className="btn-secondary p-2 text-xs text-blue-400 hover:text-white rounded-lg"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => api.deleteSmartChargingProfile(prof.id).then(() => {
+                          showToast('success', 'Perfil eliminado da base de dados.')
+                          refetchProfiles()
+                        })}
+                        title="Eliminar perfil da base de dados"
+                        className="btn-ghost p-2 text-xs text-red-400 hover:text-red-300 rounded-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Charger type badge */}
-        {selectedCp && (
-          <div className={`mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-            cap.type === 'dc'  ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20' :
-            cap.type === 'ac3' ? 'bg-violet-500/15 text-violet-400 border border-violet-500/20' :
-                                  'bg-blue-500/15 text-blue-400 border border-blue-500/20'
-          }`}>
-            <Zap className="w-3 h-3" fill="currentColor" />
-            {cap.label}
-            {cap.type === 'dc' && ' · Limite em kW'}
-            {cap.type !== 'dc' && ` · Limite em Amperes`}
-          </div>
-        )}
-
-        {/* Active profiles */}
-        {profiles.length > 0 && (
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
-                Perfis Ativos ({profiles.length})
-              </span>
-              <button
-                type="button"
-                onClick={clearAll}
-                disabled={clearing || !isOnline}
-                className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1 disabled:opacity-40"
-              >
-                {clearing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                Limpar todos
-              </button>
+        {/* Composite Schedule Query */}
+        <div className="card border border-white/8 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-cyan-400" />
+              <h3 className="text-sm font-bold text-gray-200">Consultar Horário Composto (GetCompositeSchedule)</h3>
             </div>
-            {profiles.map(p => (
-              <ActiveProfileBadge
-                key={p.id}
-                profile={p}
-                onClear={() => clearOne(p)}
-                clearing={clearing}
-              />
-            ))}
-          </div>
-        )}
-
-        {!isOnline && selectedCp && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
-            <Info className="w-4 h-4 shrink-0" />
-            Posto offline — não é possível enviar perfis de carga
-          </div>
-        )}
-      </div>
-
-      {/* Feedback toast */}
-      {feedback && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold border ${
-          feedback.type === 'success'
-            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-            : 'bg-red-500/15 text-red-300 border-red-500/30'
-        }`}>
-          {feedback.type === 'success'
-            ? <CheckCircle2 className="w-4 h-4 shrink-0" />
-            : <AlertCircle className="w-4 h-4 shrink-0" />}
-          {feedback.message}
-        </div>
-      )}
-
-      {/* Presets grid */}
-      <div>
-        <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
-          Perfis Rápidos
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          {PRESETS.map(preset => (
             <button
-              key={preset.id}
-              type="button"
-              disabled={!isOnline || loading}
-              onClick={() => applyPreset(preset)}
-              className={`relative flex flex-col items-start gap-2 p-4 rounded-2xl border border-white/10
-                text-left transition-all duration-150 active:scale-95
-                disabled:opacity-40 disabled:cursor-not-allowed
-                hover:border-white/20 hover:shadow-lg bg-gray-900/60`}
+              onClick={handleFetchCompositeSchedule}
+              disabled={!isOnline || loadingAction !== null}
+              className="btn-secondary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 text-cyan-300 hover:text-white"
             >
-              <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-gradient-to-r ${preset.color}`} />
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br ${preset.color} text-white shadow-sm`}>
-                {preset.icon}
-              </div>
-              <div className="min-w-0 w-full">
-                <p className="font-bold text-gray-100 text-sm leading-tight">{preset.label}</p>
-                <span className={`inline-block mt-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-gradient-to-r ${preset.color} text-white`}>
-                  {preset.badge}
-                </span>
-              </div>
-              <p className="text-xs text-gray-400 leading-relaxed">{preset.description}</p>
-              {loading && (
-                <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-white animate-spin" />
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Custom power slider */}
-      <div className="card">
-        <button
-          type="button"
-          onClick={() => setShowCustom(v => !v)}
-          className="w-full flex items-center justify-between"
-        >
-          <div className="flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-violet-400" />
-            <span className="font-bold text-gray-200">Personalizado</span>
-          </div>
-          {showCustom ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-        </button>
-
-        {showCustom && (
-          <div className="mt-5 space-y-5">
-            <PowerSlider value={customVal} onChange={setCustomVal} cap={cap} />
-
-            <div>
-              <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2 block">
-                Tipo de Perfil
-              </label>
-              <div className="flex gap-2">
-                {[
-                  { value: 'TxDefaultProfile', label: 'Por Transação', desc: 'Aplica a todas as sessões futuras' },
-                  { value: 'ChargePointMaxProfile', label: 'Limite Máximo', desc: 'Limita a potência do posto' },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setCustomPurpose(opt.value)}
-                    className={`flex-1 p-3 rounded-xl text-left border transition-all ${
-                      customPurpose === opt.value
-                        ? 'border-violet-500/60 bg-violet-500/15 text-violet-300'
-                        : 'border-white/10 text-gray-400 hover:border-white/20'
-                    }`}
-                  >
-                    <p className="text-xs font-bold">{opt.label}</p>
-                    <p className="text-[10px] mt-0.5 opacity-70">{opt.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              disabled={!isOnline || loading}
-              onClick={applyCustom}
-              className="w-full btn bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-40"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" fill="currentColor" />}
-              {cap.type === 'dc'
-                ? `Aplicar ${customVal} kW`
-                : `Aplicar ${customVal}A · ${((customVal * 230 * (cap.type === 'ac3' ? 3 : 1)) / 1000).toFixed(1)} kW`
-              }
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{loadingAction === 'composite' ? 'A consultar…' : 'Consultar Posto'}</span>
             </button>
           </div>
-        )}
-      </div>
 
-      {/* Info box */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-gray-800/40 border border-white/5 text-xs text-gray-400">
-        <Info className="w-4 h-4 shrink-0 mt-0.5 text-blue-400" />
-        <div>
-          <p className="font-semibold text-gray-300 mb-1">Como funciona o Smart Charging?</p>
-          <p>
-            Os perfis são enviados via OCPP 1.6 <code className="bg-gray-700 px-1 rounded">SetChargingProfile</code> ao posto.{' '}
-            Postos <strong>DC</strong> usam limites em <strong>Watts</strong>.{' '}
-            Postos <strong>AC</strong> usam <strong>Amperes</strong>.{' '}
-            <strong>TxDefaultProfile</strong> aplica-se a sessões futuras.{' '}
-            <strong>ChargePointMaxProfile</strong> limita a potência máxima do posto.
+          <p className="text-xs text-gray-500">
+            Pede ao posto para calcular e devolver o plano composto final das próximas 24h considerando todos os perfis ativos.
           </p>
+
+          {compositeData ? (
+            <div className="p-3 rounded-xl bg-gray-950/80 border border-white/10 font-mono text-xs text-gray-300 space-y-2 overflow-x-auto max-h-56">
+              <div className="flex justify-between border-b border-white/5 pb-1 text-gray-500 text-[11px]">
+                <span>Status: <strong className="text-emerald-400">{compositeData.status}</strong></span>
+                <span>Tomada: #{compositeData.connector_id}</span>
+              </div>
+              <pre className="text-[11px] text-cyan-300 whitespace-pre-wrap">
+                {JSON.stringify(compositeData.charging_schedule || compositeData, null, 2)}
+              </pre>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-xs text-gray-600 border border-dashed border-white/5 rounded-xl flex flex-col items-center gap-2">
+              <Info className="w-5 h-5 text-gray-600" />
+              Clica em "Consultar Posto" para ler a curva de carga calculada pelo firmware do posto.
+            </div>
+          )}
         </div>
       </div>
     </div>
   )
 }
-
+export default SmartCharging

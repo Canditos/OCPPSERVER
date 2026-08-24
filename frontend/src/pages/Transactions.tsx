@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { format, formatDuration, intervalToDuration } from 'date-fns'
-import { ChevronDown, ChevronRight, Zap } from 'lucide-react'
+import { formatDuration, intervalToDuration } from 'date-fns'
+import {
+  ChevronDown, ChevronRight, Zap, User as UserIcon,
+  Shield, CreditCard, Clock, Activity, ArrowLeftRight
+} from 'lucide-react'
 import { safeFormatDate } from '../utils/date'
 import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
@@ -9,9 +12,15 @@ import type { Charger, Transaction } from '../types'
 
 function StatusBadge({ status }: { status: string }) {
   const cls = status === 'Active'
-    ? 'badge bg-blue-500/20 text-blue-400 border border-blue-500/30'
-    : 'badge bg-gray-700/40 text-gray-500 border border-gray-700/30'
-  return <span className={cls}>{status === 'Active' ? '● ' : ''}{status}</span>
+    ? 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse flex items-center gap-1.5'
+    : 'px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-gray-700'
+
+  return (
+    <span className={cls}>
+      {status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />}
+      {status === 'Active' ? 'A Carregar' : 'Concluído'}
+    </span>
+  )
 }
 
 export function Transactions() {
@@ -29,107 +38,190 @@ export function Transactions() {
   const toggle = (id: number) => setExpanded(expanded === id ? null : id)
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-100">Transações</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{txs.length} transações</p>
+    <div className="space-y-6 animate-fade-up">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <ArrowLeftRight className="w-6 h-6 text-blue-500" />
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+              Transações e Consumos
+            </h1>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
+            Histórico completo de carregamentos por utilizador, posto e chave RFID
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-gray-800/80 border border-slate-200 dark:border-gray-700 text-xs font-mono text-slate-700 dark:text-gray-300">
+          <Activity className="w-3.5 h-3.5 text-blue-500" />
+          <span>{txs.length} registadas</span>
+        </div>
       </div>
 
-      <div className="flex gap-3">
-        <select className="select max-w-[200px]" value={filterCp} onChange={(e) => setFilterCp(e.target.value)}>
-          <option value="">Todos os chargers</option>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <select className="select max-w-[220px] text-xs" value={filterCp} onChange={(e) => setFilterCp(e.target.value)}>
+          <option value="">Todos os Postos</option>
           {chargers.map((c) => <option key={c.id} value={c.charge_point_id}>{c.charge_point_id}</option>)}
         </select>
-        <select className="select max-w-[160px]" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="">Todos os status</option>
-          <option value="Active">Active</option>
-          <option value="Completed">Completed</option>
+        <select className="select max-w-[180px] text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+          <option value="">Todos os Estados</option>
+          <option value="Active">Apenas Ativas (A carregar)</option>
+          <option value="Completed">Apenas Concluídas</option>
         </select>
       </div>
 
-      <div className="space-y-2">
+      {/* Transactions List */}
+      <div className="space-y-2.5">
         {txs.length === 0 && (
-          <div className="card flex items-center justify-center py-12 text-gray-600 text-sm">
-            Sem transações
+          <div className="card flex flex-col items-center justify-center py-16 text-slate-400 dark:text-gray-500 text-sm border border-slate-200 dark:border-white/5 space-y-2">
+            <Clock className="w-8 h-8 opacity-40" />
+            <p>Nenhuma transação encontrada com os filtros selecionados.</p>
           </div>
         )}
+
         {txs.map((tx) => {
           const duration = tx.stop_time
             ? formatDuration(intervalToDuration({ start: new Date(tx.start_time), end: new Date(tx.stop_time) }), { format: ['hours', 'minutes', 'seconds'] })
-            : null
+            : tx.status === 'Active' ? 'Em curso…' : null
+
           const isOpen = expanded === tx.id
 
           return (
-            <div key={tx.id} className="card p-0 overflow-hidden">
+            <div
+              key={tx.id}
+              className={`card p-0 overflow-hidden border transition-all duration-150 ${
+                tx.status === 'Active'
+                  ? 'border-emerald-500/40 shadow-md shadow-emerald-500/5 bg-emerald-500/[0.02]'
+                  : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+              }`}
+            >
               <button
-                className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-gray-800/50 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors text-left"
                 onClick={() => toggle(tx.id)}
               >
-                {isOpen ? <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />}
+                {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
 
-                <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2 items-center text-xs">
+                <div className="flex-1 grid grid-cols-2 md:grid-cols-6 gap-3 items-center text-xs">
+                  {/* Transaction ID & Charger */}
                   <div>
-                    <p className="text-gray-400 font-mono">#{tx.transaction_id}</p>
-                    <p className="text-gray-600">{tx.charge_point_id}</p>
+                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-sm block">
+                      #{tx.transaction_id}
+                    </span>
+                    <span className="text-slate-500 dark:text-gray-400 font-medium text-[11px]">
+                      {tx.charge_point_id} · T#{tx.connector_id}
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-gray-300">{tx.id_tag}</p>
-                    <p className="text-gray-600">Conector {tx.connector_id}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-300">{safeFormatDate(tx.start_time, 'dd/MM HH:mm')}</p>
-                    {tx.stop_time && <p className="text-gray-600">{safeFormatDate(tx.stop_time, 'dd/MM HH:mm')}</p>}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {tx.energy_kwh !== null && tx.energy_kwh !== undefined && (
-                      <><Zap className="w-3 h-3 text-blue-400" /><span className="text-blue-400 font-mono">{tx.energy_kwh} kWh</span></>
+
+                  {/* Driver / User */}
+                  <div className="md:col-span-2">
+                    {tx.user_username ? (
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 shrink-0">
+                          <UserIcon className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-900 dark:text-white text-xs block">
+                            {tx.user_username}
+                          </span>
+                          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                            Tag: {tx.id_tag}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="font-mono text-slate-700 dark:text-gray-300 text-xs">
+                          {tx.id_tag || 'Sem Tag'}
+                        </span>
+                      </div>
                     )}
                   </div>
+
+                  {/* Start Time */}
+                  <div>
+                    <span className="text-slate-800 dark:text-gray-200 font-mono text-xs block">
+                      {safeFormatDate(tx.start_time, 'dd/MM HH:mm')}
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-gray-400">
+                      {tx.stop_time ? safeFormatDate(tx.stop_time, 'dd/MM HH:mm') : 'Em curso…'}
+                    </span>
+                  </div>
+
+                  {/* Energy Consumed */}
+                  <div className="flex items-center gap-1.5">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
+                      <Zap className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold text-sm block">
+                        {tx.energy_kwh ?? 0} kWh
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {duration || '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Status */}
                   <div className="flex justify-end">
                     <StatusBadge status={tx.status} />
                   </div>
                 </div>
               </button>
 
+              {/* Expanded Details */}
               {isOpen && (
-                <div className="px-5 pb-5 border-t border-gray-800">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 text-xs">
-                    <div>
-                      <p className="text-gray-500 mb-0.5">Início</p>
-                      <p className="text-gray-200 font-mono">{safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm:ss')}</p>
+                <div className="px-5 pb-5 pt-3 border-t border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.01]">
+                  {/* Detailed summary pills */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3 text-xs mb-3">
+                    <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Utilizador</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {tx.user_username ? `${tx.user_username} (${tx.user_role || 'user'})` : 'Não registado'}
+                      </span>
+                      {tx.user_email && <span className="text-[10px] text-slate-400 block">{tx.user_email}</span>}
                     </div>
-                    {tx.stop_time && (
-                      <div>
-                        <p className="text-gray-500 mb-0.5">Fim</p>
-                        <p className="text-gray-200 font-mono">{safeFormatDate(tx.stop_time, 'dd/MM/yyyy HH:mm:ss')}</p>
-                      </div>
-                    )}
 
-                    {duration && (
-                      <div>
-                        <p className="text-gray-500 mb-0.5">Duração</p>
-                        <p className="text-gray-200">{duration}</p>
-                      </div>
-                    )}
-                    {tx.stop_reason && (
-                      <div>
-                        <p className="text-gray-500 mb-0.5">Motivo paragem</p>
-                        <p className="text-gray-200">{tx.stop_reason}</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-gray-500 mb-0.5">Meter start</p>
-                      <p className="text-gray-200 font-mono">{tx.meter_start} Wh</p>
+                    <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Início / Fim</span>
+                      <span className="font-mono text-slate-800 dark:text-gray-200 text-[11px] block">
+                        Início: {safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm:ss')}
+                      </span>
+                      {tx.stop_time && (
+                        <span className="font-mono text-slate-500 text-[11px] block">
+                          Fim: {safeFormatDate(tx.stop_time, 'dd/MM/yyyy HH:mm:ss')}
+                        </span>
+                      )}
                     </div>
-                    {tx.meter_stop !== null && tx.meter_stop !== undefined && (
-                      <div>
-                        <p className="text-gray-500 mb-0.5">Meter stop</p>
-                        <p className="text-gray-200 font-mono">{tx.meter_stop} Wh</p>
-                      </div>
-                    )}
+
+                    <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Leitura Contadores</span>
+                      <span className="font-mono text-slate-800 dark:text-gray-200 text-[11px] block">
+                        Start: {tx.meter_start} Wh
+                      </span>
+                      {tx.meter_stop !== null && tx.meter_stop !== undefined && (
+                        <span className="font-mono text-slate-500 text-[11px] block">
+                          Stop: {tx.meter_stop} Wh
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Motivo Paragem</span>
+                      <span className="font-medium text-slate-700 dark:text-gray-300">
+                        {tx.stop_reason || (tx.status === 'Active' ? 'Em carregamento…' : 'Normal')}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-2">
-                    <p className="text-xs text-gray-500 mb-2">MeterValues da transação</p>
+
+                  {/* MeterValues Chart */}
+                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-2 block">
+                      Curva de Telemetria e Potência da Sessão
+                    </span>
                     <MeterChart cpId={tx.charge_point_id} transactionId={tx.id} />
                   </div>
                 </div>

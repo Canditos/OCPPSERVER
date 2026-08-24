@@ -19,6 +19,8 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - backend
+    labels:
+      - "traefik.docker.network=coolify"
     networks:
       - default
       - coolify

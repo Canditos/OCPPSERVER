@@ -16,31 +16,35 @@ from ocpp.v16.enums import (
 
 import event_bus
 from database import AsyncSessionLocal
-from models.charger import Charger, Connector, OcppMessage
+from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
 from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
 from models.auth_token import AuthToken
-from sqlalchemy import func, select, update
+from models.authorized_tag import AuthorizedTag
+from models.user import User
+from services.email_service import notify_ac_suspended_ev, notify_dc_charging_completed
+from sqlalchemy import select, update, func
 
 logger = logging.getLogger(__name__)
 _TX_COUNTER = 100000
-
-
-async def _init_tx_counter():
-    """Read the max transaction_id from the DB so restarts never collide."""
-    global _TX_COUNTER
-    from sqlalchemy import text
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(text("SELECT COALESCE(MAX(transaction_id), 100000) FROM transactions"))
-        max_id = result.scalar() or 100000
-        _TX_COUNTER = max(max_id, 100000)
-        logger.info(f"TX counter initialized to {_TX_COUNTER}")
 
 
 def _next_tx_id() -> int:
     global _TX_COUNTER
     _TX_COUNTER += 1
     return _TX_COUNTER
+
+
+async def _init_tx_counter():
+    global _TX_COUNTER
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(func.max(Transaction.transaction_id)))
+            max_id = result.scalar()
+            if max_id and max_id >= _TX_COUNTER:
+                _TX_COUNTER = max_id
+    except Exception as e:
+        logger.warning(f"Failed to load max transaction ID: {e}")
 
 
 def _now() -> datetime:
@@ -91,6 +95,15 @@ class ChargePoint(OcppChargePoint):
             charger.last_seen = _now()
             charger.client_ip = self.client_ip
             charger.registered_at = charger.registered_at or _now()
+            avail = AvailabilityLog(
+                charger_id=charger.id,
+                charge_point_id=self.id,
+                connector_id=0,
+                status="Available",
+                info="BootNotification",
+                timestamp=_now(),
+            )
+            db.add(avail)
             await db.commit()
             await db.refresh(charger)
 
@@ -144,30 +157,51 @@ class ChargePoint(OcppChargePoint):
             charger_row = (await db.execute(
                 select(Charger).where(Charger.charge_point_id == self.id)
             )).scalar_one_or_none()
-            if charger_row and charger_row.autocharge_enabled:
+            if charger_row and getattr(charger_row, "autocharge_enabled", False):
                 return AuthorizationStatus.accepted
-            count = (await db.execute(
-                select(func.count()).select_from(AuthToken)
-            )).scalar()
-            if count == 0:
+
+            # Check AuthorizedTag first
+            tag = (await db.execute(
+                select(AuthorizedTag).where(
+                    AuthorizedTag.id_tag == id_tag,
+                    AuthorizedTag.is_active == True
+                )
+            )).scalar_one_or_none()
+            if tag:
                 return AuthorizationStatus.accepted
+
+            # Check AuthToken table
             token = (await db.execute(
                 select(AuthToken).where(
                     AuthToken.id_tag == id_tag,
                     AuthToken.status == "Accepted"
                 )
             )).scalar_one_or_none()
-            if not token:
-                return AuthorizationStatus.invalid
-            if token.expiry_date and token.expiry_date < datetime.utcnow():
-                return AuthorizationStatus.expired
-            return AuthorizationStatus.accepted
+            if token:
+                if token.expiry_date and token.expiry_date < datetime.utcnow():
+                    return AuthorizationStatus.expired
+                return AuthorizationStatus.accepted
+
+            # If both tables are empty, auto-accept and seed first tag
+            count_tags = (await db.execute(select(func.count()).select_from(AuthorizedTag))).scalar()
+            count_tokens = (await db.execute(select(func.count()).select_from(AuthToken))).scalar()
+            if (count_tags or 0) == 0 and (count_tokens or 0) == 0:
+                new_tag = AuthorizedTag(id_tag=id_tag, description="Auto-registada")
+                db.add(new_tag)
+                await db.commit()
+                return AuthorizationStatus.accepted
+
+            return AuthorizationStatus.invalid
 
     @on(Action.Authorize)
     async def on_authorize(self, id_tag, **kwargs):
         await self._log_message("IN", "Authorize", {"id_tag": id_tag})
         status = await self._check_auth(id_tag)
-        await event_bus.publish("authorize", {"charge_point_id": self.id, "id_tag": id_tag, "status": status.value})
+        await event_bus.publish("authorize", {
+            "charge_point_id": self.id,
+            "id_tag": id_tag,
+            "status": status.value,
+        })
         return call_result.AuthorizePayload(
             id_tag_info={"status": status, "expiryDate": None, "parentIdTag": None}
         )
@@ -177,6 +211,14 @@ class ChargePoint(OcppChargePoint):
         await self._log_message("IN", "StartTransaction", {
             "connector_id": connector_id, "id_tag": id_tag, "meter_start": meter_start
         })
+
+        auth_status = await self._check_auth(id_tag)
+        if auth_status != AuthorizationStatus.accepted:
+            return call_result.StartTransactionPayload(
+                transaction_id=0,
+                id_tag_info={"status": auth_status}
+            )
+
         tx_id = _next_tx_id()
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
@@ -203,12 +245,9 @@ class ChargePoint(OcppChargePoint):
             "id_tag": id_tag,
             "meter_start": meter_start,
         })
-        # Per OCPP 1.6 spec: once we accepted the transaction into the DB,
-        # always respond Accepted so the charger continues charging.
-        # The auth check already happened at Authorize step.
         return call_result.StartTransactionPayload(
             transaction_id=tx_id,
-            id_tag_info={"status": AuthorizationStatus.accepted, "expiryDate": None, "parentIdTag": None}
+            id_tag_info={"status": AuthorizationStatus.accepted}
         )
 
     @on(Action.StopTransaction)
@@ -217,6 +256,7 @@ class ChargePoint(OcppChargePoint):
             "transaction_id": transaction_id, "meter_stop": meter_stop
         })
         reason = kwargs.get("reason", "Local")
+        stopped_connector_id = 1
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Transaction).where(Transaction.transaction_id == transaction_id))
             tx = result.scalar_one_or_none()
@@ -225,35 +265,88 @@ class ChargePoint(OcppChargePoint):
                 tx.stop_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).replace(tzinfo=None)
                 tx.stop_reason = reason
                 tx.status = "Completed"
-                # Mark the connector as Finishing — StatusNotification will follow with Available
-                conn_result = await db.execute(
-                    select(Connector).join(Charger, Connector.charger_id == Charger.id)
-                    .where(Charger.charge_point_id == self.id, Connector.connector_id == tx.connector_id)
+                stopped_connector_id = tx.connector_id
+
+            # Update charger and connector status
+            r_charger = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
+            charger = r_charger.scalar_one_or_none()
+            if charger:
+                # Check if there are other active transactions
+                r_active = await db.execute(
+                    select(Transaction).where(
+                        Transaction.charge_point_id == self.id,
+                        Transaction.status == "Active",
+                        Transaction.transaction_id != transaction_id,
+                    )
                 )
-                conn = conn_result.scalar_one_or_none()
+                other_active = r_active.scalars().all()
+                if not other_active:
+                    charger.status = "Available"
+
+                # Update the specific connector status
+                r_conn = await db.execute(
+                    select(Connector).where(
+                        Connector.charger_id == charger.id,
+                        Connector.connector_id == stopped_connector_id,
+                    )
+                )
+                conn = r_conn.scalar_one_or_none()
                 if conn:
-                    conn.status = "Finishing"
+                    conn.status = "Available"
                     conn.updated_at = _now()
-                # Update charger status: check if any other connector is still Charging
-                charger_result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
-                charger = charger_result.scalar_one_or_none()
-                if charger:
-                    other_conns = (await db.execute(
-                        select(Connector).where(
-                            Connector.charger_id == charger.id,
-                            Connector.connector_id != 0,
-                            Connector.connector_id != tx.connector_id,
-                        )
-                    )).scalars().all()
-                    if not any(c.status == "Charging" for c in other_conns):
-                        charger.status = "Finishing"
+
+                # Add availability log
+                avail = AvailabilityLog(
+                    charger_id=charger.id,
+                    charge_point_id=self.id,
+                    connector_id=stopped_connector_id,
+                    status="Available",
+                    timestamp=_now(),
+                )
+                db.add(avail)
                 await db.commit()
+
+                # Email notification for DC charging or transaction stop
+                if tx and tx.id_tag:
+                    try:
+                        r_user = await db.execute(select(User).where(User.rfid_tag == tx.id_tag))
+                        driver_user = r_user.scalar_one_or_none()
+                        if driver_user and driver_user.email:
+                            m = (charger.model or "").upper()
+                            v = (charger.vendor or "").upper()
+                            cpid = (charger.charge_point_id or "").upper()
+                            is_dc = "SICHARGE" in m or " DC" in m or m.endswith("-D") or "DC" in v or "DC" in cpid
+                            
+                            if is_dc:
+                                kwh = max(0, (meter_stop or 0) - (tx.meter_start or 0)) / 1000.0
+                                st_str = tx.start_time.strftime("%d/%m/%Y %H:%M") if tx.start_time else "—"
+                                et_str = tx.stop_time.strftime("%d/%m/%Y %H:%M") if tx.stop_time else _now().strftime("%d/%m/%Y %H:%M")
+                                notify_dc_charging_completed(
+                                    to_email=driver_user.email,
+                                    username=driver_user.username,
+                                    charge_point_id=self.id,
+                                    connector_id=stopped_connector_id,
+                                    transaction_id=transaction_id,
+                                    kwh=kwh,
+                                    start_time_str=st_str,
+                                    stop_time_str=et_str,
+                                    stop_reason=reason,
+                                )
+                    except Exception as e:
+                        logger.error(f"Error checking email notification on StopTransaction: {e}")
 
         await event_bus.publish("transaction_stopped", {
             "charge_point_id": self.id,
             "transaction_id": transaction_id,
+            "connector_id": stopped_connector_id,
             "meter_stop": meter_stop,
             "reason": reason,
+        })
+        await event_bus.publish("status_notification", {
+            "charge_point_id": self.id,
+            "connector_id": stopped_connector_id,
+            "status": "Available",
+            "error_code": "NoError",
         })
         return call_result.StopTransactionPayload(id_tag_info={"status": AuthorizationStatus.accepted})
 
@@ -338,25 +431,28 @@ class ChargePoint(OcppChargePoint):
                     conn.status = status
                     conn.error_code = error_code
                     conn.updated_at = _now()
-                    await db.flush()
 
-                    # Derive charger-level status from all connector statuses
-                    all_conns = (await db.execute(
-                        select(Connector).where(Connector.charger_id == charger.id, Connector.connector_id != 0)
-                    )).scalars().all()
-                    connector_statuses = [c.status for c in all_conns]
-                    if any(s == "Charging" for s in connector_statuses):
+                    # Sync overall charger status
+                    r_all_conn = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
+                    all_conns = r_all_conn.scalars().all()
+                    if any(c.status == "Charging" for c in all_conns):
                         charger.status = "Charging"
-                    elif any(s == "Faulted" for s in connector_statuses):
+                    elif any(c.status == "Faulted" for c in all_conns):
                         charger.status = "Faulted"
-                    elif any(s == "Preparing" for s in connector_statuses):
-                        charger.status = "Preparing"
-                    elif any(s == "Finishing" for s in connector_statuses):
-                        charger.status = "Finishing"
-                    elif connector_statuses and all(s == "Available" for s in connector_statuses):
-                        charger.status = "Available"
+                    else:
+                        charger.status = status
 
                 charger.last_seen = _now()
+
+                avail = AvailabilityLog(
+                    charger_id=charger.id,
+                    charge_point_id=self.id,
+                    connector_id=connector_id,
+                    status=status,
+                    error_code=error_code if error_code != "NoError" else None,
+                    timestamp=_now(),
+                )
+                db.add(avail)
                 await db.commit()
 
         await event_bus.publish("status_notification", {
@@ -365,6 +461,51 @@ class ChargePoint(OcppChargePoint):
             "status": status,
             "error_code": error_code,
         })
+
+        # Email notification for AC charging when reaching SuspendedEV (battery full)
+        if status == "SuspendedEV":
+            try:
+                async with AsyncSessionLocal() as email_db:
+                    r_tx = await email_db.execute(
+                        select(Transaction)
+                        .where(
+                            Transaction.charge_point_id == self.id,
+                            Transaction.connector_id == connector_id,
+                            Transaction.status == "Active"
+                        )
+                        .order_by(Transaction.start_time.desc())
+                        .limit(1)
+                    )
+                    active_tx = r_tx.scalar_one_or_none()
+                    if active_tx and active_tx.id_tag:
+                        r_user = await email_db.execute(select(User).where(User.rfid_tag == active_tx.id_tag))
+                        driver_user = r_user.scalar_one_or_none()
+                        if driver_user and driver_user.email:
+                            r_mv = await email_db.execute(
+                                select(MeterValue)
+                                .where(MeterValue.transaction_id == active_tx.transaction_id)
+                                .order_by(MeterValue.timestamp.desc())
+                                .limit(5)
+                            )
+                            mvs = r_mv.scalars().all()
+                            latest_e = active_tx.meter_start or 0
+                            for mv in mvs:
+                                if mv.measurand and 'energy' in mv.measurand.lower():
+                                    latest_e = float(mv.value)
+                                    break
+                            kwh = max(0, latest_e - (active_tx.meter_start or 0)) / 1000.0
+                            st_str = active_tx.start_time.strftime("%d/%m/%Y %H:%M") if active_tx.start_time else "—"
+                            notify_ac_suspended_ev(
+                                to_email=driver_user.email,
+                                username=driver_user.username,
+                                charge_point_id=self.id,
+                                connector_id=connector_id,
+                                transaction_id=active_tx.transaction_id,
+                                kwh=kwh,
+                                start_time_str=st_str,
+                            )
+            except Exception as e:
+                logger.error(f"Error checking email notification on SuspendedEV: {e}")
         return call_result.StatusNotificationPayload()
 
     @on(Action.DataTransfer)
@@ -506,30 +647,58 @@ class ChargePoint(OcppChargePoint):
         await self._log_message("OUT", "ReserveNow", {"connector_id": connector_id, "id_tag": id_tag})
         return resp
 
-    async def set_charging_profile(self, connector_id: int, charging_profile: dict):
+    async def cancel_reservation(self, reservation_id: int):
+        req = call.CancelReservationPayload(reservation_id=reservation_id)
+        resp = await self.call(req)
+        await self._log_message("OUT", "CancelReservation", {"reservation_id": reservation_id})
+        return resp
+
+    # ── Smart Charging ──────────────────────────────────────────────────────
+
+    async def set_charging_profile(self, connector_id: int, cs_charging_profiles: dict):
         req = call.SetChargingProfilePayload(
             connector_id=connector_id,
-            cs_charging_profiles=charging_profile,
+            cs_charging_profiles=cs_charging_profiles,
         )
         resp = await self.call(req)
         await self._log_message("OUT", "SetChargingProfile", {
-            "connector_id": connector_id, "profile": charging_profile
+            "connector_id": connector_id,
+            "cs_charging_profiles": cs_charging_profiles,
         })
         return resp
 
-    async def clear_charging_profile(self, profile_id: int | None = None,
-                                     connector_id: int | None = None,
-                                     charging_profile_purpose: str | None = None,
-                                     stack_level: int | None = None):
-        req = call.ClearChargingProfilePayload(
-            id=profile_id,
-            connector_id=connector_id,
-            charging_profile_purpose=charging_profile_purpose,
-            stack_level=stack_level,
-        )
+    async def clear_charging_profile(
+        self,
+        profile_id: int | None = None,
+        connector_id: int | None = None,
+        purpose: str | None = None,
+        stack_level: int | None = None,
+    ):
+        payload_kwargs = {}
+        if profile_id is not None:
+            payload_kwargs["id"] = profile_id
+        if connector_id is not None:
+            payload_kwargs["connector_id"] = connector_id
+        if purpose is not None:
+            payload_kwargs["charging_profile_purpose"] = purpose
+        if stack_level is not None:
+            payload_kwargs["stack_level"] = stack_level
+
+        req = call.ClearChargingProfilePayload(**payload_kwargs)
         resp = await self.call(req)
-        await self._log_message("OUT", "ClearChargingProfile", {
-            "profile_id": profile_id, "connector_id": connector_id
-        })
+        await self._log_message("OUT", "ClearChargingProfile", payload_kwargs)
         return resp
 
+    async def get_composite_schedule(
+        self,
+        connector_id: int,
+        duration: int,
+        rate_unit: str | None = None,
+    ):
+        payload_kwargs = {"connector_id": connector_id, "duration": duration}
+        if rate_unit:
+            payload_kwargs["charging_rate_unit"] = rate_unit
+        req = call.GetCompositeSchedulePayload(**payload_kwargs)
+        resp = await self.call(req)
+        await self._log_message("OUT", "GetCompositeSchedule", payload_kwargs)
+        return resp

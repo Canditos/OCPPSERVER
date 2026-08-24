@@ -59,3 +59,17 @@ export function safeFormatTime(dateInput?: string | number | Date | null, fmtStr
     return ''
   }
 }
+
+/** Alias for safeFormatDate with default dd/MM/yyyy HH:mm */
+export const safeFormatDateTime = safeFormatDate
+
+/** Format a duration in seconds to a human-readable string (e.g. "1h 23m") */
+export function safeFormatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return '0m'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0 && m > 0) return `${h}h ${m}m`
+  if (h > 0) return `${h}h`
+  return `${m}m`
+}
+

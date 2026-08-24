@@ -28,8 +28,31 @@ async def remote_start(req: RemoteStartRequest):
 @router.post("/remote-stop")
 async def remote_stop(req: RemoteStopRequest):
     cp = _get_cp(req.charge_point_id)
-    resp = await cp.remote_stop_transaction(req.transaction_id)
-    return {"status": resp.status if resp else "error"}
+    tx_id = req.transaction_id
+
+    # Auto-detect active transaction if not provided
+    if tx_id is None or tx_id == 0:
+        from database import AsyncSessionLocal
+        from sqlalchemy import select
+        from models.transaction import Transaction
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Transaction)
+                .where(
+                    Transaction.charge_point_id == req.charge_point_id,
+                    Transaction.status == "Active"
+                )
+                .order_by(Transaction.start_time.desc())
+                .limit(1)
+            )
+            tx = result.scalar_one_or_none()
+            if tx:
+                tx_id = tx.transaction_id
+            else:
+                raise HTTPException(status_code=404, detail="No active transaction found for this charger")
+
+    resp = await cp.remote_stop_transaction(tx_id)
+    return {"status": resp.status if resp else "error", "transaction_id": tx_id}
 
 
 @router.post("/reset")

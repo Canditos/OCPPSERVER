@@ -7,6 +7,13 @@ class ConnectorOut(BaseModel):
     status: str
     error_code: str | None
     updated_at: datetime | None
+    active_transaction_id: int | None = None
+    active_id_tag: str | None = None
+    active_username: str | None = None
+    active_user_role: str | None = None
+    active_power_kw: float | None = None
+    active_energy_kwh: float | None = None
+    active_start_time: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -45,6 +52,9 @@ class TransactionOut(BaseModel):
     stop_reason: str | None
     status: str
     energy_kwh: float | None = None
+    user_username: str | None = None
+    user_email: str | None = None
+    user_role: str | None = None
 
     class Config:
         from_attributes = True
@@ -95,7 +105,7 @@ class RemoteStartRequest(BaseModel):
 
 class RemoteStopRequest(BaseModel):
     charge_point_id: str
-    transaction_id: int
+    transaction_id: int | None = None
 
 
 class ResetRequest(BaseModel):
