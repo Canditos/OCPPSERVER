@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ScrollText, Zap } from 'lucide-react'
 import { api } from '../api'
 import { OcppLogViewer } from '../components/OcppLogViewer'
+import { EventLog } from '../components/EventLog'
 import { useChargerStore } from '../store/chargerStore'
 import { useChargerUiStore } from '../store/chargerUiStore'
 import type { Charger, OcppMessage } from '../types'
@@ -106,15 +107,33 @@ export function Logs() {
         )}
       </div>
 
-      {/* Log Viewer */}
-      {currentCpId ? (
-        <OcppLogViewer messages={messages} cpId={currentCpId} maxHeight="calc(100vh - 220px)" />
-      ) : (
-        <div className="card flex flex-col items-center justify-center py-16 text-center gap-4">
-          <ScrollText className="w-8 h-8 text-gray-600" />
-          <p className="text-gray-400 font-medium">Sem chargers ligados</p>
+      {/* Log Viewer + Live Events */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          {currentCpId ? (
+            <OcppLogViewer messages={messages} cpId={currentCpId} maxHeight="calc(100vh - 220px)" />
+          ) : (
+            <div className="card flex flex-col items-center justify-center py-16 text-center gap-4">
+              <ScrollText className="w-8 h-8 text-gray-600" />
+              <p className="text-gray-400 font-medium">Sem chargers ligados</p>
+            </div>
+          )}
         </div>
-      )}
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.liveEvents')}</h2>
+            <span className="live-pill">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+              </span>
+              LIVE
+            </span>
+          </div>
+          <EventLog maxHeight="calc(100vh - 260px)" />
+        </div>
+      </div>
     </div>
   )
 }
