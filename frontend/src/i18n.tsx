@@ -34,6 +34,7 @@ const translations = {
       authentication: 'White-list RFID',
       users: 'Utilizadores',
       myCharging: 'Minhas Cargas',
+      logs: 'Logs OCPP',
     },
     shell: {
       overview: 'Resumo Geral',
@@ -68,6 +69,16 @@ const translations = {
       fullLogViewer: 'Visualizador Completo de Logs & Payloads JSON',
       selectCharger: 'Selecionar Charger:',
       activeCharge: '⚡ CARGA ATIVA',
+      noGroup: 'Sem grupo',
+      newGroup: 'Novo grupo...',
+      editName: 'Editar nome',
+      groupName: 'Nome do grupo',
+      assignGroup: 'Atribuir grupo',
+    },
+    logs: {
+      title: 'Logs OCPP',
+      subtitle: 'Mensagens trocadas com os chargers em tempo real',
+      selectCharger: 'Selecionar Charger:',
     },
     userPortal: {
       title: 'Portal do Condutor',
@@ -542,6 +553,7 @@ const translations = {
       authentication: 'RFID whitelist',
       users: 'Users',
       myCharging: 'My Charging',
+      logs: 'OCPP Logs',
     },
     shell: {
       overview: 'Overview',
@@ -576,6 +588,16 @@ const translations = {
       fullLogViewer: 'Full Log & JSON Payload Viewer',
       selectCharger: 'Select Charger:',
       activeCharge: '⚡ ACTIVE CHARGING',
+      noGroup: 'No group',
+      newGroup: 'New group...',
+      editName: 'Edit name',
+      groupName: 'Group name',
+      assignGroup: 'Assign group',
+    },
+    logs: {
+      title: 'OCPP Logs',
+      subtitle: 'Messages exchanged with chargers in real time',
+      selectCharger: 'Select Charger:',
     },
     userPortal: {
       title: 'Driver Portal',

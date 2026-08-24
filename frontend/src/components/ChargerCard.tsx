@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock,
-  Loader2, CheckCircle2, AlertCircle, Tag, Plus, X, ShieldCheck, Mail
+  Loader2, CheckCircle2, AlertCircle, Tag, Plus, X, ShieldCheck, Mail,
+  Pencil, Check
 } from 'lucide-react'
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
+import { useChargerUiStore } from '../store/chargerUiStore'
 import { ConnectorBadge } from './ConnectorBadge'
 import { BatteryIndicator } from './BatteryIndicator'
 import { api } from '../api'
@@ -37,9 +39,74 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const queryClient = useQueryClient()
   const { t } = useI18n()
   const live = useChargerStore((s) => s.liveState[charger.charge_point_id])
+  const { displayNames, groups, setDisplayName, setGroup } = useChargerUiStore()
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null)
+
+  // Display name editing state
+  const cpId = charger.charge_point_id
+  const displayName = displayNames[cpId] || ''
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const nameInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editingName && nameInputRef.current) {
+      nameInputRef.current.focus()
+      nameInputRef.current.select()
+    }
+  }, [editingName])
+
+  const startEditName = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setNameInput(displayName || cpId)
+    setEditingName(true)
+  }
+
+  const commitName = () => {
+    const trimmed = nameInput.trim()
+    if (trimmed && trimmed !== cpId) {
+      setDisplayName(cpId, trimmed)
+    } else if (!trimmed || trimmed === cpId) {
+      setDisplayName(cpId, '')
+    }
+    setEditingName(false)
+  }
+
+  const cancelEditName = () => {
+    setEditingName(false)
+  }
+
+  // Group assignment state
+  const currentGroup = groups[cpId] || ''
+  const allGroups = Array.from(new Set(Object.values(groups).filter(Boolean))).sort()
+  const [showGroupInput, setShowGroupInput] = useState(false)
+  const [groupInput, setGroupInput] = useState('')
+  const groupInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (showGroupInput && groupInputRef.current) {
+      groupInputRef.current.focus()
+    }
+  }, [showGroupInput])
+
+  const commitGroup = (val: string) => {
+    if (val === '__new__') {
+      setGroupInput('')
+      setShowGroupInput(true)
+      return
+    }
+    setGroup(cpId, val)
+  }
+
+  const commitNewGroup = () => {
+    const trimmed = groupInput.trim()
+    if (trimmed) setGroup(cpId, trimmed)
+    setShowGroupInput(false)
+    setGroupInput('')
+  }
 
   // Quick Add Tag Modal state
   const [showTagModal, setShowTagModal] = useState(false)
@@ -313,18 +380,89 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             )}
           </div>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-base font-bold text-gray-100 leading-tight truncate">{charger.charge_point_id}</p>
-              {isDC && (
-                <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-purple-700 text-white tracking-widest shadow-sm shadow-violet-500/30">
-                  DC
-                </span>
+          <div className="min-w-0 flex-1">
+            {/* Editable display name */}
+            {editingName ? (
+              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <input
+                  ref={nameInputRef}
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') cancelEditName() }}
+                  onBlur={commitName}
+                  className="text-sm font-bold bg-white/10 border border-blue-500/40 rounded-lg px-2 py-0.5 text-gray-100 w-full focus:outline-none focus:border-blue-400"
+                  maxLength={40}
+                />
+                <button onClick={commitName} className="shrink-0 p-0.5 text-emerald-400 hover:text-emerald-300">
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={cancelEditName} className="shrink-0 p-0.5 text-gray-500 hover:text-gray-300">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <p className="text-base font-bold text-gray-100 leading-tight truncate">
+                  {displayName || cpId}
+                </p>
+                {isDC && (
+                  <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-purple-700 text-white tracking-widest shadow-sm shadow-violet-500/30">
+                    DC
+                  </span>
+                )}
+                <button
+                  onClick={startEditName}
+                  className="shrink-0 p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
+                  title={t('dashboard.editName')}
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            {/* Subtitle: OCPP ID when display name is set, else model/vendor */}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {displayName ? (
+                <p className="text-xs text-gray-600 truncate font-mono">{cpId}</p>
+              ) : (
+                <p className="text-xs text-gray-500 truncate">
+                  {[charger.model, charger.vendor].filter(Boolean).join(' · ') || t('chargerCard.defaultStation')}
+                </p>
               )}
             </div>
-            <p className="text-xs text-gray-500 truncate mt-0.5">
-              {[charger.model, charger.vendor].filter(Boolean).join(' · ') || t('chargerCard.defaultStation')}
-            </p>
+
+            {/* Group selector */}
+            {showGroupInput ? (
+              <div className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
+                <input
+                  ref={groupInputRef}
+                  value={groupInput}
+                  onChange={(e) => setGroupInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') commitNewGroup(); if (e.key === 'Escape') { setShowGroupInput(false); setGroupInput('') } }}
+                  onBlur={commitNewGroup}
+                  placeholder={t('dashboard.groupName')}
+                  className="text-xs bg-white/10 border border-blue-500/40 rounded-lg px-2 py-0.5 text-gray-100 w-28 focus:outline-none focus:border-blue-400"
+                  maxLength={30}
+                />
+                <button onClick={commitNewGroup} className="shrink-0 p-0.5 text-emerald-400">
+                  <Check className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                <select
+                  value={currentGroup}
+                  onChange={(e) => commitGroup(e.target.value)}
+                  className="text-[10px] bg-white/5 border border-white/10 text-gray-500 rounded-md px-1.5 py-0.5 focus:outline-none focus:border-blue-500/40 cursor-pointer hover:border-white/20 transition-colors max-w-[140px] truncate"
+                >
+                  <option value="">{t('dashboard.noGroup')}</option>
+                  {allGroups.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                  <option value="__new__">{t('dashboard.newGroup')}</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -527,9 +665,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 onChange={(e) => setSelectedTag(e.target.value)}
                 className="bg-white/5 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-emerald-600 dark:text-emerald-400 rounded-lg px-2 py-0.5 text-xs font-mono font-medium focus:outline-none focus:border-emerald-500/50"
               >
-                {authorizedTags.map((t) => (
-                  <option key={t.id} value={t.id_tag}>
-                    {t.id_tag} {t.description ? `(${t.description})` : ''}
+                {authorizedTags.map((tag) => (
+                  <option key={tag.id} value={tag.id_tag}>
+                    {tag.id_tag} {tag.description ? `(${tag.description})` : ''}
                   </option>
                 ))}
               </select>

@@ -1,12 +1,12 @@
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Zap, Wifi, AlertTriangle, Server, Activity, TrendingUp, Terminal } from 'lucide-react'
+import { Zap, Wifi, AlertTriangle, Server, Activity, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
 import { EventLog } from '../components/EventLog'
-import { OcppLogViewer } from '../components/OcppLogViewer'
 import { useChargerStore } from '../store/chargerStore'
-import type { Charger, OcppMessage } from '../types'
+import { useChargerUiStore } from '../store/chargerUiStore'
+import type { Charger } from '../types'
 import { useI18n } from '../i18n'
 
 interface KpiProps {
@@ -75,6 +75,44 @@ function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0, onCl
   )
 }
 
+interface GroupSectionProps {
+  groupName: string
+  chargers: Charger[]
+  isNoGroup?: boolean
+}
+
+function GroupSection({ groupName, chargers, isNoGroup = false }: GroupSectionProps) {
+  const [collapsed, setCollapsed] = React.useState(false)
+  const label = isNoGroup ? groupName : groupName
+
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={() => setCollapsed((v) => !v)}
+        className="flex items-center gap-2 w-full text-left group"
+      >
+        {collapsed ? (
+          <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
+        )}
+        <span className={`text-xs font-semibold uppercase tracking-wider ${isNoGroup ? 'text-gray-600' : 'text-gray-400'}`}>
+          {label}
+        </span>
+        <span className="text-xs text-gray-600 font-mono">{chargers.length}</span>
+        <div className="flex-1 h-px bg-white/5 ml-1" />
+      </button>
+
+      {!collapsed && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6">
+          {chargers.map((c) => <ChargerCard key={c.id} charger={c} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Dashboard() {
   const { t } = useI18n()
   const { data: chargers = [], isLoading } = useQuery<Charger[]>({
@@ -83,19 +121,9 @@ export function Dashboard() {
     refetchInterval: 5000,
   })
 
-  // State for selected charger logs on the dashboard
-  const [selectedLogCpId, setSelectedLogCpId] = React.useState<string>('')
-  const currentCpId = selectedLogCpId || chargers[0]?.charge_point_id
-
-  const { data: messages = [] } = useQuery<OcppMessage[]>({
-    queryKey: ['messages', currentCpId],
-    queryFn: () => api.getMessages(currentCpId!, 100),
-    enabled: !!currentCpId,
-    refetchInterval: 3000,
-  })
-
   const liveState = useChargerStore((s) => s.liveState)
   const events    = useChargerStore((s) => s.events)
+  const { groups } = useChargerUiStore()
 
   const total = chargers.length
 
@@ -131,14 +159,8 @@ export function Dashboard() {
     .reduce((acc, [, m]) => acc + Number(m.value ?? 0), 0)
   const totalChargingKw = totalChargingWatts / 1000
 
-  const totalEnergyWh = Object.values(liveState)
-    .flatMap((s) => Object.entries(s.meters ?? {}))
-    .filter(([measurand]) => measurand.toLowerCase().includes('energy'))
-    .reduce((acc, [, m]) => acc + Number(m.value ?? 0), 0)
-  const totalKwh = (totalEnergyWh / 1000).toFixed(1)
-
-  const scrollToSelector = (selector: string) => {
-    const el = document.querySelector(selector) as HTMLElement | null
+  const scrollToSection = (id: string) => {
+    const el = document.querySelector(`#${id}`) as HTMLElement | null
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     el?.classList.add('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
     window.setTimeout(() => {
@@ -146,22 +168,24 @@ export function Dashboard() {
     }, 1400)
   }
 
-  const scrollToSection = (id: string) => {
-    scrollToSelector(`#${id}`)
-  }
-
-  const scrollToFirstMatchingCard = (status: 'online' | 'charging' | 'faulted') => {
-    const el = document.querySelector(`[data-charger-flags~="${status}"]`) as HTMLElement | null
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      el.classList.add('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
-      window.setTimeout(() => {
-        el.classList.remove('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
-      }, 1400)
-      return
+  // Group chargers: named groups sorted alphabetically, then ungrouped at the end
+  const grouped = React.useMemo(() => {
+    const map: Record<string, Charger[]> = {}
+    const ungrouped: Charger[] = []
+    for (const c of chargers) {
+      const g = groups[c.charge_point_id]
+      if (g && g.trim()) {
+        if (!map[g]) map[g] = []
+        map[g].push(c)
+      } else {
+        ungrouped.push(c)
+      }
     }
-    scrollToSection('chargers-section')
-  }
+    const sortedGroups = Object.keys(map).sort((a, b) => a.localeCompare(b))
+    return { sortedGroups, map, ungrouped }
+  }, [chargers, groups])
+
+  const hasGroups = grouped.sortedGroups.length > 0
 
   return (
     <div className="space-y-8 animate-fade-up">
@@ -225,9 +249,9 @@ export function Dashboard() {
         />
       </div>
 
-      {/* CHARGERS LIST WITH CONNECTORS & QUICK ACTIONS */}
+      {/* CHARGERS + EVENT LOG */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="chargers-section">
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.chargingStations')}</h2>
             <span className="text-xs text-gray-500 font-mono">{t('dashboard.registered', { count: chargers.length })}</span>
@@ -257,8 +281,25 @@ export function Dashboard() {
           )}
 
           {!isLoading && chargers.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {chargers.map((c) => <ChargerCard key={c.id} charger={c} />)}
+            <div className="space-y-6">
+              {hasGroups ? (
+                <>
+                  {grouped.sortedGroups.map((g) => (
+                    <GroupSection key={g} groupName={g} chargers={grouped.map[g]} />
+                  ))}
+                  {grouped.ungrouped.length > 0 && (
+                    <GroupSection
+                      groupName={t('dashboard.noGroup')}
+                      chargers={grouped.ungrouped}
+                      isNoGroup
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {chargers.map((c) => <ChargerCard key={c.id} charger={c} />)}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -277,62 +318,6 @@ export function Dashboard() {
           </div>
           <EventLog maxHeight="520px" />
         </div>
-      </div>
-
-      {/* FULL OCPP MESSAGES LOG VIEWER SECTION */}
-      <div className="pt-6 border-t border-white/10 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Terminal className="w-5 h-5 text-blue-400" />
-            <h2 className="text-base font-bold text-gray-200 uppercase tracking-wider">{t('dashboard.fullLogViewer')}</h2>
-          </div>
-
-          {/* HIGH-TECH INTERACTIVE BUTTON SELECTOR CARDS FOR CHARGERS */}
-          {chargers.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-xs text-gray-400 font-medium mr-1">{t('dashboard.selectCharger')}</span>
-              {chargers.map((c) => {
-                const isSelected = currentCpId === c.charge_point_id
-                const isCharging = isChargerCharging(c)
-                const isOnline = isChargerOnline(c)
-
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedLogCpId(c.charge_point_id)}
-                    className={`relative px-4 py-2.5 rounded-2xl text-xs font-medium border transition-all duration-300 flex items-center gap-2.5 cursor-pointer ${
-                      isSelected
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/25 scale-102 ring-2 ring-blue-400/50'
-                        : 'bg-white dark:bg-gray-900/80 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-400 hover:border-slate-300 dark:hover:border-white/20 hover:text-slate-900 dark:hover:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-800/80 shadow-sm'
-                    } ${isCharging ? 'border-cyan-400/60 shadow-cyan-500/20' : ''}`}
-                  >
-                    {isCharging ? (
-                      <div className="relative flex items-center justify-center">
-                        <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-cyan-400 opacity-75" />
-                        <Zap className="w-4 h-4 text-cyan-400 animate-bounce" fill="currentColor" />
-                      </div>
-                    ) : (
-                      <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-gray-600'}`} />
-                    )}
-
-                    <div className="text-left">
-                      <p className="font-mono font-bold leading-tight text-xs">{c.charge_point_id}</p>
-                      <p className="text-[10px] opacity-75 mt-0.5">
-                        {c.vendor ?? 'Siemens'} {isCharging ? `· ${t('dashboard.activeCharge')}` : ''}
-                      </p>
-                    </div>
-
-                    {isSelected && (
-                      <span className="ml-1 w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        <OcppLogViewer messages={messages} cpId={currentCpId} maxHeight="500px" />
       </div>
     </div>
   )

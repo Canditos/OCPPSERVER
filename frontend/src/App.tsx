@@ -10,6 +10,7 @@ import Authentication from './pages/Authentication'
 import { SmartCharging } from './pages/SmartCharging'
 import { UsersManagement } from './pages/UsersManagement'
 import { UserPortal } from './pages/UserPortal'
+import { Logs } from './pages/Logs'
 import { Login } from './pages/Login'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useOcppEvents } from './hooks/useOcppEvents'
@@ -110,6 +111,16 @@ function AppInner() {
           <ProtectedRoute requiredRole="admin">
             <AppShell>
               <UsersManagement />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/logs"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AppShell>
+              <Logs />
             </AppShell>
           </ProtectedRoute>
         }
