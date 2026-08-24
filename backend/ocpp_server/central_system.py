@@ -6,7 +6,7 @@ from websockets.server import WebSocketServerProtocol
 import event_bus
 from database import AsyncSessionLocal
 from models.charger import Charger
-from sqlalchemy import update
+from sqlalchemy import update, select
 
 from ocpp_server.charge_point import ChargePoint
 
