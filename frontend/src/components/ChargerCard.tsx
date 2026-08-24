@@ -79,7 +79,12 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const rawSoC = live?.meters
     ? Object.entries(live.meters).find(([k]) => k.toLowerCase() === 'soc')?.[1]?.value ?? null
     : null
-  const liveSoC: number | null = rawSoC !== null ? Math.min(100, Math.max(0, Number(rawSoC))) : null
+  const liveSoC: number | null = rawSoC !== null 
+    ? (() => {
+        const parsed = Number(rawSoC)
+        return !isNaN(parsed) ? Math.min(100, Math.max(0, parsed)) : null
+      })()
+    : null
 
   const livePowerKw = livePower !== null && livePower > 0 ? livePower / 1000 : null
 

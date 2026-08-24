@@ -48,8 +48,11 @@ function getBatteryColor(soc: number | null): ColorConfig {
 
 export function BatteryIndicator({ soc, isCharging, powerKw, className = '' }: BatteryIndicatorProps) {
   const uid = useId().replace(/:/g, '')
-  const color = getBatteryColor(soc)
-  const fillPct = soc !== null ? Math.max(soc, 4) : 0
+  
+  // Handle NaN or invalid soc values
+  const validSoC = soc !== null && !isNaN(soc) ? soc : null
+  const color = getBatteryColor(validSoC)
+  const fillPct = validSoC !== null ? Math.max(validSoC, 4) : 0
   const fillWidth = (fillPct / 100) * 34
 
   return (
@@ -81,7 +84,7 @@ export function BatteryIndicator({ soc, isCharging, powerKw, className = '' }: B
           <rect x="3" y="3" width="34" height="18" rx="2" fill="white" fillOpacity="0.05" />
 
           {/* Colored fill */}
-          {soc !== null ? (
+          {validSoC !== null ? (
             <rect
               x="3" y="3"
               width={fillWidth}
@@ -103,7 +106,7 @@ export function BatteryIndicator({ soc, isCharging, powerKw, className = '' }: B
           )}
 
           {/* Shimmer sweep when charging */}
-          {isCharging && soc !== null && (
+          {isCharging && validSoC !== null && (
             <rect
               x="3" y="3" width="34" height="18" rx="2"
               fill={`url(#bs-${uid})`}
@@ -127,9 +130,9 @@ export function BatteryIndicator({ soc, isCharging, powerKw, className = '' }: B
       {/* Text info */}
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-baseline gap-1">
-          {soc !== null ? (
+          {validSoC !== null ? (
             <>
-              <span className={`text-2xl font-black leading-none ${color.text}`}>{Math.round(soc)}</span>
+              <span className={`text-2xl font-black leading-none ${color.text}`}>{Math.round(validSoC)}</span>
               <span className="text-sm font-bold text-gray-400">%</span>
             </>
           ) : (
