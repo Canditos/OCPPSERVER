@@ -275,9 +275,16 @@ class ChargePoint(OcppChargePoint):
                 ts = mv.get("timestamp", _now().isoformat())
                 for sv in mv.get("sampled_value", []):
                     try:
-                        val = float(sv.get("value", 0))
-                    except (ValueError, TypeError):
+                        # Parse value as float first, then convert to appropriate type
+                        val_raw = sv.get("value", "0")
+                        if not val_raw or str(val_raw).strip() == "":
+                            val = 0.0
+                        else:
+                            val = float(val_raw)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Failed to parse meter value: {sv.get('value')} - {e}")
                         val = 0.0
+                    
                     row = MeterValue(
                         transaction_id=db_tx_id or 0,
                         charger_id=charger.id if charger else 0,

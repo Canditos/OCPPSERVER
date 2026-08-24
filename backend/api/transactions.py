@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from database import get_db
 from models.transaction import Transaction, MeterValue
 from schemas import TransactionOut, MeterValueOut
@@ -27,6 +27,21 @@ async def list_transactions(
         d = TransactionOut.model_validate(tx)
         if tx.meter_stop is not None:
             d.energy_kwh = round((tx.meter_stop - tx.meter_start) / 1000, 3)
+        else:
+            # For active transactions, calculate from latest meter reading
+            meter_result = await db.execute(
+                select(MeterValue)
+                .where(
+                    MeterValue.transaction_id == tx.id,
+                    MeterValue.measurand == 'Energy.Active.Import.Register'
+                )
+                .order_by(MeterValue.timestamp.desc())
+                .limit(1)
+            )
+            latest_meter = meter_result.scalar_one_or_none()
+            if latest_meter:
+                meter_value = int(latest_meter.value)
+                d.energy_kwh = round((meter_value - tx.meter_start) / 1000, 3)
         out.append(d)
     return out
 
@@ -39,6 +54,47 @@ async def get_meter_values(tx_id: int, db: AsyncSession = Depends(get_db)):
         .order_by(MeterValue.timestamp.asc())
     )
     return list(result.scalars().all())
+
+
+@router.get("/{tx_id}/live-power")
+async def get_live_power(tx_id: int, db: AsyncSession = Depends(get_db)):
+    """Get latest power and energy reading for an active transaction."""
+    # Get latest Power.Active.Import measurement
+    power_result = await db.execute(
+        select(MeterValue)
+        .where(
+            MeterValue.transaction_id == tx_id,
+            MeterValue.measurand == 'Power.Active.Import'
+        )
+        .order_by(MeterValue.timestamp.desc())
+        .limit(1)
+    )
+    power_meter = power_result.scalar_one_or_none()
+    
+    # Get latest Energy.Active.Import.Register measurement
+    energy_result = await db.execute(
+        select(MeterValue)
+        .where(
+            MeterValue.transaction_id == tx_id,
+            MeterValue.measurand == 'Energy.Active.Import.Register'
+        )
+        .order_by(MeterValue.timestamp.desc())
+        .limit(1)
+    )
+    energy_meter = energy_result.scalar_one_or_none()
+    
+    # Get transaction to get meter_start for calculation
+    tx_result = await db.execute(select(Transaction).where(Transaction.id == tx_id))
+    tx = tx_result.scalar_one_or_none()
+    
+    return {
+        "power_w": float(power_meter.value) if power_meter else 0.0,
+        "power_kw": float(power_meter.value) / 1000 if power_meter else 0.0,
+        "energy_wh": float(energy_meter.value) if energy_meter else 0,
+        "energy_kwh": round(float(energy_meter.value) / 1000, 3) if energy_meter else 0,
+        "energy_delivered_kwh": round((float(energy_meter.value) - (tx.meter_start if tx else 0)) / 1000, 3) if energy_meter and tx else 0,
+        "timestamp": power_meter.timestamp.isoformat() if power_meter else None,
+    }
 
 
 @router.get("/charger/{cp_id}/meter-values/live", response_model=list[MeterValueOut])

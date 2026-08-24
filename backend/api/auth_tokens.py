@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 from database import AsyncSessionLocal
 from models.auth_token import AuthToken
 from models.charger import Charger
+from models.transaction import Transaction, MeterValue
 from ocpp_server.central_system import get_charge_point
 
 router = APIRouter(prefix="/auth-tokens", tags=["auth-tokens"])
@@ -50,11 +51,83 @@ async def list_tokens():
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(AuthToken).order_by(AuthToken.created_at.desc()))
         tokens = result.scalars().all()
-    return [_token_dict(t) for t in tokens]
+        
+        # Fetch consumption for each token
+        out = []
+        for t in tokens:
+            token_dict = _token_dict(t)
+            
+            # Calculate total energy delivered for this id_tag
+            energy_result = await db.execute(
+                select(func.sum(MeterValue.value))
+                .join(Transaction, MeterValue.transaction_id == Transaction.id)
+                .where(
+                    Transaction.id_tag == t.id_tag,
+                    MeterValue.measurand == 'Energy.Active.Import.Register'
+                )
+            )
+            total_energy_wh = energy_result.scalar() or 0
+            token_dict["energy_kwh"] = round(total_energy_wh / 1000, 3)
+            
+            # Count sessions for this id_tag
+            sessions_result = await db.execute(
+                select(func.count(Transaction.id))
+                .where(Transaction.id_tag == t.id_tag)
+            )
+            token_dict["sessions"] = sessions_result.scalar() or 0
+            
+            out.append(token_dict)
+    
+    return out
 
 
-@router.post("")
-async def create_token(body: AuthTokenCreate):
+@router.get("/{id_tag}")
+async def get_token_consumption(id_tag: str):
+    """Get token details with consumption stats."""
+    async with AsyncSessionLocal() as db:
+        # Get the token
+        result = await db.execute(select(AuthToken).where(AuthToken.id_tag == id_tag))
+        token = result.scalar_one_or_none()
+        if not token:
+            raise HTTPException(status_code=404, detail="Token not found")
+        
+        token_dict = _token_dict(token)
+        
+        # Calculate total energy delivered
+        energy_result = await db.execute(
+            select(func.sum(MeterValue.value))
+            .join(Transaction, MeterValue.transaction_id == Transaction.id)
+            .where(
+                Transaction.id_tag == id_tag,
+                MeterValue.measurand == 'Energy.Active.Import.Register'
+            )
+        )
+        total_energy_wh = energy_result.scalar() or 0
+        token_dict["energy_kwh"] = round(total_energy_wh / 1000, 3)
+        
+        # Count sessions
+        sessions_result = await db.execute(
+            select(func.count(Transaction.id))
+            .where(Transaction.id_tag == id_tag)
+        )
+        token_dict["sessions"] = sessions_result.scalar() or 0
+        
+        # Get latest session info
+        latest_tx = await db.execute(
+            select(Transaction)
+            .where(Transaction.id_tag == id_tag)
+            .order_by(Transaction.start_time.desc())
+            .limit(1)
+        )
+        latest = latest_tx.scalar_one_or_none()
+        if latest:
+            token_dict["latest_session"] = {
+                "start_time": latest.start_time.isoformat() if latest.start_time else None,
+                "status": latest.status,
+                "charge_point_id": latest.charge_point_id,
+            }
+    
+    return token_dict
     expiry = None
     if body.expiry_date:
         try:
