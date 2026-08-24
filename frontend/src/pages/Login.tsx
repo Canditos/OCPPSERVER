@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Zap, User, Lock, Mail, Tag, AlertCircle, ArrowRight,
-  Sparkles, Shield, BatteryCharging, Activity, CheckCircle2, UserPlus, LogIn
+  Sparkles, Shield, BatteryCharging, Activity, CheckCircle2, UserPlus, LogIn, AtSign
 } from 'lucide-react'
 import { api } from '../api'
 import { useAuthStore } from '../store/authStore'
@@ -15,11 +15,12 @@ export function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
 
   // Login Form
-  const [username, setUsername] = useState('')
+  const [loginIdentifier, setLoginIdentifier] = useState('')
   const [password, setPassword] = useState('')
 
   // Register Form
-  const [regUsername, setRegUsername] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regRfid, setRegRfid] = useState('')
@@ -33,11 +34,11 @@ export function Login() {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!username.trim() || !password) { setError('Preenche todos os campos.'); return }
+    if (!loginIdentifier.trim() || !password) { setError('Preenche todos os campos.'); return }
     setLoading(true)
     setError(null)
     try {
-      const res = await api.login({ username: username.trim(), password })
+      const res = await api.login({ username: loginIdentifier.trim(), password })
       login(res.token, res.user)
       navigate(res.user.role === 'admin' ? '/' : '/my-charging')
     } catch (err: any) {
@@ -47,12 +48,12 @@ export function Login() {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!regUsername.trim() || !regEmail.trim() || !regPassword) {
-      setError('Por favor preenche os campos obrigatórios (*).')
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('Por favor introduz o Nome e o Apelido.')
       return
     }
-    if (!regEmail.includes('@')) {
-      setError('Por favor introduz um email válido para contacto.')
+    if (!regEmail.trim() || !regEmail.includes('@')) {
+      setError('Por favor introduz um email válido.')
       return
     }
     if (regPassword.length < 4) {
@@ -60,11 +61,16 @@ export function Login() {
       return
     }
 
+    const fullName = `${firstName.trim()} ${lastName.trim()}`
+
     setLoading(true)
     setError(null)
     try {
       const res = await api.registerDriver({
-        username: regUsername.trim(),
+        full_name: fullName,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        username: regEmail.trim().split('@')[0],
         email: regEmail.trim(),
         password: regPassword,
         requested_rfid_tag: regRfid.trim() || undefined,
@@ -79,7 +85,7 @@ export function Login() {
 
   const fill = (u: string, p: string) => {
     setMode('login')
-    setUsername(u)
+    setLoginIdentifier(u)
     setPassword(p)
     setError(null)
   }
@@ -109,7 +115,7 @@ export function Login() {
       {/* LEFT PANEL — Hero                              */}
       {/* ══════════════════════════════════════════════ */}
       <div
-        className={`hidden lg:flex lg:w-[50%] xl:w-[55%] relative flex-col justify-between p-10 xl:p-14 transition-all duration-1000 ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}
+        className={`hidden lg:flex lg:w-[48%] xl:w-[52%] relative flex-col justify-between p-10 xl:p-14 transition-all duration-1000 ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}
       >
         {/* Grid */}
         <div
@@ -158,7 +164,7 @@ export function Login() {
           </h1>
 
           <p className="text-base leading-relaxed max-w-md" style={{ color: '#94a3b8' }}>
-            Plataforma central de gestão de postos de carregamento OCPP, telemetria em tempo real, aprovação de condutores e atribuição de chaves RFID.
+            Plataforma central de gestão de postos de carregamento OCPP, telemetria em tempo real, registo de condutores e atribuição de chaves RFID.
           </p>
 
           {/* Feature Pills */}
@@ -220,7 +226,7 @@ export function Login() {
         <div className="w-full max-w-md">
 
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
+          <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
             <div className="flex items-center justify-center w-10 h-10 rounded-2xl" style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', boxShadow: '0 8px 24px rgba(37,99,235,0.35)' }}>
               <Zap className="w-5 h-5 text-white" fill="white" />
             </div>
@@ -232,7 +238,7 @@ export function Login() {
 
           {/* Mode Switcher Tabs */}
           <div
-            className="flex items-center p-1 rounded-2xl mb-8"
+            className="flex items-center p-1 rounded-2xl mb-6"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
             <button
@@ -267,7 +273,7 @@ export function Login() {
           {/* Error Alert */}
           {error && (
             <div
-              className="flex items-start gap-2.5 p-3.5 rounded-xl text-xs mb-6"
+              className="flex items-start gap-2.5 p-3.5 rounded-xl text-xs mb-5"
               style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}
             >
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -280,47 +286,47 @@ export function Login() {
           {/* ──────────────────────────────────────────────────────────── */}
           {mode === 'login' && (
             <div>
-              <div className="mb-6">
+              <div className="mb-5">
                 <h2 className="text-2xl font-bold tracking-tight" style={{ color: '#ffffff' }}>
                   Bem-vindo de volta
                 </h2>
-                <p className="text-sm mt-1.5" style={{ color: '#94a3b8' }}>
-                  Introduz as tuas credenciais para aceder ao portal
+                <p className="text-sm mt-1" style={{ color: '#94a3b8' }}>
+                  Introduz o teu email ou username para aceder
                 </p>
               </div>
 
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                    Utilizador
+                  <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
+                    Email ou Nome de Utilizador
                   </label>
                   <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: '#475569' }}>
-                      <User className="w-4 h-4" />
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
+                      <AtSign className="w-4 h-4" />
                     </div>
                     <input
                       type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Nome de utilizador"
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      placeholder="ex: hugo@empresa.com ou admin"
                       autoFocus
                       required
                       style={{
-                        width: '100%', paddingLeft: '2.75rem', paddingRight: '1rem', paddingTop: '0.75rem', paddingBottom: '0.75rem',
+                        width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.7rem', paddingBottom: '0.7rem',
                         borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                         color: '#f1f5f9', fontSize: '0.875rem', outline: 'none',
                       }}
-                      className="focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/50 transition-all placeholder:text-gray-600"
+                      className="focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/50 transition-all placeholder:text-gray-600 text-xs"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
+                  <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
                     Palavra-passe
                   </label>
                   <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: '#475569' }}>
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
                       <Lock className="w-4 h-4" />
                     </div>
                     <input
@@ -330,7 +336,7 @@ export function Login() {
                       placeholder="••••••••"
                       required
                       style={{
-                        width: '100%', paddingLeft: '2.75rem', paddingRight: '1rem', paddingTop: '0.75rem', paddingBottom: '0.75rem',
+                        width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.7rem', paddingBottom: '0.7rem',
                         borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                         color: '#f1f5f9', fontSize: '0.875rem', outline: 'none',
                       }}
@@ -437,47 +443,70 @@ export function Login() {
                     {regSuccess}
                   </p>
                   <div className="p-3.5 rounded-xl text-left text-xs space-y-1.5" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div className="text-slate-400">👤 Utilizador: <strong className="text-white font-mono">{regUsername}</strong></div>
-                    <div className="text-slate-400">📧 Email: <strong className="text-white font-mono">{regEmail}</strong></div>
+                    <div className="text-slate-400">👤 Nome Completo: <strong className="text-white">{firstName} {lastName}</strong></div>
+                    <div className="text-slate-400">📧 Email de Login: <strong className="text-emerald-400 font-mono">{regEmail}</strong></div>
                     <div className="text-slate-400">⏳ Estado: <strong className="text-amber-400">Aguardando Validação do Admin</strong></div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setMode('login'); setRegSuccess(null); }}
-                    className="w-full py-2.5 rounded-xl text-xs font-bold transition-all"
+                    onClick={() => { setMode('login'); setRegSuccess(null); setLoginIdentifier(regEmail); }}
+                    className="w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                     style={{ background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#ffffff' }}
                   >
-                    Voltar ao Login
+                    Ir para o Login
                   </button>
                 </div>
               ) : (
                 <div>
-                  <div className="mb-6">
+                  <div className="mb-5">
                     <h2 className="text-2xl font-bold tracking-tight" style={{ color: '#ffffff' }}>
                       Criar Conta de Condutor
                     </h2>
-                    <p className="text-sm mt-1.5" style={{ color: '#94a3b8' }}>
+                    <p className="text-sm mt-1" style={{ color: '#94a3b8' }}>
                       Regista os teus dados para aprovação e atribuição de chave RFID
                     </p>
                   </div>
 
                   <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-                    <div>
-                      <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                        Nome de Utilizador *
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
-                          <User className="w-4 h-4" />
+                    
+                    {/* First and Last Name Grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
+                          Nome *
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#475569' }}>
+                            <User className="w-3.5 h-3.5" />
+                          </div>
+                          <input
+                            type="text"
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            placeholder="ex: Hugo"
+                            required
+                            style={{
+                              width: '100%', paddingLeft: '2.2rem', paddingRight: '0.75rem', paddingTop: '0.6rem', paddingBottom: '0.6rem',
+                              borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                              color: '#f1f5f9', fontSize: '0.875rem', outline: 'none',
+                            }}
+                            className="focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all placeholder:text-gray-600"
+                          />
                         </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
+                          Apelido *
+                        </label>
                         <input
                           type="text"
-                          value={regUsername}
-                          onChange={(e) => setRegUsername(e.target.value)}
-                          placeholder="ex: joao.silva"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="ex: Santos"
                           required
                           style={{
-                            width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.65rem', paddingBottom: '0.65rem',
+                            width: '100%', paddingLeft: '0.85rem', paddingRight: '0.75rem', paddingTop: '0.6rem', paddingBottom: '0.6rem',
                             borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                             color: '#f1f5f9', fontSize: '0.875rem', outline: 'none',
                           }}
@@ -487,36 +516,38 @@ export function Login() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                        Email (Obrigatório para avisos de carga) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: '#94a3b8' }}>
+                          Email (Usado para Login & Avisos) *
+                        </label>
+                      </div>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
-                          <Mail className="w-4 h-4" />
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#475569' }}>
+                          <Mail className="w-3.5 h-3.5 text-emerald-500" />
                         </div>
                         <input
                           type="email"
                           value={regEmail}
                           onChange={(e) => setRegEmail(e.target.value)}
-                          placeholder="ex: joao.silva@empresa.com"
+                          placeholder="ex: hugo.santos@empresa.com"
                           required
                           style={{
-                            width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.65rem', paddingBottom: '0.65rem',
+                            width: '100%', paddingLeft: '2.2rem', paddingRight: '0.75rem', paddingTop: '0.6rem', paddingBottom: '0.6rem',
                             borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                             color: '#f1f5f9', fontSize: '0.875rem', outline: 'none',
                           }}
-                          className="focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all placeholder:text-gray-600"
+                          className="focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all placeholder:text-gray-600 text-xs"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
+                      <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
                         Palavra-passe *
                       </label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
-                          <Lock className="w-4 h-4" />
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#475569' }}>
+                          <Lock className="w-3.5 h-3.5" />
                         </div>
                         <input
                           type="password"
@@ -525,7 +556,7 @@ export function Login() {
                           placeholder="Mínimo 4 caracteres"
                           required
                           style={{
-                            width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.65rem', paddingBottom: '0.65rem',
+                            width: '100%', paddingLeft: '2.2rem', paddingRight: '0.75rem', paddingTop: '0.6rem', paddingBottom: '0.6rem',
                             borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                             color: '#f1f5f9', fontSize: '0.875rem', outline: 'none',
                           }}
@@ -535,12 +566,12 @@ export function Login() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
+                      <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
                         Cartão / Chave RFID Físico (Opcional)
                       </label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
-                          <Tag className="w-4 h-4" />
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#475569' }}>
+                          <Tag className="w-3.5 h-3.5" />
                         </div>
                         <input
                           type="text"
@@ -548,14 +579,14 @@ export function Login() {
                           onChange={(e) => setRegRfid(e.target.value)}
                           placeholder="Se já tiveres um cartão da empresa (ex: 9F13FB29)"
                           style={{
-                            width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem', paddingTop: '0.65rem', paddingBottom: '0.65rem',
+                            width: '100%', paddingLeft: '2.2rem', paddingRight: '0.75rem', paddingTop: '0.6rem', paddingBottom: '0.6rem',
                             borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                             color: '#f1f5f9', fontSize: '0.875rem', outline: 'none',
                           }}
                           className="focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all placeholder:text-gray-600 font-mono text-xs"
                         />
                       </div>
-                      <p className="text-[11px] mt-1" style={{ color: '#64748b' }}>
+                      <p className="text-[10px] mt-1" style={{ color: '#64748b' }}>
                         Caso não tenhas cartão, o Administrador irá atribuir-te uma chave RFID.
                       </p>
                     </div>
@@ -588,7 +619,7 @@ export function Login() {
             </div>
           )}
 
-          <p className="text-center text-[11px] mt-8" style={{ color: '#334155' }}>
+          <p className="text-center text-[11px] mt-6" style={{ color: '#334155' }}>
             OCPP 1.6 Central System · @Canditos
           </p>
         </div>

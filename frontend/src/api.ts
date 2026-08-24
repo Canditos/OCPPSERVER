@@ -38,6 +38,7 @@ export interface ActiveUserCharge {
 export interface UserProfile {
   id: number
   username: string
+  full_name?: string | null
   email: string | null
   role: 'admin' | 'user'
   rfid_tag: string | null
@@ -80,9 +81,9 @@ export const api = {
     http.get<UserProfile>('/auth/me').then(r => r.data),
   getUsers: () =>
     http.get<UserProfile[]>('/auth/users').then(r => r.data),
-  createUser: (data: { username: string; password: string; email?: string; role: string; rfid_tag?: string }) =>
+  createUser: (data: { username: string; full_name?: string; password: string; email: string; role: string; rfid_tag?: string }) =>
     http.post<UserProfile>('/auth/users', data).then(r => r.data),
-  updateUser: (id: number, data: Partial<{ email: string; role: string; rfid_tag: string; password?: string; is_active?: boolean }>) =>
+  updateUser: (id: number, data: Partial<{ username: string; full_name: string; email: string; role: string; rfid_tag: string; password?: string; is_active?: boolean }>) =>
     http.patch<UserProfile>(`/auth/users/${id}`, data).then(r => r.data),
   deleteUser: (id: number) =>
     http.delete(`/auth/users/${id}`).then(r => r.data),
@@ -90,8 +91,8 @@ export const api = {
     http.get<Transaction[]>('/auth/my-transactions').then(r => r.data),
   getMyActiveCharge: () =>
     http.get<MyActiveCharge | null>('/auth/my-active-charge').then(r => r.data),
-  registerDriver: (data: { username: string; password: string; email: string; requested_rfid_tag?: string }) =>
-    http.post<{ status: string; message: string; username: string }>('/auth/register', data).then(r => r.data),
+  registerDriver: (data: { username: string; full_name?: string; first_name?: string; last_name?: string; password: string; email: string; requested_rfid_tag?: string }) =>
+    http.post<{ status: string; message: string; username: string; full_name?: string }>('/auth/register', data).then(r => r.data),
   approveUser: (id: number, data: { rfid_tag: string }) =>
     http.post<UserProfile>(`/auth/users/${id}/approve`, data).then(r => r.data),
   notifyMoveCar: (params: { user_id?: number; charge_point_id?: string; connector_id?: number }) =>

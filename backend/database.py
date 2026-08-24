@@ -54,6 +54,7 @@ async def _add_missing_columns(conn) -> None:
         ("charging_profiles", "label", "VARCHAR(128)"),
         ("charging_profiles", "active", "BOOLEAN DEFAULT 1" if is_sqlite else "BOOLEAN DEFAULT TRUE"),
         ("charging_profiles", "is_deployed", "BOOLEAN DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT FALSE"),
+        ("users", "full_name", "VARCHAR(128)"),
     ]
 
     for table, column, col_type in cols_to_add:

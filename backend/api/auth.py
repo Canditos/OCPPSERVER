@@ -147,6 +147,7 @@ class ActiveUserCharge(BaseModel):
 class UserOut(BaseModel):
     id: int
     username: str
+    full_name: Optional[str] = None
     email: Optional[str] = None
     role: str
     rfid_tag: Optional[str] = None
@@ -164,9 +165,12 @@ class LoginResponse(BaseModel):
 
 
 class RegisterDriverRequest(BaseModel):
-    username: str = Field(..., min_length=3)
-    password: str = Field(..., min_length=4)
+    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
     email: str = Field(..., min_length=5)
+    password: str = Field(..., min_length=4)
     requested_rfid_tag: Optional[str] = None
 
 
@@ -176,6 +180,7 @@ class ApproveUserRequest(BaseModel):
 
 class CreateUserRequest(BaseModel):
     username: str = Field(..., min_length=3)
+    full_name: Optional[str] = None
     password: str = Field(..., min_length=4)
     email: str = Field(..., min_length=5)
     role: str = "user"  # 'admin' or 'user'
@@ -183,6 +188,7 @@ class CreateUserRequest(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
+    full_name: Optional[str] = None
     email: Optional[str] = None
     role: Optional[str] = None
     rfid_tag: Optional[str] = None
@@ -195,18 +201,43 @@ class UpdateUserRequest(BaseModel):
 @router.post("/register")
 async def register_driver(req: RegisterDriverRequest, db: AsyncSession = Depends(get_db)):
     """Public self-registration for new drivers (pending admin approval)."""
+    import random
     from services.email_service import notify_driver_registration_received
-
-    existing = await db.execute(select(User).where(User.username == req.username.strip()))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Este nome de utilizador já se encontra registado.")
 
     if not req.email or "@" not in req.email:
         raise HTTPException(status_code=400, detail="Email obrigatório e válido para contacto.")
 
+    # Check if email is already registered
+    existing_email = await db.execute(select(User).where(func.lower(User.email) == req.email.strip().lower()))
+    if existing_email.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Este endereço de email já se encontra associado a uma conta.")
+
+    # Calculate full_name if given first_name/last_name
+    calc_name = req.full_name
+    if not calc_name and (req.first_name or req.last_name):
+        calc_name = f"{req.first_name or ''} {req.last_name or ''}".strip()
+    if not calc_name:
+        calc_name = req.email.split("@")[0]
+
+    # Calculate username: either provided or derived from email/name
+    if req.username and req.username.strip():
+        clean_username = req.username.strip().lower().replace(" ", ".")
+    elif req.first_name and req.last_name:
+        clean_username = f"{req.first_name.strip().lower()}.{req.last_name.strip().lower()}".replace(" ", ".")
+    else:
+        clean_username = req.email.split("@")[0].lower().replace(" ", ".")
+
+    # If username exists, make it unique
+    existing = await db.execute(select(User).where(User.username == clean_username))
+    if existing.scalar_one_or_none():
+        if req.username:
+            raise HTTPException(status_code=400, detail="Este nome de utilizador já se encontra registado.")
+        clean_username = f"{clean_username}{random.randint(10, 99)}"
+
     hashed = hash_password(req.password)
     user = User(
-        username=req.username.strip(),
+        username=clean_username,
+        full_name=calc_name,
         email=req.email.strip(),
         hashed_password=hashed,
         role="user",
@@ -219,7 +250,7 @@ async def register_driver(req: RegisterDriverRequest, db: AsyncSession = Depends
 
     # Send confirmation email to driver
     try:
-        notify_driver_registration_received(user.email, user.username, user.rfid_tag)
+        notify_driver_registration_received(user.email, user.full_name or user.username, user.rfid_tag)
     except Exception as e:
         logger.error(f"Error sending registration email: {e}")
 
@@ -227,17 +258,26 @@ async def register_driver(req: RegisterDriverRequest, db: AsyncSession = Depends
         "status": "pending_approval",
         "message": "Pedido de registo submetido com sucesso! A tua conta aguarda aprovação pelo Administrador e atribuição de chave RFID.",
         "username": user.username,
+        "full_name": user.full_name,
     }
 
 
 @router.post("/login", response_model=LoginResponse)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Authenticate user with username and password, returning JWT token."""
-    result = await db.execute(select(User).where(User.username == req.username.strip()))
+    """Authenticate user with username OR email and password, returning JWT token."""
+    login_input = req.username.strip().lower()
+    
+    # Check by username OR email (case-insensitive)
+    result = await db.execute(
+        select(User).where(
+            (func.lower(User.username) == login_input) |
+            (func.lower(User.email) == login_input)
+        )
+    )
     user = result.scalar_one_or_none()
     
     if not user or not verify_password(req.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nome de utilizador ou palavra-passe incorretos")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email/Nome de utilizador ou palavra-passe incorretos")
     
     if not user.is_active:
         raise HTTPException(
@@ -252,6 +292,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         "user": {
             "id": user.id,
             "username": user.username,
+            "full_name": user.full_name,
             "email": user.email,
             "role": user.role,
             "rfid_tag": user.rfid_tag,
@@ -393,6 +434,7 @@ async def list_users(
         out.append({
             "id": u.id,
             "username": u.username,
+            "full_name": u.full_name,
             "email": u.email,
             "role": u.role,
             "rfid_tag": u.rfid_tag,
@@ -413,7 +455,8 @@ async def create_user(
     db: AsyncSession = Depends(get_db)
 ):
     """(Admin only) Create a new user with role and optional RFID tag."""
-    existing = await db.execute(select(User).where(User.username == req.username.strip()))
+    clean_username = req.username.strip().lower().replace(" ", ".")
+    existing = await db.execute(select(User).where(User.username == clean_username))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Nome de utilizador já existe")
         
@@ -422,7 +465,8 @@ async def create_user(
 
     hashed = hash_password(req.password)
     user = User(
-        username=req.username.strip(),
+        username=clean_username,
+        full_name=req.full_name.strip() if req.full_name else clean_username,
         email=req.email.strip(),
         hashed_password=hashed,
         role=req.role if req.role in ("admin", "user") else "user",
@@ -436,6 +480,7 @@ async def create_user(
     return {
         "id": user.id,
         "username": user.username,
+        "full_name": user.full_name,
         "email": user.email,
         "role": user.role,
         "rfid_tag": user.rfid_tag,
@@ -459,6 +504,8 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="Utilizador não encontrado")
         
+    if req.full_name is not None:
+        user.full_name = req.full_name.strip() if req.full_name else user.username
     if req.email is not None:
         if not req.email.strip() or "@" not in req.email:
             raise HTTPException(status_code=400, detail="O email é obrigatório e deve ser válido")
@@ -478,6 +525,7 @@ async def update_user(
     return {
         "id": user.id,
         "username": user.username,
+        "full_name": user.full_name,
         "email": user.email,
         "role": user.role,
         "rfid_tag": user.rfid_tag,
@@ -516,7 +564,7 @@ async def approve_user(
         if not tag_row:
             new_tag = AuthorizedTag(
                 id_tag=rfid,
-                description=f"Condutor: {user.username}",
+                description=f"Condutor: {user.full_name or user.username}",
                 is_active=True
             )
             db.add(new_tag)
@@ -530,13 +578,14 @@ async def approve_user(
 
     if user.email:
         try:
-            notify_driver_approved(user.email, user.username, user.rfid_tag)
+            notify_driver_approved(user.email, user.full_name or user.username, user.rfid_tag)
         except Exception as e:
             logger.error(f"Error sending approval email: {e}")
 
     return {
         "id": user.id,
         "username": user.username,
+        "full_name": user.full_name,
         "email": user.email,
         "role": user.role,
         "rfid_tag": user.rfid_tag,

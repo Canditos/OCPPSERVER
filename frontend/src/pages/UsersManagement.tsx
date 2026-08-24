@@ -29,6 +29,7 @@ export function UsersManagement() {
 
   // Form State
   const [username, setUsername] = useState('')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'admin' | 'user'>('user')
@@ -64,6 +65,7 @@ export function UsersManagement() {
   const openCreateModal = () => {
     setEditingUser(null)
     setUsername('')
+    setFullName('')
     setEmail('')
     setPassword('')
     setRole('user')
@@ -75,6 +77,7 @@ export function UsersManagement() {
   const openEditModal = (u: UserProfile) => {
     setEditingUser(u)
     setUsername(u.username)
+    setFullName(u.full_name || '')
     setEmail(u.email || '')
     setPassword('')
     setRole(u.role)
@@ -91,7 +94,7 @@ export function UsersManagement() {
 
   // Mutations
   const createMutation = useMutation({
-    mutationFn: (data: { username: string; password: string; email?: string; role: string; rfid_tag?: string }) =>
+    mutationFn: (data: { username: string; full_name?: string; password: string; email: string; role: string; rfid_tag?: string }) =>
       api.createUser(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
@@ -123,7 +126,7 @@ export function UsersManagement() {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
       qc.invalidateQueries({ queryKey: ['tags'] })
       setApproveModalOpen(false)
-      showSuccess(`Condutor ${data.username} aprovado com sucesso! Chave RFID "${data.rfid_tag}" ativada e email enviado.`)
+      showSuccess(`Condutor ${data.full_name || data.username} aprovado com sucesso! Chave RFID "${data.rfid_tag}" ativada.`)
     },
     onError: (err: any) => {
       alert(`Erro ao aprovar: ${err?.response?.data?.detail || err.message}`)
@@ -173,6 +176,7 @@ export function UsersManagement() {
 
     if (editingUser) {
       const payload: any = {
+        full_name: fullName.trim() || undefined,
         email: email.trim(),
         role,
         rfid_tag: rfidTag.trim() || undefined,
@@ -184,6 +188,7 @@ export function UsersManagement() {
     } else {
       createMutation.mutate({
         username: username.trim(),
+        full_name: fullName.trim() || undefined,
         password,
         email: email.trim(),
         role,
@@ -216,6 +221,7 @@ export function UsersManagement() {
     const q = search.toLowerCase()
     const matchesSearch = (
       u.username.toLowerCase().includes(q) ||
+      (u.full_name && u.full_name.toLowerCase().includes(q)) ||
       (u.email && u.email.toLowerCase().includes(q)) ||
       (u.rfid_tag && u.rfid_tag.toLowerCase().includes(q))
     )
@@ -313,14 +319,19 @@ export function UsersManagement() {
               >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-slate-900 dark:text-white">
-                      {pu.username}
-                    </span>
+                    <div>
+                      <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                        {pu.full_name || pu.username}
+                      </span>
+                      <span className="text-[11px] font-mono text-blue-500 dark:text-blue-400">
+                        @{pu.username}
+                      </span>
+                    </div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold">
                       Pendente
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-gray-400 mt-1 flex items-center gap-1.5">
+                  <div className="text-xs text-slate-500 dark:text-gray-400 mt-1.5 flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5 opacity-60" />
                     <span>{pu.email}</span>
                   </div>
@@ -557,15 +568,21 @@ export function UsersManagement() {
                               ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                               : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                           }`}>
-                            {u.username.slice(0, 2).toUpperCase()}
+                            {(u.full_name || u.username).slice(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <span className="font-bold text-xs text-slate-900 dark:text-white block">
-                              {u.username}
+                              {u.full_name || u.username}
                             </span>
-                            <span className="text-[11px] text-slate-500 dark:text-gray-400">
-                              {u.email || 'Sem email'}
-                            </span>
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-gray-400">
+                              <span className="font-mono text-[10px] text-blue-500 dark:text-blue-400">@{u.username}</span>
+                              {u.email && (
+                                <>
+                                  <span>·</span>
+                                  <span>{u.email}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -841,14 +858,27 @@ export function UsersManagement() {
             <form onSubmit={handleSave} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Nome de Utilizador *
+                  Nome Completo (ex: Hugo Santos)
+                </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="ex: Hugo Santos"
+                  className="input w-full text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
+                  Nome de Utilizador / Username *
                 </label>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="ex: marco"
-                  className="input w-full text-xs"
+                  placeholder="ex: hugo.santos"
+                  className="input w-full text-xs font-mono"
                   disabled={Boolean(editingUser)}
                   required
                 />
