@@ -72,8 +72,11 @@ export function SmartCharging() {
     enabled: !!selectedCpId,
   })
 
-  // Auto-switch filter when selecting a DC or AC charger
+  // Auto-switch filter and defaults only when charger TYPE changes (DC ↔ AC)
+  const prevIsDCRef = React.useRef<boolean | null>(null)
   React.useEffect(() => {
+    if (prevIsDCRef.current === isDC) return  // same type, don't reset user's form
+    prevIsDCRef.current = isDC
     if (isDC) {
       setPresetFilter('DC')
       setRateUnit('W')
@@ -89,7 +92,7 @@ export function SmartCharging() {
         { startHHMM: '07:00', limit: 10, phases: 3 },
       ])
     }
-  }, [selectedCpId, isDC])
+  }, [isDC])
 
   // Action status state
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -1002,7 +1005,7 @@ export function SmartCharging() {
                             setPeriods(
                               prof.periods.map((per: any) => ({
                                 startHHMM: secondsToHHMM(per.start_period || 0),
-                                limit: prof.charging_rate_unit === 'W' && per.limit >= 1000 ? per.limit / 1000 : per.limit,
+                                limit: per.limit,
                                 phases: per.number_phases || 3,
                               }))
                             )
