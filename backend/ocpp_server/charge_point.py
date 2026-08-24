@@ -379,7 +379,7 @@ class ChargePoint(OcppChargePoint):
                         val = 0.0
                     
                     row = MeterValue(
-                        transaction_id=db_tx_id or 0,
+                        transaction_id=db_tx_id or (tx_id_ocpp or 0),
                         charger_id=charger.id if charger else 0,
                         connector_id=connector_id,
                         timestamp=datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None),

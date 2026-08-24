@@ -58,6 +58,7 @@ async def list_tokens():
             token_dict = _token_dict(t)
             
             # Calculate total energy delivered for this id_tag
+            # Try to sum by direct transaction join first
             energy_result = await db.execute(
                 select(func.sum(MeterValue.value))
                 .join(Transaction, MeterValue.transaction_id == Transaction.id)
@@ -67,6 +68,18 @@ async def list_tokens():
                 )
             )
             total_energy_wh = energy_result.scalar() or 0
+            
+            # Also sum MeterValues where transaction_id is an OCPP transaction_id
+            # (in case the transaction lookup failed and we stored the OCPP id instead of DB id)
+            ocpp_energy = await db.execute(
+                select(func.sum(MeterValue.value))
+                .join(Transaction, MeterValue.transaction_id == Transaction.transaction_id)
+                .where(
+                    Transaction.id_tag == t.id_tag,
+                    MeterValue.measurand == 'Energy.Active.Import.Register'
+                )
+            )
+            total_energy_wh += ocpp_energy.scalar() or 0
             token_dict["energy_kwh"] = round(total_energy_wh / 1000, 3)
             
             # Count sessions for this id_tag
@@ -93,7 +106,7 @@ async def get_token_consumption(id_tag: str):
         
         token_dict = _token_dict(token)
         
-        # Calculate total energy delivered
+        # Calculate total energy delivered (try both DB id and OCPP transaction_id)
         energy_result = await db.execute(
             select(func.sum(MeterValue.value))
             .join(Transaction, MeterValue.transaction_id == Transaction.id)
@@ -103,6 +116,17 @@ async def get_token_consumption(id_tag: str):
             )
         )
         total_energy_wh = energy_result.scalar() or 0
+        
+        # Also sum MeterValues where transaction_id is an OCPP transaction_id
+        ocpp_energy = await db.execute(
+            select(func.sum(MeterValue.value))
+            .join(Transaction, MeterValue.transaction_id == Transaction.transaction_id)
+            .where(
+                Transaction.id_tag == id_tag,
+                MeterValue.measurand == 'Energy.Active.Import.Register'
+            )
+        )
+        total_energy_wh += ocpp_energy.scalar() or 0
         token_dict["energy_kwh"] = round(total_energy_wh / 1000, 3)
         
         # Count sessions
