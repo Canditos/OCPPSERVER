@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { I18nProvider } from './i18n'
 import './index.css'
 
 const themeKey = 'ocpp-theme-mode'
@@ -27,7 +28,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <I18nProvider>
+          <App />
+        </I18nProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>,

@@ -61,17 +61,39 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     }
   }, [authorizedTags, selectedTag])
 
-  // Determine connectors array (NEVER EMPTY - defaults to connector #1 if DB/live empty)
-  const rawConnectors = (live?.connectors && Object.keys(live.connectors).length > 0)
-    ? Object.entries(live.connectors).map(([id, c]) => ({
+  // Merge persisted connectors with live connector updates so a charger never "loses" plugs
+  const rawConnectors = (() => {
+    const connectorMap = new Map<number, {
+      connector_id: number
+      status: string
+      error_code: string | null
+      updated_at: string | null
+    }>()
+
+    for (const connector of charger.connectors || []) {
+      connectorMap.set(connector.connector_id, {
+        connector_id: connector.connector_id,
+        status: connector.status,
+        error_code: connector.error_code ?? null,
+        updated_at: connector.updated_at ?? null,
+      })
+    }
+
+    for (const [id, connector] of Object.entries(live?.connectors || {})) {
+      connectorMap.set(Number(id), {
         connector_id: Number(id),
-        status: c.status,
-        error_code: c.errorCode ?? null,
+        status: connector.status,
+        error_code: connector.errorCode ?? null,
         updated_at: null,
-      }))
-    : (charger.connectors && charger.connectors.length > 0
-        ? charger.connectors
-        : [{ connector_id: 1, status: live?.isOnline ?? charger.is_online ? (charger.status || 'Available') : 'Offline' }])
+      })
+    }
+
+    if (connectorMap.size === 0) {
+      return [{ connector_id: 1, status: live?.isOnline ?? charger.is_online ? (charger.status || 'Available') : 'Offline', error_code: null, updated_at: null }]
+    }
+
+    return Array.from(connectorMap.values()).sort((a, b) => a.connector_id - b.connector_id)
+  })()
 
   // Plug selection state - moved before use
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(

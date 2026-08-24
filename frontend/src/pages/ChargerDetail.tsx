@@ -59,11 +59,38 @@ export function ChargerDetail() {
   })
 
   const isOnline   = live?.isOnline ?? charger?.is_online ?? false
-  const connectors = (live?.connectors && Object.keys(live.connectors).length > 0)
-    ? Object.entries(live.connectors).map(([cid, c]) => ({ connector_id: Number(cid), ...c }))
-    : (charger?.connectors && charger.connectors.length > 0)
-    ? charger.connectors
-    : [{ connector_id: 1, status: isOnline ? (charger?.status || 'Available') : 'Offline' }]
+  const connectors = (() => {
+    const connectorMap = new Map<number, {
+      connector_id: number
+      status: string
+      error_code?: string | null
+      updated_at?: string | null
+    }>()
+
+    for (const connector of charger?.connectors || []) {
+      connectorMap.set(connector.connector_id, {
+        connector_id: connector.connector_id,
+        status: connector.status,
+        error_code: connector.error_code ?? null,
+        updated_at: connector.updated_at ?? null,
+      })
+    }
+
+    for (const [cid, connector] of Object.entries(live?.connectors || {})) {
+      connectorMap.set(Number(cid), {
+        connector_id: Number(cid),
+        status: connector.status,
+        error_code: connector.errorCode ?? null,
+        updated_at: null,
+      })
+    }
+
+    if (connectorMap.size === 0) {
+      return [{ connector_id: 1, status: isOnline ? (charger?.status || 'Available') : 'Offline', error_code: null, updated_at: null }]
+    }
+
+    return Array.from(connectorMap.values()).sort((a, b) => a.connector_id - b.connector_id)
+  })()
 
   const isCharging = connectors.some((c) => c.status === 'Charging')
 

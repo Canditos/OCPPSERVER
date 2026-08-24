@@ -6,10 +6,13 @@ import {
 } from 'lucide-react'
 import { api } from '../api'
 import { useAuthStore } from '../store/authStore'
+import { LanguageToggle } from '../components/LanguageToggle'
+import { useI18n } from '../i18n'
 
 export function Login() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
+  const { t } = useI18n()
 
   // Mode: 'login' | 'register'
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -34,7 +37,7 @@ export function Login() {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!loginIdentifier.trim() || !password) { setError('Preenche todos os campos.'); return }
+    if (!loginIdentifier.trim() || !password) { setError(t('login.fillAllFields')); return }
     setLoading(true)
     setError(null)
     try {
@@ -42,22 +45,22 @@ export function Login() {
       login(res.token, res.user)
       navigate(res.user.role === 'admin' ? '/' : '/my-charging')
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Credenciais inválidas ou conta pendente de aprovação.')
+      setError(err?.response?.data?.detail || t('login.invalidCredentials'))
     } finally { setLoading(false) }
   }
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!firstName.trim() || !lastName.trim()) {
-      setError('Por favor introduz o Nome e o Apelido.')
+      setError(t('login.validName'))
       return
     }
     if (!regEmail.trim() || !regEmail.includes('@')) {
-      setError('Por favor introduz um email válido.')
+      setError(t('login.validEmail'))
       return
     }
     if (regPassword.length < 4) {
-      setError('A palavra-passe deve ter pelo menos 4 caracteres.')
+      setError(t('login.minPassword'))
       return
     }
 
@@ -75,9 +78,9 @@ export function Login() {
         password: regPassword,
         requested_rfid_tag: regRfid.trim() || undefined,
       })
-      setRegSuccess(res.message || 'Pedido de registo submetido com sucesso! A tua conta aguarda aprovação pelo Administrador.')
+      setRegSuccess(res.message || t('login.registerSuccess'))
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Erro ao submeter pedido de registo.')
+      setError(err?.response?.data?.detail || t('login.registerError'))
     } finally {
       setLoading(false)
     }
@@ -95,6 +98,10 @@ export function Login() {
       style={{ background: '#020617', color: '#f1f5f9', minHeight: '100vh' }}
       className="flex overflow-hidden relative"
     >
+      <div className="absolute right-4 top-4 z-20">
+        <LanguageToggle />
+      </div>
+
       {/* ── Animated BG Orbs ── */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
         <div
@@ -152,28 +159,28 @@ export function Login() {
             style={{ background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.25)', color: '#60a5fa' }}
           >
             <Activity className="w-3.5 h-3.5" />
-            <span>Sistema Ativo · Mobilidade Elétrica Sustentável</span>
+            <span>{t('login.activeSystem')}</span>
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-extrabold leading-[1.1] tracking-tight mb-5" style={{ color: '#ffffff' }}>
-            Carregamentos
+            {t('login.heroTitle1')}
             <br />
             <span style={{ background: 'linear-gradient(90deg, #60a5fa, #818cf8, #34d399)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Simples & Partilhados
+              {t('login.heroTitle2')}
             </span>
           </h1>
 
           <p className="text-base leading-relaxed max-w-md" style={{ color: '#94a3b8' }}>
-            Plataforma central de gestão de postos de carregamento OCPP, telemetria em tempo real, registo de condutores e atribuição de chaves RFID.
+            {t('login.heroDescription')}
           </p>
 
           {/* Feature Pills */}
           <div className="flex flex-wrap gap-2.5 mt-8">
             {[
               { icon: Zap, text: 'Smart Charging', color: '#60a5fa' },
-              { icon: Shield, text: 'Aprovação RFID', color: '#34d399' },
-              { icon: Mail, text: 'Avisos por Email', color: '#fbbf24' },
-              { icon: BatteryCharging, text: 'Portal do Condutor', color: '#a78bfa' },
+              { icon: Shield, text: t('login.rfidApproval'), color: '#34d399' },
+              { icon: Mail, text: t('login.emailAlerts'), color: '#fbbf24' },
+              { icon: BatteryCharging, text: t('login.driverPortal'), color: '#a78bfa' },
             ].map(({ icon: Icon, text, color }) => (
               <div
                 key={text}
@@ -192,12 +199,12 @@ export function Login() {
           <div className="flex items-center gap-6">
             <div>
               <div className="text-2xl font-bold font-mono" style={{ color: '#ffffff' }}>OCPP</div>
-              <div className="text-xs" style={{ color: '#64748b' }}>Protocolo</div>
+              <div className="text-xs" style={{ color: '#64748b' }}>{t('login.protocol')}</div>
             </div>
             <div style={{ width: '1px', height: '2.5rem', background: 'rgba(255,255,255,0.1)' }} />
             <div>
               <div className="text-2xl font-bold font-mono" style={{ color: '#ffffff' }}>1.6J</div>
-              <div className="text-xs" style={{ color: '#64748b' }}>Versão</div>
+              <div className="text-xs" style={{ color: '#64748b' }}>{t('login.version')}</div>
             </div>
             <div style={{ width: '1px', height: '2.5rem', background: 'rgba(255,255,255,0.1)' }} />
             <div>
@@ -206,9 +213,9 @@ export function Login() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#34d399' }} />
                   <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#34d399' }} />
                 </span>
-                Online
+                {t('common.online')}
               </div>
-              <div className="text-xs" style={{ color: '#64748b' }}>Estado</div>
+              <div className="text-xs" style={{ color: '#64748b' }}>{t('login.status')}</div>
             </div>
           </div>
         </div>
@@ -252,7 +259,7 @@ export function Login() {
               }}
             >
               <LogIn className="w-4 h-4" />
-              <span>Iniciar Sessão</span>
+              <span>{t('login.login')}</span>
             </button>
 
             <button
@@ -266,7 +273,7 @@ export function Login() {
               }}
             >
               <UserPlus className="w-4 h-4" />
-              <span>Registar Condutor</span>
+              <span>{t('login.register')}</span>
             </button>
           </div>
 
@@ -288,17 +295,17 @@ export function Login() {
             <div>
               <div className="mb-5">
                 <h2 className="text-2xl font-bold tracking-tight" style={{ color: '#ffffff' }}>
-                  Bem-vindo de volta
+                  {t('login.welcomeBack')}
                 </h2>
                 <p className="text-sm mt-1" style={{ color: '#94a3b8' }}>
-                  Introduz o teu email ou username para aceder
+                  {t('login.accessPrompt')}
                 </p>
               </div>
 
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                    Email ou Nome de Utilizador
+                    {t('login.emailOrUsername')}
                   </label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
@@ -308,7 +315,7 @@ export function Login() {
                       type="text"
                       value={loginIdentifier}
                       onChange={(e) => setLoginIdentifier(e.target.value)}
-                      placeholder="ex: hugo@empresa.com ou admin"
+                      placeholder={t('login.loginPlaceholder')}
                       autoFocus
                       required
                       style={{
@@ -323,7 +330,7 @@ export function Login() {
 
                 <div>
                   <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                    Palavra-passe
+                    {t('login.password')}
                   </label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none" style={{ color: '#475569' }}>
@@ -362,11 +369,11 @@ export function Login() {
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-                      A autenticar…
+                      {t('common.loading')}
                     </span>
                   ) : (
                     <>
-                      <span>Entrar no Sistema</span>
+                      <span>{t('login.submitLogin')}</span>
                       <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                     </>
                   )}

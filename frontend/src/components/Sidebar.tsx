@@ -7,20 +7,22 @@ import {
 import { useChargerStore } from '../store/chargerStore'
 import { useAuthStore } from '../store/authStore'
 import { ThemeToggle } from './ThemeToggle'
+import { LanguageToggle } from './LanguageToggle'
 import type { ThemeMode } from '../hooks/useTheme'
+import { useI18n } from '../i18n'
 
 const ADMIN_NAV = [
-  { to: '/',               icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/transactions',   icon: ArrowLeftRight,  label: 'Transações' },
-  { to: '/commands',       icon: Terminal,        label: 'Comandos' },
-  { to: '/smart-charging', icon: Gauge,           label: 'Smart Charging' },
-  { to: '/configuration',  icon: Settings,        label: 'Configuração' },
-  { to: '/authentication', icon: ShieldCheck,     label: 'White-list RFID' },
-  { to: '/users',          icon: Users,           label: 'Utilizadores' },
+  { to: '/',               icon: LayoutDashboard, labelKey: 'nav.dashboard' },
+  { to: '/transactions',   icon: ArrowLeftRight,  labelKey: 'nav.transactions' },
+  { to: '/commands',       icon: Terminal,        labelKey: 'nav.commands' },
+  { to: '/smart-charging', icon: Gauge,           labelKey: 'nav.smartCharging' },
+  { to: '/configuration',  icon: Settings,        labelKey: 'nav.configuration' },
+  { to: '/authentication', icon: ShieldCheck,     labelKey: 'nav.authentication' },
+  { to: '/users',          icon: Users,           labelKey: 'nav.users' },
 ]
 
 const USER_NAV = [
-  { to: '/my-charging',    icon: Zap,             label: 'Minhas Cargas' },
+  { to: '/my-charging',    icon: Zap,             labelKey: 'nav.myCharging' },
 ]
 
 export function Sidebar({
@@ -35,6 +37,7 @@ export function Sidebar({
   const events = useChargerStore((s) => s.events)
   const liveState = useChargerStore((s) => s.liveState)
   const { user, isAdmin, logout } = useAuthStore()
+  const { t } = useI18n()
 
   const online   = Object.values(liveState).filter((s) => s.isOnline).length
   const total    = Object.values(liveState).length
@@ -86,7 +89,7 @@ export function Sidebar({
 
       {/* nav */}
       <nav className="flex-1 px-3 space-y-0.5">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {navItems.map(({ to, icon: Icon, labelKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -106,7 +109,7 @@ export function Sidebar({
             {({ isActive }) => (
               <>
                 <Icon className={`w-4 h-4 shrink-0 ${isActive ? (resolved === 'dark' ? 'text-blue-400' : 'text-blue-600') : ''}`} />
-                {label}
+                {t(labelKey)}
                 {isActive && (
                   <div className={`ml-auto w-1.5 h-1.5 rounded-full ${resolved === 'dark' ? 'bg-blue-400' : 'bg-blue-600'} animate-pulse-slow`} />
                 )}
@@ -134,7 +137,7 @@ export function Sidebar({
                 <span className={`text-[10px] uppercase font-bold tracking-wider ${
                   user.role === 'admin' ? 'text-blue-500' : 'text-emerald-500'
                 }`}>
-                  {user.role === 'admin' ? 'Administrador' : 'Condutor'}
+                  {user.role === 'admin' ? t('shell.admin') : t('shell.driver')}
                 </span>
               </div>
             </div>
@@ -142,7 +145,7 @@ export function Sidebar({
             <button
               onClick={logout}
               className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors"
-              title="Terminar Sessão"
+              title={t('shell.logout')}
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -159,14 +162,14 @@ export function Sidebar({
             <div className="flex items-center justify-between text-xs">
               <div className={`flex items-center gap-2 ${resolved === 'dark' ? 'text-gray-500' : 'text-slate-500'}`}>
                 <Activity className="w-3.5 h-3.5" />
-                Eventos
+                {t('shell.events')}
               </div>
               <span className={`font-mono ${resolved === 'dark' ? 'text-gray-400' : 'text-slate-700'}`}>{events.length}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <div className={`flex items-center gap-2 ${resolved === 'dark' ? 'text-gray-500' : 'text-slate-500'}`}>
                 <Zap className="w-3.5 h-3.5" />
-                A carregar
+                {t('common.charging')}
               </div>
               <span className={`font-mono font-medium ${charging > 0 ? (resolved === 'dark' ? 'text-blue-400' : 'text-blue-600') : (resolved === 'dark' ? 'text-gray-500' : 'text-slate-400')}`}>
                 {charging}
@@ -176,6 +179,9 @@ export function Sidebar({
         )}
 
         <div className="w-full">
+          <div className="mb-2">
+            <LanguageToggle compact />
+          </div>
           <ThemeToggle value={mode} onChange={setMode} />
         </div>
       </div>

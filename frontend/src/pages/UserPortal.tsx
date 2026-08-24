@@ -9,9 +9,11 @@ import { useAuthStore } from '../store/authStore'
 import { safeFormatDateTime, safeFormatDuration } from '../utils/date'
 import { RemoteStartModal } from '../components/RemoteStartModal'
 import type { Transaction } from '../types'
+import { useI18n } from '../i18n'
 
 export function UserPortal() {
   const { user } = useAuthStore()
+  const { t } = useI18n()
   const [showRemoteStartModal, setShowRemoteStartModal] = useState(false)
 
   // Profile data with personal stats
@@ -41,7 +43,7 @@ export function UserPortal() {
     refetchTxs()
   }
 
-  const rfidTag = profile?.rfid_tag || user?.rfid_tag || 'Nenhuma Tag Atribuída'
+  const rfidTag = profile?.rfid_tag || user?.rfid_tag || t('userPortal.noAssignedTag')
 
   return (
     <div className="space-y-8 animate-fade-up">
@@ -50,14 +52,14 @@ export function UserPortal() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Portal do Condutor
+              {t('userPortal.title')}
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-              Utilizador Ativo
+              {t('userPortal.activeUser')}
             </span>
           </div>
           <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
-            Olá, <span className="font-semibold text-slate-800 dark:text-slate-200">{profile?.username || user?.username}</span>. Acompanha os teus consumos e carregamentos.
+            {t('userPortal.greeting', { name: profile?.username || user?.username || '' })}
           </p>
         </div>
 
@@ -66,7 +68,7 @@ export function UserPortal() {
           className="btn btn-secondary flex items-center gap-2 text-xs"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          <span>Atualizar</span>
+          <span>{t('common.update')}</span>
         </button>
       </div>
 
@@ -79,14 +81,14 @@ export function UserPortal() {
           <div className="flex items-center justify-between relative z-10">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-emerald-400" />
-              <span className="font-bold text-xs tracking-wider uppercase text-blue-200">@Canditos Pass</span>
+              <span className="font-bold text-xs tracking-wider uppercase text-blue-200">{t('userPortal.passTitle')}</span>
             </div>
             <CreditCard className="w-6 h-6 text-slate-400" />
           </div>
 
           <div className="my-4 relative z-10">
             <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-1">
-              Chave RFID / ID Tag
+              {t('userPortal.rfidLabel')}
             </span>
             <div className="font-mono text-lg font-bold tracking-widest text-emerald-400 bg-black/30 px-3 py-1.5 rounded-lg border border-white/10 inline-block">
               {rfidTag}
@@ -100,7 +102,7 @@ export function UserPortal() {
               className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-emerald-500 text-white text-[11px] font-semibold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
             >
               <Play className="w-3 h-3 fill-current" />
-              Iniciar Carga
+              {t('userPortal.startCharge')}
             </button>
           </div>
         </div>
@@ -109,7 +111,7 @@ export function UserPortal() {
         <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="card p-5 border border-slate-200 dark:border-white/10 flex flex-col justify-between">
             <div className="flex items-center justify-between text-slate-500 dark:text-gray-400">
-              <span className="text-xs font-semibold uppercase">Total Consumido</span>
+              <span className="text-xs font-semibold uppercase">{t('userPortal.totalConsumed')}</span>
               <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
                 <Zap className="w-4 h-4" />
               </div>
@@ -119,14 +121,14 @@ export function UserPortal() {
                 {profile?.total_kwh ?? 0} <span className="text-sm font-normal text-slate-500">kWh</span>
               </div>
               <span className="text-[11px] text-slate-500 dark:text-gray-400 mt-0.5 block">
-                Energia total carregada
+                {t('userPortal.totalChargedEnergy')}
               </span>
             </div>
           </div>
 
           <div className="card p-5 border border-slate-200 dark:border-white/10 flex flex-col justify-between">
             <div className="flex items-center justify-between text-slate-500 dark:text-gray-400">
-              <span className="text-xs font-semibold uppercase">Sessões de Carga</span>
+              <span className="text-xs font-semibold uppercase">{t('userPortal.chargingSessions')}</span>
               <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
                 <BatteryCharging className="w-4 h-4" />
               </div>
@@ -136,14 +138,14 @@ export function UserPortal() {
                 {profile?.total_sessions ?? transactions.length}
               </div>
               <span className="text-[11px] text-slate-500 dark:text-gray-400 mt-0.5 block">
-                Total de utilizações
+                {t('userPortal.totalUses')}
               </span>
             </div>
           </div>
 
           <div className="card p-5 border border-slate-200 dark:border-white/10 flex flex-col justify-between">
             <div className="flex items-center justify-between text-slate-500 dark:text-gray-400">
-              <span className="text-xs font-semibold uppercase">Média p/ Sessão</span>
+              <span className="text-xs font-semibold uppercase">{t('userPortal.avgPerSession')}</span>
               <div className="p-2 rounded-xl bg-violet-500/10 text-violet-500">
                 <Activity className="w-4 h-4" />
               </div>
@@ -156,7 +158,7 @@ export function UserPortal() {
                 <span className="text-sm font-normal text-slate-500">kWh</span>
               </div>
               <span className="text-[11px] text-slate-500 dark:text-gray-400 mt-0.5 block">
-                Consumo médio
+                {t('userPortal.avgConsumption')}
               </span>
             </div>
           </div>
@@ -174,46 +176,46 @@ export function UserPortal() {
               </div>
               <div>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
-                  Carregamento em Curso
+                  {t('userPortal.activeCharging')}
                 </span>
                 <span className="text-sm font-semibold text-slate-800 dark:text-white">
-                  Posto: {activeCharge.charge_point_id} · Tomada #{activeCharge.connector_id}
+                  {t('userPortal.stationConnector', { cp: activeCharge.charge_point_id, connector: activeCharge.connector_id })}
                 </span>
               </div>
             </div>
 
             <div className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
-              Transação #{activeCharge.transaction_id}
+              {t('userPortal.transaction', { id: activeCharge.transaction_id })}
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
             <div className="p-3 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5">
-              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">Potência Live</span>
+              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">{t('userPortal.livePower')}</span>
               <span className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
                 {activeCharge.current_power_kw} kW
               </span>
             </div>
 
             <div className="p-3 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5">
-              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">Energia Entregue</span>
+              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">{t('userPortal.deliveredEnergy')}</span>
               <span className="text-xl font-bold font-mono text-blue-600 dark:text-blue-400">
                 {activeCharge.consumed_kwh} kWh
               </span>
             </div>
 
             <div className="p-3 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5">
-              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">Hora de Início</span>
+              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">{t('userPortal.startTime')}</span>
               <span className="text-sm font-bold font-mono text-slate-700 dark:text-gray-200">
                 {activeCharge.start_time ? safeFormatDateTime(activeCharge.start_time) : '—'}
               </span>
             </div>
 
             <div className="p-3 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5">
-              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">Estado</span>
+              <span className="text-[10px] text-slate-500 dark:text-gray-400 uppercase block">{t('userPortal.status')}</span>
               <span className="text-sm font-bold text-emerald-500 flex items-center justify-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                A Carregar
+                {t('userPortal.chargingNow')}
               </span>
             </div>
           </div>
@@ -226,24 +228,24 @@ export function UserPortal() {
           <div className="flex items-center gap-2">
             <History className="w-5 h-5 text-blue-500" />
             <h2 className="text-base font-bold text-slate-900 dark:text-white">
-              Histórico das Minhas Cargas
+              {t('userPortal.historyTitle')}
             </h2>
           </div>
           <span className="text-xs text-slate-500 dark:text-gray-400 font-mono">
-            {transactions.length} registadas
+            {t('userPortal.registeredCount', { count: transactions.length })}
           </span>
         </div>
 
         {txLoading ? (
           <div className="py-12 text-center text-slate-400 text-sm animate-pulse">
-            A carregar histórico de transações…
+            {t('userPortal.loadingHistory')}
           </div>
         ) : transactions.length === 0 ? (
           <div className="py-12 text-center text-slate-400 dark:text-gray-500 space-y-2">
             <Clock className="w-8 h-8 mx-auto opacity-40" />
-            <p className="text-sm font-medium">Nenhum carregamento registado ainda</p>
+            <p className="text-sm font-medium">{t('userPortal.noChargesYet')}</p>
             <p className="text-xs text-slate-400">
-              Assim que utilizares a chave <span className="font-mono text-emerald-500 font-bold">{rfidTag}</span> no posto, os detalhes aparecerão aqui.
+              {t('userPortal.noChargesDescription', { tag: rfidTag })}
             </p>
           </div>
         ) : (
@@ -251,13 +253,13 @@ export function UserPortal() {
             <table className="table w-full text-left whitespace-nowrap">
               <thead>
                 <tr>
-                  <th>Transação</th>
-                  <th>Posto</th>
-                  <th>Início</th>
-                  <th>Fim</th>
-                  <th>Duração</th>
-                  <th>Consumo</th>
-                  <th>Estado</th>
+                  <th>{t('userPortal.table.transaction')}</th>
+                  <th>{t('userPortal.table.station')}</th>
+                  <th>{t('userPortal.table.start')}</th>
+                  <th>{t('userPortal.table.end')}</th>
+                  <th>{t('userPortal.table.duration')}</th>
+                  <th>{t('userPortal.table.consumption')}</th>
+                  <th>{t('userPortal.table.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -266,7 +268,7 @@ export function UserPortal() {
                     ? safeFormatDuration(
                         (new Date(tx.stop_time).getTime() - new Date(tx.start_time).getTime()) / 1000
                       )
-                    : tx.status === 'Active' ? 'Em curso…' : '—'
+                    : tx.status === 'Active' ? t('userPortal.inProgress') : '—'
 
                   const kwh = tx.kwh !== undefined
                     ? tx.kwh
@@ -278,7 +280,7 @@ export function UserPortal() {
                         #{tx.transaction_id}
                       </td>
                       <td className="font-medium text-xs text-slate-800 dark:text-gray-200">
-                        {tx.charge_point_id} (Tomada #{tx.connector_id})
+                        {tx.charge_point_id} ({t('remoteStart.connectorLabel', { id: tx.connector_id })})
                       </td>
                       <td className="text-xs text-slate-600 dark:text-gray-400 font-mono">
                         {safeFormatDateTime(tx.start_time)}
@@ -300,7 +302,7 @@ export function UserPortal() {
                             ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20 animate-pulse'
                             : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                         }`}>
-                          {tx.status === 'Active' ? 'A Carregar' : 'Concluído'}
+                          {tx.status === 'Active' ? t('userPortal.chargingNow') : t('userPortal.completed')}
                         </span>
                       </td>
                     </tr>

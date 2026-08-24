@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Zap, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { api } from '../api'
 import type { Charger } from '../types'
+import { useI18n } from '../i18n'
 
 interface RemoteStartModalProps {
   isOpen: boolean
@@ -14,6 +15,7 @@ interface RemoteStartModalProps {
 
 export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteStartModalProps) {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
   const [selectedCharger, setSelectedCharger] = useState('')
   const [selectedConnector, setSelectedConnector] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -30,7 +32,7 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
         ...charger,
         freeConnectors: (charger.connectors || []).filter((connector) => connector.status === 'Available'),
       }))
-      .filter((charger) => charger.status === 'Available' && charger.freeConnectors.length > 0),
+      .filter((charger) => charger.is_online && charger.freeConnectors.length > 0),
     [chargers]
   )
 
@@ -63,7 +65,7 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
   const { mutate: performRemoteStart, isPending } = useMutation({
     mutationFn: () => api.remoteStart(selectedCharger, rfidTag, Number(selectedConnector)),
     onSuccess: () => {
-      setFeedback({ type: 'success', message: 'Carga iniciada com sucesso.' })
+      setFeedback({ type: 'success', message: t('remoteStart.startSuccess') })
       queryClient.invalidateQueries({ queryKey: ['chargers'] })
       queryClient.invalidateQueries({ queryKey: ['my-active-charge'] })
       setTimeout(() => {
@@ -74,7 +76,7 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
     onError: (error: any) => {
       setFeedback({
         type: 'error',
-        message: error?.response?.data?.detail || 'Nao foi possivel iniciar a carga.',
+        message: error?.response?.data?.detail || t('remoteStart.startError'),
       })
     },
   })
@@ -94,8 +96,8 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
                 <Zap className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold text-white">Iniciar carga</h2>
-                <p className="text-[11px] text-slate-400">Usa o teu RFID</p>
+                <h2 className="text-sm font-semibold text-white">{t('remoteStart.title')}</h2>
+                <p className="text-[11px] text-slate-400">{t('remoteStart.subtitle')}</p>
               </div>
             </div>
             <button
@@ -110,7 +112,7 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
 
           <div className="space-y-4 px-4 py-4">
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400">Cartao</div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">{t('remoteStart.card')}</div>
               <div className="mt-1 font-mono text-sm font-bold text-emerald-400">{rfidTag}</div>
               {username && <div className="mt-1 text-[11px] text-slate-400">{username}</div>}
             </div>
@@ -118,42 +120,61 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
             {availableChargers.length === 0 ? (
               <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-300">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                <span>Sem carregadores disponiveis.</span>
+                <span>{t('remoteStart.noChargers')}</span>
               </div>
             ) : (
               <>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-300">Carregador</label>
-                  <select
-                    value={selectedCharger}
-                    onChange={(e) => {
-                      const nextCharger = availableChargers.find((charger) => charger.charge_point_id === e.target.value)
-                      setSelectedCharger(e.target.value)
-                      setSelectedConnector(nextCharger ? String(nextCharger.freeConnectors[0].connector_id) : '')
-                    }}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-blue-500"
-                  >
-                    {availableChargers.map((charger) => (
-                      <option key={charger.charge_point_id} value={charger.charge_point_id}>
-                        {charger.charge_point_id} ({charger.freeConnectors.length} livre)
-                      </option>
-                    ))}
-                  </select>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-300">{t('remoteStart.charger')}</label>
+                  <div className="space-y-2">
+                    {availableChargers.map((charger) => {
+                      const isSelected = charger.charge_point_id === selectedCharger
+                      return (
+                        <button
+                          key={charger.charge_point_id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCharger(charger.charge_point_id)
+                            setSelectedConnector(String(charger.freeConnectors[0].connector_id))
+                          }}
+                          className={`w-full rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-500/15 text-white'
+                              : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                          }`}
+                        >
+                          <div className="text-sm font-medium">{charger.charge_point_id}</div>
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            {charger.vendor || t('remoteStart.charger')} · {t(charger.freeConnectors.length > 1 ? 'remoteStart.freeCountPlural' : 'remoteStart.freeCount', { count: charger.freeConnectors.length })}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-300">Tomada</label>
-                  <select
-                    value={selectedConnector}
-                    onChange={(e) => setSelectedConnector(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-emerald-500"
-                  >
-                    {availableConnectors.map((connector) => (
-                      <option key={connector.connector_id} value={String(connector.connector_id)}>
-                        Tomada #{connector.connector_id}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-300">{t('remoteStart.connector')}</label>
+                  <div className="flex gap-2">
+                    {availableConnectors.map((connector) => {
+                      const connectorValue = String(connector.connector_id)
+                      const isSelected = connectorValue === selectedConnector
+                      return (
+                        <button
+                          key={connector.connector_id}
+                          type="button"
+                          onClick={() => setSelectedConnector(connectorValue)}
+                          className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+                            isSelected
+                              ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
+                              : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                          }`}
+                        >
+                          {t('remoteStart.connectorLabel', { id: connector.connector_id })}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               </>
             )}
@@ -183,7 +204,7 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
               disabled={isPending}
               className="flex-1 rounded-xl border border-slate-600 px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 disabled:opacity-50"
             >
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -193,7 +214,7 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
             >
               <span className="flex items-center justify-center gap-1.5">
                 {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                Iniciar
+                {t('common.start')}
               </span>
             </button>
           </div>

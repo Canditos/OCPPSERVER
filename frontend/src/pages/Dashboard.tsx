@@ -7,6 +7,7 @@ import { EventLog } from '../components/EventLog'
 import { OcppLogViewer } from '../components/OcppLogViewer'
 import { useChargerStore } from '../store/chargerStore'
 import type { Charger, OcppMessage } from '../types'
+import { useI18n } from '../i18n'
 
 interface KpiProps {
   label: string
@@ -75,6 +76,7 @@ function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0, onCl
 }
 
 export function Dashboard() {
+  const { t } = useI18n()
   const { data: chargers = [], isLoading } = useQuery<Charger[]>({
     queryKey: ['chargers'],
     queryFn: api.getChargers,
@@ -171,14 +173,14 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm">
           <Activity className="w-4 h-4 text-emerald-400 animate-pulse-slow" />
-          <span className="text-xs text-emerald-400 font-medium">{events.length} eventos registados</span>
+          <span className="text-xs text-emerald-400 font-medium">{t('dashboard.registeredEvents', { count: events.length })}</span>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard
-          label="Chargers"
+          label={t('dashboard.chargers')}
           value={total}
           icon={<Server className="w-5 h-5" />}
           color="violet"
@@ -186,9 +188,9 @@ export function Dashboard() {
           onClick={() => scrollToSection('chargers-section')}
         />
         <KpiCard
-          label="Online"
+          label={t('dashboard.online')}
           value={online}
-          sub={`${total > 0 ? Math.round((online / total) * 100) : 0}% disponibilidade`}
+          sub={t('dashboard.onlineAvailability', { pct: total > 0 ? Math.round((online / total) * 100) : 0 })}
           icon={<Wifi className="w-5 h-5" />}
           color="emerald"
           glow={online > 0}
@@ -196,9 +198,9 @@ export function Dashboard() {
           onClick={() => scrollToSection('chargers-section')}
         />
         <KpiCard
-          label="A Carregar"
+          label={t('dashboard.charging')}
           value={charging}
-          sub={`${totalChargingKw.toFixed(1)} kW potência ativa total`}
+          sub={t('dashboard.activePower', { kw: totalChargingKw.toFixed(1) })}
           icon={<Zap className="w-5 h-5" />}
           color="blue"
           glow={charging > 0}
@@ -206,7 +208,7 @@ export function Dashboard() {
           onClick={() => scrollToSection('chargers-section')}
         />
         <KpiCard
-          label="Disponíveis"
+          label={t('dashboard.available')}
           value={available}
           icon={<Zap className="w-5 h-5" />}
           color="amber"
@@ -214,7 +216,7 @@ export function Dashboard() {
           onClick={() => scrollToSection('chargers-section')}
         />
         <KpiCard
-          label="Avarias"
+          label={t('dashboard.faults')}
           value={faulted}
           icon={<AlertTriangle className="w-5 h-5" />}
           color="red"
@@ -227,8 +229,8 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="chargers-section">
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Postos de Carga (EVSE)</h2>
-            <span className="text-xs text-gray-500 font-mono">{chargers.length} registados</span>
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.chargingStations')}</h2>
+            <span className="text-xs text-gray-500 font-mono">{t('dashboard.registered', { count: chargers.length })}</span>
           </div>
 
           {isLoading && (
@@ -245,8 +247,8 @@ export function Dashboard() {
                 <Zap className="w-8 h-8 text-gray-600" />
               </div>
               <div>
-                <p className="text-gray-400 font-medium">Sem chargers ligados</p>
-                <p className="text-gray-500 text-sm mt-1">Liga o posto de carga a:</p>
+                <p className="text-gray-400 font-medium">{t('dashboard.noChargers')}</p>
+                <p className="text-gray-500 text-sm mt-1">{t('dashboard.connectStation')}</p>
                 <p className="text-xs font-mono mt-2 px-3 py-1.5 rounded-lg bg-gray-800/80 text-blue-400 border border-blue-500/20">
                   wss://ocpp.gatoescondido.com/ocpp/&lt;charger-id&gt;
                 </p>
@@ -264,7 +266,7 @@ export function Dashboard() {
         {/* event log sidebar */}
         <div className="space-y-4" id="live-events-section">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Eventos Live</h2>
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.liveEvents')}</h2>
             <span className="live-pill">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -282,13 +284,13 @@ export function Dashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Terminal className="w-5 h-5 text-blue-400" />
-            <h2 className="text-base font-bold text-gray-200 uppercase tracking-wider">Visualizador Completo de Logs & Payloads JSON</h2>
+            <h2 className="text-base font-bold text-gray-200 uppercase tracking-wider">{t('dashboard.fullLogViewer')}</h2>
           </div>
 
           {/* HIGH-TECH INTERACTIVE BUTTON SELECTOR CARDS FOR CHARGERS */}
           {chargers.length > 0 && (
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-xs text-gray-400 font-medium mr-1">Selecionar Charger:</span>
+              <span className="text-xs text-gray-400 font-medium mr-1">{t('dashboard.selectCharger')}</span>
               {chargers.map((c) => {
                 const isSelected = currentCpId === c.charge_point_id
                 const isCharging = isChargerCharging(c)
@@ -316,7 +318,7 @@ export function Dashboard() {
                     <div className="text-left">
                       <p className="font-mono font-bold leading-tight text-xs">{c.charge_point_id}</p>
                       <p className="text-[10px] opacity-75 mt-0.5">
-                        {c.vendor ?? 'Siemens'} {isCharging ? '· ⚡ CARGA ATIVA' : ''}
+                        {c.vendor ?? 'Siemens'} {isCharging ? `· ${t('dashboard.activeCharge')}` : ''}
                       </p>
                     </div>
 

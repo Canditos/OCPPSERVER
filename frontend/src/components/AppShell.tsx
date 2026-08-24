@@ -6,31 +6,33 @@ import {
 } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { ThemeToggle } from './ThemeToggle'
+import { LanguageToggle } from './LanguageToggle'
 import { useChargerStore } from '../store/chargerStore'
 import { useAuthStore } from '../store/authStore'
 import { useTheme } from '../hooks/useTheme'
+import { useI18n } from '../i18n'
 
 const ADMIN_NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
-  { to: '/commands', label: 'Comandos', icon: Terminal },
-  { to: '/smart-charging', label: 'Smart', icon: Gauge },
-  { to: '/users', label: 'Users', icon: Users },
+  { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { to: '/transactions', labelKey: 'nav.transactions', icon: ArrowLeftRight },
+  { to: '/commands', labelKey: 'nav.commands', icon: Terminal },
+  { to: '/smart-charging', labelKey: 'nav.smartCharging', icon: Gauge },
+  { to: '/users', labelKey: 'nav.users', icon: Users },
 ]
 
 const USER_NAV_ITEMS = [
-  { to: '/my-charging', label: 'Minhas Cargas', icon: Zap },
+  { to: '/my-charging', labelKey: 'nav.myCharging', icon: Zap },
 ]
 
-const TITLES: Record<string, string> = {
-  '/': 'Resumo Geral',
-  '/transactions': 'Transações Globais',
-  '/commands': 'Comandos OCPP',
-  '/smart-charging': 'Smart Charging',
-  '/authentication': 'White-list RFID',
-  '/configuration': 'Configuração',
-  '/users': 'Gestão de Utilizadores',
-  '/my-charging': 'Portal do Condutor',
+const TITLE_KEYS: Record<string, string> = {
+  '/': 'shell.overview',
+  '/transactions': 'shell.globalTransactions',
+  '/commands': 'shell.ocppCommands',
+  '/smart-charging': 'shell.smartCharging',
+  '/authentication': 'shell.authentication',
+  '/configuration': 'shell.configuration',
+  '/users': 'shell.users',
+  '/my-charging': 'shell.driverPortal',
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -39,13 +41,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const events = useChargerStore((s) => s.events)
   const { user, isAdmin, logout } = useAuthStore()
   const { mode, resolved, setMode } = useTheme()
+  const { t } = useI18n()
 
   const chargers = Object.values(liveState)
   const online = chargers.filter((c) => c.isOnline).length
   const charging = chargers.filter((c) => Object.values(c.connectors).some((connector) => connector.status === 'Charging')).length
   const currentTitle = location.pathname.startsWith('/chargers/')
-    ? 'Posto'
-    : TITLES[location.pathname] ?? 'Dashboard'
+    ? t('shell.station')
+    : t(TITLE_KEYS[location.pathname] ?? 'nav.dashboard')
 
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : USER_NAV_ITEMS
 
@@ -77,13 +80,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <button
                   onClick={logout}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-red-500"
-                  title="Sair"
+                  title={t('shell.logout')}
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3">
+              <LanguageToggle compact />
               <ThemeToggle value={mode} onChange={setMode} compact />
             </div>
           </div>
@@ -104,7 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
       >
         <div className={`grid ${isAdmin ? 'grid-cols-5' : 'grid-cols-1'} gap-1`}>
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, labelKey, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -122,7 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               }
             >
               <Icon className="h-4 w-4" />
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
             </NavLink>
           ))}
         </div>
@@ -135,15 +139,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           }`}>
             <span className="inline-flex items-center gap-1.5">
               <Wifi className="h-3.5 w-3.5 text-emerald-400" />
-              {online} online
+              {online} {t('common.online')}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-blue-400" />
-              {charging} a carregar
+              {charging} {t('common.charging')}
             </span>
           </div>
         )}
         <div className="mt-2">
+          <div className="mb-2">
+            <LanguageToggle compact />
+          </div>
           <ThemeToggle value={mode} onChange={setMode} compact />
         </div>
       </nav>
