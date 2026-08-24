@@ -170,11 +170,15 @@ async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_d
         return {}
     
     # Get all transactions grouped by connector
+    # Count as successful if status is "Completed" or "Finishing" (completed sessions)
     tx_result = await db.execute(
         select(
             Transaction.connector_id,
             func.count(Transaction.id).label('total'),
-            func.sum(case((Transaction.status == 'Completed', 1), else_=0)).label('completed')
+            func.sum(case(
+                ((Transaction.status == 'Completed') | (Transaction.status == 'Finishing'), 1), 
+                else_=0
+            )).label('completed')
         )
         .where(Transaction.charge_point_id == cp_id)
         .group_by(Transaction.connector_id)
