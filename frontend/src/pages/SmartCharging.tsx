@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { api, SmartChargingPreset, SmartChargingProfile } from '../api'
 import type { Charger } from '../types'
+import { useChargerStore } from '../store/chargerStore'
 import { useI18n } from '../i18n'
 
 // Helper to convert seconds into HH:MM
@@ -25,6 +26,7 @@ function hhmmToSeconds(hhmm: string): number {
 export function SmartCharging() {
   const qc = useQueryClient()
   const { t } = useI18n()
+  const liveState = useChargerStore((s) => s.liveState)
 
   const { data: chargers = [] } = useQuery<Charger[]>({
     queryKey: ['chargers'],
@@ -32,18 +34,20 @@ export function SmartCharging() {
     refetchInterval: 5000,
   })
 
+  const isChargerOnline = (c: Charger) => liveState[c.charge_point_id]?.isOnline ?? c.is_online
+
   const [selectedCpId, setSelectedCpId] = useState<string>('')
 
   // Automatically select first connected or online charger if none selected
   React.useEffect(() => {
     if (!selectedCpId && chargers.length > 0) {
-      const firstOnline = chargers.find((c) => c.is_online) || chargers[0]
+      const firstOnline = chargers.find(isChargerOnline) || chargers[0]
       setSelectedCpId(firstOnline.charge_point_id)
     }
-  }, [chargers, selectedCpId])
+  }, [chargers, selectedCpId, liveState])
 
   const currentCharger = chargers.find((c) => c.charge_point_id === selectedCpId)
-  const isOnline = currentCharger?.is_online ?? false
+  const isOnline = currentCharger ? isChargerOnline(currentCharger) : false
 
   // Detect charger capabilities (DC Fast vs AC)
   const isDC = Boolean(
@@ -326,7 +330,7 @@ export function SmartCharging() {
             >
               {chargers.map((c) => (
                 <option key={c.id} value={c.charge_point_id}>
-                  {c.is_online ? '🟢' : '⚫'} {c.charge_point_id} ({c.vendor || t('smart.stationFallback')})
+                  {isChargerOnline(c) ? '🟢' : '⚫'} {c.charge_point_id} ({c.vendor || t('smart.stationFallback')})
                 </option>
               ))}
             </select>
