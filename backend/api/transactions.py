@@ -153,4 +153,38 @@ async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db))
             d.user_email = user.email
             d.user_role = user.role
 
-    return d
+@router.get("/{cp_id}/success-rate", response_model=dict)
+async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """Get charging success rate per connector for a charger."""
+    from models.charger import Charger
+    from sqlalchemy import func
+    
+    result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = result.scalar_one_or_none()
+    if not charger:
+        return {}
+    
+    # Get all transactions grouped by connector
+    tx_result = await db.execute(
+        select(
+            Transaction.connector_id,
+            func.count(Transaction.id).label('total'),
+            func.sum(func.cast(Transaction.status == 'Completed', type_=func.Integer())).label('completed')
+        )
+        .where(Transaction.charge_point_id == cp_id)
+        .group_by(Transaction.connector_id)
+    )
+    
+    rates = {}
+    for row in tx_result:
+        connector_id = row[0]
+        total = row[1] or 0
+        completed = row[2] or 0
+        success_rate = (completed / total * 100) if total > 0 else 0
+        rates[str(connector_id)] = {
+            'total_transactions': total,
+            'completed_transactions': completed,
+            'success_rate': round(success_rate, 1)
+        }
+    
+    return rates

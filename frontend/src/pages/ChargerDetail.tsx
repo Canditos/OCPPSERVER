@@ -51,6 +51,13 @@ export function ChargerDetail() {
     refetchInterval: 5000,
   })
 
+  const { data: successRates = {} } = useQuery({
+    queryKey: ['successRate', id],
+    queryFn:  () => api.getChargingSuccessRate(id!),
+    enabled:  !!id,
+    refetchInterval: 30000,
+  })
+
   const isOnline   = live?.isOnline ?? charger?.is_online ?? false
   const connectors = (live?.connectors && Object.keys(live.connectors).length > 0)
     ? Object.entries(live.connectors).map(([cid, c]) => ({ connector_id: Number(cid), ...c }))

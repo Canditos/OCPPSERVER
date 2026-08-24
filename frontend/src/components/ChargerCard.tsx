@@ -61,11 +61,35 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     }
   }, [authorizedTags, selectedTag])
 
+  // Determine connectors array (NEVER EMPTY - defaults to connector #1 if DB/live empty)
+  const rawConnectors = (live?.connectors && Object.keys(live.connectors).length > 0)
+    ? Object.entries(live.connectors).map(([id, c]) => ({
+        connector_id: Number(id),
+        status: c.status,
+        error_code: c.errorCode ?? null,
+        updated_at: null,
+      }))
+    : (charger.connectors && charger.connectors.length > 0
+        ? charger.connectors
+        : [{ connector_id: 1, status: live?.isOnline ?? charger.is_online ? (charger.status || 'Available') : 'Offline' }])
+
+  // Plug selection state - moved before use
+  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(
+    rawConnectors.length > 0 ? rawConnectors[0].connector_id : 1
+  )
+
   // Fetch active transaction for this charger
   const { data: activeTransaction, refetch: refetchActiveTx } = useQuery({
     queryKey: ['activeTransaction', charger.charge_point_id],
     queryFn: () => api.getActiveTransaction(charger.charge_point_id),
     refetchInterval: 5000,
+  })
+
+  // Fetch charging success rate per connector
+  const { data: successRates = {} } = useQuery({
+    queryKey: ['successRate', charger.charge_point_id],
+    queryFn: () => api.getChargingSuccessRate(charger.charge_point_id),
+    refetchInterval: 30000,
   })
 
   // Filter active transaction by selected connector
@@ -81,23 +105,6 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   }, [live?.status])
 
   const isOnline = live?.isOnline ?? charger.is_online
-
-  // Determine connectors array (NEVER EMPTY - defaults to connector #1 if DB/live empty)
-  const rawConnectors = (live?.connectors && Object.keys(live.connectors).length > 0)
-    ? Object.entries(live.connectors).map(([id, c]) => ({
-        connector_id: Number(id),
-        status: c.status,
-        error_code: c.errorCode ?? null,
-        updated_at: null,
-      }))
-    : (charger.connectors && charger.connectors.length > 0
-        ? charger.connectors
-        : [{ connector_id: 1, status: isOnline ? (charger.status || 'Available') : 'Offline' }])
-
-  // Plug selection state
-  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(
-    rawConnectors.length > 0 ? rawConnectors[0].connector_id : 1
-  )
 
   // Determine current operational status incorporating optimistic state
   const computedStatus = !isOnline
@@ -421,6 +428,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           {rawConnectors.map((c) => {
             const isSelected = selectedConnectorId === c.connector_id
             const connectorStatus = (isSelected && optimisticStatus) ? optimisticStatus : c.status
+            const successRate = successRates[String(c.connector_id)]
             return (
               <button
                 key={c.connector_id}
@@ -430,7 +438,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                   e.stopPropagation()
                   setSelectedConnectorId(c.connector_id)
                 }}
-                className={`transition-all rounded-xl cursor-pointer ${
+                className={`transition-all rounded-xl cursor-pointer relative group ${
                   isSelected
                     ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/20 scale-105'
                     : 'opacity-70 hover:opacity-100 hover:scale-102'
@@ -440,11 +448,39 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                   connectorId={c.connector_id}
                   status={connectorStatus}
                 />
+                {/* Success Rate Tooltip */}
+                {successRate && (
+                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-gray-900/95 text-gray-200 px-2 py-1 rounded whitespace-nowrap border border-gray-700/50 pointer-events-none">
+                    {successRate.success_rate.toFixed(1)}% sucesso
+                  </div>
+                )}
               </button>
             )
           })}
         </div>
       </div>
+
+      {/* Charging Success Rate Cards */}
+      {Object.keys(successRates).length > 0 && (
+        <div className="mb-3">
+          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1.5">Taxa de Sucesso por Tomada</span>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(successRates).map(([connectorId, data]) => (
+              <div key={connectorId} className="p-2.5 rounded-lg bg-gray-800/40 border border-gray-700/50 hover:border-gray-600/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Tomada {connectorId}</span>
+                  <span className={`text-sm font-bold ${data.success_rate >= 90 ? 'text-emerald-400' : data.success_rate >= 70 ? 'text-amber-400' : 'text-red-400'}`}>
+                    {data.success_rate.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-500 mt-1">
+                  {data.completed_transactions}/{data.total_transactions}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Inline Feedback Toast */}
       {feedback && (

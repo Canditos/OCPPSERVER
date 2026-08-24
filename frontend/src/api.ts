@@ -117,6 +117,8 @@ export const api = {
     http.get<MeterValue[]>(`/transactions/${txId}/meter-values`).then(r => r.data),
   getLiveMeterValues: (cpId: string, connectorId = 1) =>
     http.get<MeterValue[]>(`/transactions/charger/${cpId}/meter-values/live?connector_id=${connectorId}`).then(r => r.data),
+  getChargingSuccessRate: (cpId: string) =>
+    http.get<Record<string, { total_transactions: number; completed_transactions: number; success_rate: number }>>(`/transactions/${cpId}/success-rate`).then(r => r.data),
 
   getConfiguration: (cpId: string) =>
     http.get<ConfigurationItem[]>(`/configuration/${cpId}`).then(r => r.data),
