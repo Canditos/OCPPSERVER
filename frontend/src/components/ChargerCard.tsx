@@ -68,6 +68,11 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     refetchInterval: 5000,
   })
 
+  // Filter active transaction by selected connector
+  const activeTransactionForSelectedConnector = activeTransaction && activeTransaction.connector_id === selectedConnectorId
+    ? activeTransaction
+    : null
+
   // Reset optimistic status when real live status updates
   useEffect(() => {
     if (live?.status) {
@@ -99,8 +104,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     ? 'Offline'
     : (optimisticStatus || live?.status || (charger.status && charger.status !== 'Offline' ? charger.status : null) || (rawConnectors[0]?.status && rawConnectors[0]?.status !== 'Offline' ? rawConnectors[0]?.status : null) || 'Available')
 
-  // Check if any connector or charger is in active session (Preparing, Charging, etc.)
-  const isSessionActive = isOnline && (ACTIVE_STATUSES.includes(computedStatus) || rawConnectors.some((c) => ACTIVE_STATUSES.includes(c.status)))
+  // Check if SELECTED connector is in active session (Preparing, Charging, etc.)
+  const selectedConnectorStatus = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
+  const isSessionActive = isOnline && selectedConnectorStatus && ACTIVE_STATUSES.includes(selectedConnectorStatus)
   const isPreparing = isOnline && (computedStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing'))
   const isFaulted = isOnline && (computedStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted'))
 
@@ -351,7 +357,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           </div>
 
           {/* Active User / Driver banner */}
-          {activeTransaction && (
+          {activeTransactionForSelectedConnector && (
             <div className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-white/5 text-xs">
               <div className="flex items-center gap-2">
                 <div className="p-1 rounded-md bg-blue-500/20 text-blue-400">
@@ -359,25 +365,25 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 </div>
                 <div>
                   <span className="font-bold text-slate-100 text-xs block">
-                    {activeTransaction.user_username ? `Condutor: ${activeTransaction.user_username}` : `Tag: ${activeTransaction.id_tag}`}
+                    {activeTransactionForSelectedConnector.user_username ? `Condutor: ${activeTransactionForSelectedConnector.user_username}` : `Tag: ${activeTransactionForSelectedConnector.id_tag}`}
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    TX #{activeTransaction.transaction_id} {activeTransaction.user_username ? `· ${activeTransaction.id_tag}` : ''}
+                    TX #{activeTransactionForSelectedConnector.transaction_id} {activeTransactionForSelectedConnector.user_username ? `· ${activeTransactionForSelectedConnector.id_tag}` : ''}
                   </span>
                 </div>
               </div>
 
-              {activeTransaction.energy_kwh !== null && activeTransaction.energy_kwh !== undefined && (
+              {activeTransactionForSelectedConnector.energy_kwh !== null && activeTransactionForSelectedConnector.energy_kwh !== undefined && (
                 <div className="text-right font-mono">
                   <span className="text-emerald-400 font-bold text-xs">
-                    {activeTransaction.energy_kwh} kWh
+                    {activeTransactionForSelectedConnector.energy_kwh} kWh
                   </span>
                 </div>
               )}
             </div>
           )}
 
-          {activeTransaction && (
+          {activeTransactionForSelectedConnector && (
             <button
               type="button"
               onClick={async (e) => {

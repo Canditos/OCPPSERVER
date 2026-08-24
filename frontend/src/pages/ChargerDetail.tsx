@@ -80,6 +80,11 @@ export function ChargerDetail() {
         timestamp: data.timestamp,
       }))
     : []
+  
+  // Filter liveMeters to only show when selected connector is actively charging
+  const selectedConnector = connectors.find((c) => c.connector_id === selectedConnectorId)
+  const isSelectedConnectorActive = selectedConnector && (selectedConnector.status === 'Charging' || selectedConnector.status === 'SuspendedEV' || selectedConnector.status === 'SuspendedEVSE')
+  const displayedLiveMeters = isSelectedConnectorActive ? liveMeters : []
 
   if (!charger) {
     return (
@@ -179,7 +184,7 @@ export function ChargerDetail() {
           </div>
 
           {/* live meters snapshot */}
-          {liveMeters.length > 0 && (
+          {displayedLiveMeters.length > 0 && (
             <div className="card">
               <div className="flex items-center gap-2 mb-3">
                 <Activity className="w-4 h-4 text-amber-400" />
@@ -193,7 +198,7 @@ export function ChargerDetail() {
                 </span>
               </div>
               <div className="space-y-2">
-                {liveMeters.map((m) => (
+                {displayedLiveMeters.map((m) => (
                   <div key={m.key} className="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
                     <span className="text-xs text-gray-400 font-medium truncate max-w-[55%]">{m.label}</span>
                     <span className="text-xs font-mono text-amber-300 font-bold">{m.value} {m.unit}</span>
