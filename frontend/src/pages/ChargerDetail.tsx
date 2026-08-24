@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
+import { useState } from 'react'
 import { safeFormatDate, safeFormatDistance } from '../utils/date'
 import { ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap } from 'lucide-react'
 
@@ -33,6 +34,8 @@ function DirectionBadge({ direction }: { direction: string }) {
 export function ChargerDetail() {
   const { id } = useParams<{ id: string }>()
   const live    = useChargerStore((s) => s.liveState[id ?? ''])
+  
+  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1)
 
   const { data: charger } = useQuery<Charger>({
     queryKey: ['charger', id],
@@ -159,7 +162,17 @@ export function ChargerDetail() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {connectors.map((c) => (
-                  <ConnectorBadge key={c.connector_id} connectorId={c.connector_id} status={c.status} errorCode={(c as { error_code?: string }).error_code} />
+                  <button
+                    key={c.connector_id}
+                    onClick={() => setSelectedConnectorId(c.connector_id)}
+                    className={`cursor-pointer transition-all ${
+                      selectedConnectorId === c.connector_id
+                        ? 'ring-2 ring-blue-400 shadow-md shadow-blue-500/30 scale-105'
+                        : 'opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <ConnectorBadge connectorId={c.connector_id} status={c.status} errorCode={(c as { error_code?: string }).error_code} />
+                  </button>
                 ))}
               </div>
             )}
@@ -200,8 +213,9 @@ export function ChargerDetail() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">MeterValues</h3>
+              <span className="text-xs text-gray-600 font-mono">Conector #{selectedConnectorId}</span>
             </div>
-            <MeterChart cpId={charger.charge_point_id} connectorId={1} />
+            <MeterChart cpId={charger.charge_point_id} connectorId={selectedConnectorId} />
           </div>
 
           {/* events */}
