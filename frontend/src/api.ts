@@ -145,6 +145,14 @@ export const api = {
   getMessages: (id: string, limit = 100) =>
     http.get<OcppMessage[]>(`/chargers/${id}/messages?limit=${limit}`).then(r => r.data),
 
+  // Virtual Simulator
+  getSimulatorStatus: () =>
+    http.get<{ is_running: boolean; station_id?: string | null; ocpp_version?: string | null; started_at?: string | null }>('/simulator/status').then(r => r.data),
+  launchSimulator: (data: { station_id: string; ocpp_version: '1.6' | '2.0.1'; duration_seconds: number }) =>
+    http.post<{ status: string; station_id: string; ocpp_version: string; duration_seconds: number; message: string }>('/simulator/launch', data).then(r => r.data),
+  stopSimulator: () =>
+    http.post<{ status: string }>('/simulator/stop').then(r => r.data),
+
   getTransactions: (cp_id?: string, status?: string) => {
     const params = new URLSearchParams()
     if (cp_id) params.set('cp_id', cp_id)
