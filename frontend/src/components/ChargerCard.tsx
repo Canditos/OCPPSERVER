@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock,
   Loader2, CheckCircle2, AlertCircle, Tag, Plus, X, ShieldCheck, Mail,
-  Pencil, Check, Shield, Lock
+  Pencil, Check, Shield, Lock, Eye, EyeOff, Copy, Sparkles, Send
 } from 'lucide-react'
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
@@ -113,6 +113,87 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const [newTagId, setNewTagId] = useState('')
   const [newTagDesc, setNewTagDesc] = useState('')
   const [isSavingTag, setIsSavingTag] = useState(false)
+
+  // Security Modal state
+  const [showSecModal, setShowSecModal] = useState(false)
+  const [secProfile, setSecProfile] = useState<number>(charger.security_profile ?? 0)
+  const [authKey, setAuthKey] = useState<string>(charger.auth_password || '')
+  const [authEnabled, setAuthEnabled] = useState<boolean>(charger.auth_enabled ?? false)
+  const [showKey, setShowKey] = useState<boolean>(false)
+  const [copiedKey, setCopiedKey] = useState<boolean>(false)
+  const [secFeedback, setSecFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [isSavingSec, setIsSavingSec] = useState(false)
+
+  useEffect(() => {
+    setSecProfile(charger.security_profile ?? 0)
+    setAuthKey(charger.auth_password || '')
+    setAuthEnabled(charger.auth_enabled ?? false)
+  }, [charger])
+
+  const handleOpenSecModal = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowSecModal(true)
+    setSecProfile(charger.security_profile ?? 0)
+    setAuthKey(charger.auth_password || '')
+    setAuthEnabled(charger.auth_enabled ?? false)
+    setSecFeedback(null)
+  }
+
+  const handleSaveSecurity = async () => {
+    setIsSavingSec(true)
+    setSecFeedback(null)
+    try {
+      await api.updateChargerSecurity(charger.charge_point_id, {
+        security_profile: secProfile,
+        auth_password: authKey,
+        auth_enabled: authEnabled || secProfile >= 1,
+      })
+      setSecFeedback({ type: 'success', message: 'Segurança guardada com sucesso!' })
+      queryClient.invalidateQueries({ queryKey: ['chargers'] })
+      setTimeout(() => {
+        setShowSecModal(false)
+        setSecFeedback(null)
+      }, 1200)
+    } catch (err: any) {
+      setSecFeedback({ type: 'error', message: `Erro: ${err?.response?.data?.detail || err.message}` })
+    } finally {
+      setIsSavingSec(false)
+    }
+  }
+
+  const handleGenerateKey = async () => {
+    setIsSavingSec(true)
+    try {
+      const res = await api.generateChargerKey(charger.charge_point_id)
+      setAuthKey(res.authorization_key)
+      setSecFeedback({ type: 'success', message: 'Nova AuthorizationKey gerada!' })
+      queryClient.invalidateQueries({ queryKey: ['chargers'] })
+    } catch (err: any) {
+      setSecFeedback({ type: 'error', message: `Erro ao gerar: ${err?.response?.data?.detail || err.message}` })
+    } finally {
+      setIsSavingSec(false)
+    }
+  }
+
+  const handleSyncKey = async () => {
+    setIsSavingSec(true)
+    try {
+      const res = await api.syncChargerKey(charger.charge_point_id)
+      setSecFeedback({ type: 'success', message: `Chave enviada ao posto via OCPP (${res.status})` })
+    } catch (err: any) {
+      setSecFeedback({ type: 'error', message: `Erro ao sincronizar: ${err?.response?.data?.detail || err.message}` })
+    } finally {
+      setIsSavingSec(false)
+    }
+  }
+
+  const handleCopyKey = () => {
+    if (!authKey) return
+    navigator.clipboard.writeText(authKey)
+    setCopiedKey(true)
+    setTimeout(() => setCopiedKey(false), 2000)
+  }
 
   // Fetch authorized tags
   const { data: authorizedTags = [] } = useQuery({
@@ -502,15 +583,20 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             </span>
           </span>
 
-          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold border ${
-            (charger.security_profile ?? 0) === 2
-              ? 'bg-blue-500/10 text-blue-400 border-blue-500/25'
-              : (charger.security_profile ?? 0) === 1
-              ? 'bg-amber-500/10 text-amber-400 border-amber-500/25'
-              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
-          }`} title={`Security Profile ${charger.security_profile ?? 0}`}>
+          <button
+            type="button"
+            onClick={handleOpenSecModal}
+            className={`text-[10px] px-2 py-0.5 rounded-lg font-mono font-semibold border transition-all cursor-pointer hover:scale-105 ${
+              (charger.security_profile ?? 0) === 2
+                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/25'
+                : (charger.security_profile ?? 0) === 1
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25'
+                : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+            }`}
+            title={`Clique para configurar Segurança / AuthorizationKey (${(charger.security_profile ?? 0) === 2 ? 'Profile 2 - TLS+Basic' : (charger.security_profile ?? 0) === 1 ? 'Profile 1 - Basic Auth' : 'Profile 0 - Aberto'})`}
+          >
             {(charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
-          </span>
+          </button>
 
           <Link
             to={`/chargers/${charger.charge_point_id}`}
@@ -864,6 +950,145 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               >
                 {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
                 <span>{t('chargerCard.saveAndStart')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Security & AuthorizationKey Modal */}
+      {showSecModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          onClick={(e) => { e.stopPropagation(); setShowSecModal(false) }}
+        >
+          <div
+            className="w-full max-w-md bg-gray-900 border border-white/15 rounded-2xl shadow-2xl p-5 space-y-4 animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-100">Segurança & AuthorizationKey</h3>
+                  <p className="text-xs text-gray-500 font-mono">{charger.charge_point_id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSecModal(false)}
+                className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Alert feedback */}
+            {secFeedback && (
+              <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                secFeedback.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
+              }`}>
+                {secFeedback.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />}
+                <span>{secFeedback.message}</span>
+              </div>
+            )}
+
+            {/* Profile selector */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-gray-300">Perfil de Segurança (OCPP 1.6)</label>
+              <select
+                value={secProfile}
+                onChange={(e) => {
+                  const val = Number(e.target.value)
+                  setSecProfile(val)
+                  if (val >= 1) setAuthEnabled(true)
+                }}
+                className="select w-full text-xs py-2 bg-gray-800/90 border-white/10"
+              >
+                <option value={0}>Profile 0 — Aberto / Unsecure (ws:// sem password)</option>
+                <option value={1}>Profile 1 — HTTP Basic Auth (ws:// com password)</option>
+                <option value={2}>Profile 2 — TLS + Basic Auth (wss:// encriptado com password)</option>
+              </select>
+            </div>
+
+            {/* AuthorizationKey */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-gray-300">AuthorizationKey (Password do Posto)</label>
+                <button
+                  type="button"
+                  onClick={handleGenerateKey}
+                  disabled={isSavingSec}
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> Gerar Chave Segura
+                </button>
+              </div>
+
+              <div className="relative flex items-center">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  value={authKey}
+                  onChange={(e) => setAuthKey(e.target.value)}
+                  placeholder="Introduza ou gere a password do posto"
+                  className="input pr-20 text-xs font-mono bg-gray-800/90 border-white/10 w-full"
+                />
+                <div className="absolute right-1.5 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
+                    title={showKey ? 'Ocultar' : 'Mostrar'}
+                  >
+                    {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyKey}
+                    disabled={!authKey}
+                    className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
+                    title="Copiar Chave"
+                  >
+                    {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Header preview if key present */}
+            {authKey && secProfile >= 1 && (
+              <div className="p-2.5 rounded-lg bg-white/4 border border-white/8 space-y-1">
+                <span className="text-[10px] text-gray-400 font-medium">Cabeçalho HTTP Basic para o Carregador:</span>
+                <p className="text-[10px] font-mono text-gray-300 break-all bg-gray-950/80 p-1.5 rounded border border-white/5 select-all">
+                  Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={handleSyncKey}
+                disabled={isSavingSec || !isOnline || !authKey}
+                className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-2 px-3 rounded-xl flex items-center gap-1.5 disabled:opacity-40 transition-all"
+                title={isOnline ? 'Enviar chave ao posto via OCPP' : 'Posto offline'}
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Sincronizar no Posto</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveSecurity}
+                disabled={isSavingSec}
+                className="flex-1 btn-primary text-xs py-2 rounded-xl flex items-center justify-center gap-1.5 font-semibold"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>{isSavingSec ? 'A guardar...' : 'Guardar Segurança'}</span>
               </button>
             </div>
           </div>
