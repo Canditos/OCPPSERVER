@@ -199,3 +199,47 @@ class SyncKeyResponse(BaseModel):
     status: str
     key_applied: str
 
+
+# ── X.509 Certificate Schemas (Security Profile 3) ───────────────────────────
+
+class CertificateOut(BaseModel):
+    id: int
+    charger_id: int | None
+    charge_point_id: str | None
+    certificate_type: str
+    serial_number: str
+    issuer_name_hash: str | None
+    issuer_key_hash: str | None
+    subject_cn: str | None
+    issuer_cn: str | None
+    valid_from: datetime | None
+    valid_to: datetime | None
+    certificate_pem: str
+    status: str
+    installed_at: datetime | None
+    created_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class InstallCertificateRequest(BaseModel):
+    certificate_type: str = "CentralSystemRootCertificate"  # CentralSystemRootCertificate, ManufacturerRootCertificate
+    certificate_pem: str | None = None  # If None, automatically sends the CSMS Root CA
+
+
+class IssueClientCertRequest(BaseModel):
+    validity_days: int = 365
+    organization: str = "Canditos EV Charging"
+
+
+class IssueClientCertResponse(BaseModel):
+    charge_point_id: str
+    certificate_pem: str
+    private_key_pem: str
+    ca_root_pem: str
+    serial_number: str
+    valid_from: str
+    valid_to: str
+
+

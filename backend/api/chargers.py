@@ -4,13 +4,15 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database import get_db
-from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
+from models.charger import Charger, Connector, OcppMessage, AvailabilityLog, ChargerCertificate
 from models.transaction import Transaction, MeterValue
 from models.user import User
 from schemas import (
     ChargerOut, ConnectorOut, OcppMessageOut,
-    ChargerSecurityUpdate, GenerateKeyResponse, SyncKeyResponse
+    ChargerSecurityUpdate, GenerateKeyResponse, SyncKeyResponse,
+    CertificateOut, InstallCertificateRequest, IssueClientCertRequest, IssueClientCertResponse
 )
+import pki
 
 
 from ocpp_server.central_system import CONNECTED, get_charge_point
@@ -375,5 +377,167 @@ async def sync_authorization_key_to_device(cp_id: str, db: AsyncSession = Depend
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao enviar ChangeConfiguration(AuthorizationKey) para o posto: {str(e)}")
+
+
+# ── X.509 Certificate Management Endpoints (Security Profile 3) ───────────────
+
+@router.get("/ca/root-cert")
+async def get_root_ca_certificate():
+    """Download the CSMS Root CA certificate in PEM format."""
+    cert_pem, _ = pki.get_or_create_root_ca()
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content=cert_pem, media_type="application/x-pem-file")
+
+
+@router.get("/{cp_id}/certificates", response_model=list[CertificateOut])
+async def list_charger_certificates(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """List all X.509 certificates registered for this charge point, including the CSMS Root CA."""
+    result = await db.execute(
+        select(ChargerCertificate)
+        .where(
+            (ChargerCertificate.charge_point_id == cp_id) |
+            (ChargerCertificate.certificate_type == "CentralSystemRootCertificate")
+        )
+        .order_by(ChargerCertificate.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+@router.post("/{cp_id}/certificates/issue-client", response_model=IssueClientCertResponse)
+async def issue_client_cert(cp_id: str, body: IssueClientCertRequest, db: AsyncSession = Depends(get_db)):
+    """Issue and sign a new X.509 Client Certificate (with private key) for this charger."""
+    res = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = res.scalar_one_or_none()
+    if not charger:
+        raise HTTPException(status_code=404, detail="Charger not found")
+
+    cert_data = pki.issue_client_certificate(
+        charge_point_id=cp_id,
+        validity_days=body.validity_days,
+        organization=body.organization,
+    )
+
+    now = datetime.now(timezone.utc)
+    cert_entry = ChargerCertificate(
+        charger_id=charger.id,
+        charge_point_id=cp_id,
+        certificate_type="ChargePointCertificate",
+        serial_number=cert_data["serial_number"],
+        issuer_name_hash=cert_data["issuer_name_hash"],
+        issuer_key_hash=cert_data["issuer_key_hash"],
+        subject_cn=cp_id,
+        issuer_cn="Canditos CSMS Root CA",
+        valid_from=now,
+        valid_to=now + timedelta(days=body.validity_days),
+        certificate_pem=cert_data["certificate_pem"],
+        status="Active",
+    )
+    db.add(cert_entry)
+    await db.commit()
+
+    return IssueClientCertResponse(
+        charge_point_id=cp_id,
+        certificate_pem=cert_data["certificate_pem"],
+        private_key_pem=cert_data["private_key_pem"],
+        ca_root_pem=cert_data["ca_root_pem"],
+        serial_number=cert_data["serial_number"],
+        valid_from=cert_data["valid_from"],
+        valid_to=cert_data["valid_to"],
+    )
+
+
+@router.post("/{cp_id}/certificates/install")
+async def install_certificate_on_device(cp_id: str, body: InstallCertificateRequest, db: AsyncSession = Depends(get_db)):
+    """Remotely install a Root CA or Client Certificate on the connected charger via OCPP InstallCertificate."""
+    cp = get_charge_point(cp_id)
+    if not cp:
+        raise HTTPException(status_code=404, detail=f"O carregador '{cp_id}' não está online para receber o comando OCPP")
+
+    # If no certificate_pem provided, default to the CSMS Root CA
+    cert_pem = body.certificate_pem
+    if not cert_pem:
+        cert_pem, _ = pki.get_or_create_root_ca()
+
+    try:
+        resp = await cp.install_certificate(
+            certificate_type=body.certificate_type,
+            certificate=cert_pem,
+        )
+        status_val = getattr(resp, "status", "Accepted")
+
+        # Mark installed in DB if recognized
+        hash_data = pki.calculate_ocpp_certificate_hash(cert_pem)
+        res = await db.execute(
+            select(ChargerCertificate).where(ChargerCertificate.serial_number == hash_data["serial_number"])
+        )
+        cert_record = res.scalar_one_or_none()
+        if cert_record:
+            cert_record.installed_at = datetime.utcnow()
+            cert_record.status = "InstalledOnDevice"
+            await db.commit()
+
+        return {
+            "charge_point_id": cp_id,
+            "certificate_type": body.certificate_type,
+            "status": str(status_val),
+            "serial_number": hash_data["serial_number"],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao enviar InstallCertificate: {str(e)}")
+
+
+@router.post("/{cp_id}/certificates/query")
+async def query_installed_certificates(cp_id: str, certificate_type: str = "CentralSystemRootCertificate"):
+    """Query certificates currently installed on the charge point via OCPP GetInstalledCertificateIds."""
+    cp = get_charge_point(cp_id)
+    if not cp:
+        raise HTTPException(status_code=404, detail=f"O carregador '{cp_id}' não está online para receber o comando OCPP")
+
+    try:
+        resp = await cp.get_installed_certificate_ids(certificate_type=certificate_type)
+        status_val = getattr(resp, "status", "Accepted")
+        hash_data = getattr(resp, "certificate_hash_data", [])
+        return {
+            "charge_point_id": cp_id,
+            "certificate_type": certificate_type,
+            "status": str(status_val),
+            "certificate_hash_data": hash_data,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao consultar certificados no posto: {str(e)}")
+
+
+@router.delete("/{cp_id}/certificates/{cert_id}")
+async def delete_certificate_record(cp_id: str, cert_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a certificate record from the system and optionally send DeleteCertificate to the device."""
+    res = await db.execute(select(ChargerCertificate).where(ChargerCertificate.id == cert_id))
+    cert = res.scalar_one_or_none()
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+
+    # If online and has hash data, attempt remote deletion
+    cp = get_charge_point(cp_id)
+    remote_status = "Skipped (Device Offline)"
+    if cp and cert.issuer_name_hash and cert.issuer_key_hash:
+        try:
+            resp = await cp.delete_certificate({
+                "hash_algorithm": "SHA256",
+                "issuer_name_hash": cert.issuer_name_hash,
+                "issuer_key_hash": cert.issuer_key_hash,
+                "serial_number": cert.serial_number,
+            })
+            remote_status = str(getattr(resp, "status", "Accepted"))
+        except Exception as e:
+            remote_status = f"Failed: {str(e)}"
+
+    await db.delete(cert)
+    await db.commit()
+
+    return {
+        "charge_point_id": cp_id,
+        "deleted_cert_id": cert_id,
+        "remote_deletion_status": remote_status,
+    }
+
 
 

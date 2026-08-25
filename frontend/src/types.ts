@@ -46,6 +46,34 @@ export interface SyncKeyResponse {
   key_applied: string
 }
 
+export interface Certificate {
+  id: number
+  charger_id: number | null
+  charge_point_id: string | null
+  certificate_type: string
+  serial_number: string
+  issuer_name_hash: string | null
+  issuer_key_hash: string | null
+  subject_cn: string | null
+  issuer_cn: string | null
+  valid_from: string | null
+  valid_to: string | null
+  certificate_pem: string
+  status: 'Active' | 'InstalledOnDevice' | 'Revoked' | 'Expired'
+  installed_at: string | null
+  created_at: string | null
+}
+
+export interface IssueClientCertResponse {
+  charge_point_id: string
+  certificate_pem: string
+  private_key_pem: string
+  ca_root_pem: string
+  serial_number: string
+  valid_from: string
+  valid_to: string
+}
+
 export interface AuthToken {
   id: number
   id_tag: string

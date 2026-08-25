@@ -529,6 +529,46 @@ class ChargePoint(OcppChargePoint):
         await event_bus.publish("diagnostics_status", {"charge_point_id": self.id, "status": status})
         return call_result.DiagnosticsStatusNotificationPayload()
 
+    @on(Action.SignCertificate)
+    async def on_sign_certificate(self, csr: str, **kwargs):
+        """
+        Handle CSR from charger (OCPP 1.6 Security Profile 3).
+        Signs the CSR with CSMS Root CA and asynchronously responds with CertificateSigned.
+        """
+        await self._log_message("IN", "SignCertificate", {"csr": csr[:120] + "..." if len(csr) > 120 else csr})
+        try:
+            import pki
+            from models.charger import ChargerCertificate
+            signed_data = pki.sign_csr(csr, expected_charge_point_id=self.id)
+
+            async with AsyncSessionLocal() as db:
+                res = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
+                charger = res.scalar_one_or_none()
+                if charger:
+                    cert_entry = ChargerCertificate(
+                        charger_id=charger.id,
+                        charge_point_id=self.id,
+                        certificate_type="ChargePointCertificate",
+                        serial_number=signed_data["serial_number"],
+                        issuer_name_hash=signed_data["issuer_name_hash"],
+                        issuer_key_hash=signed_data["issuer_key_hash"],
+                        subject_cn=self.id,
+                        issuer_cn="Canditos CSMS Root CA",
+                        valid_from=datetime.fromisoformat(signed_data["valid_from"]),
+                        valid_to=datetime.fromisoformat(signed_data["valid_to"]),
+                        certificate_pem=signed_data["certificate_pem"],
+                        status="Active",
+                    )
+                    db.add(cert_entry)
+                    await db.commit()
+
+            # Schedule dispatching CertificateSigned call to the charger
+            asyncio.create_task(self.certificate_signed(signed_data["certificate_pem"]))
+            return call_result.SignCertificatePayload(status="Accepted")
+        except Exception as e:
+            logger.error(f"SignCertificate error for {self.id}: {e}")
+            return call_result.SignCertificatePayload(status="Rejected")
+
     # ── Outgoing commands ──────────────────────────────────────────────────
 
     async def remote_start_transaction(self, id_tag: str, connector_id: int | None = None):
@@ -702,3 +742,52 @@ class ChargePoint(OcppChargePoint):
         resp = await self.call(req)
         await self._log_message("OUT", "GetCompositeSchedule", payload_kwargs)
         return resp
+
+    # ── Security Profile 3 & Certificate Management (OCPP 1.6 Security Whitepaper) ──
+
+    async def install_certificate(self, certificate_type: str, certificate: str):
+        """Install a CA root or client certificate on the charge point."""
+        req = call.InstallCertificatePayload(
+            certificate_type=certificate_type,
+            certificate=certificate,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "InstallCertificate", {
+            "certificate_type": certificate_type,
+            "certificate_len": len(certificate),
+        })
+        return resp
+
+    async def get_installed_certificate_ids(self, certificate_type: str):
+        """Query installed certificates on the charge point."""
+        req = call.GetInstalledCertificateIdsPayload(
+            certificate_type=certificate_type,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "GetInstalledCertificateIds", {
+            "certificate_type": certificate_type,
+        })
+        return resp
+
+    async def delete_certificate(self, certificate_hash_data: dict):
+        """Delete an installed certificate from the charge point."""
+        req = call.DeleteCertificatePayload(
+            certificate_hash_data=certificate_hash_data,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "DeleteCertificate", {
+            "certificate_hash_data": certificate_hash_data,
+        })
+        return resp
+
+    async def certificate_signed(self, certificate: str):
+        """Send a signed X.509 certificate to the charge point in response to SignCertificate."""
+        req = call.CertificateSignedPayload(
+            certificate=certificate,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "CertificateSigned", {
+            "certificate_len": len(certificate),
+        })
+        return resp
+

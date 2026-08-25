@@ -587,15 +587,17 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             type="button"
             onClick={handleOpenSecModal}
             className={`text-[10px] px-2 py-0.5 rounded-lg font-mono font-semibold border transition-all cursor-pointer hover:scale-105 ${
-              (charger.security_profile ?? 0) === 2
+              (charger.security_profile ?? 0) === 3
+                ? 'bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30'
+                : (charger.security_profile ?? 0) === 2
                 ? 'bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/25'
                 : (charger.security_profile ?? 0) === 1
                 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25'
                 : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
             }`}
-            title={`Clique para configurar Segurança / AuthorizationKey (${(charger.security_profile ?? 0) === 2 ? 'Profile 2 - TLS+Basic' : (charger.security_profile ?? 0) === 1 ? 'Profile 1 - Basic Auth' : 'Profile 0 - Aberto'})`}
+            title={`Configurar Segurança (${(charger.security_profile ?? 0) === 3 ? 'Profile 3 - mTLS' : (charger.security_profile ?? 0) === 2 ? 'Profile 2 - TLS+Basic' : (charger.security_profile ?? 0) === 1 ? 'Profile 1 - Basic Auth' : 'Profile 0 - Aberto'})`}
           >
-            {(charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
+            {(charger.security_profile ?? 0) === 3 ? '🛡️ P3' : (charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
           </button>
 
           <Link
@@ -1011,6 +1013,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 <option value={0}>Profile 0 — Aberto / Unsecure (ws:// sem password)</option>
                 <option value={1}>Profile 1 — HTTP Basic Auth (ws:// com password)</option>
                 <option value={2}>Profile 2 — TLS + Basic Auth (wss:// encriptado com password)</option>
+                <option value={3}>Profile 3 — mTLS (TLS Mútuo com Certificados Digitais X.509)</option>
               </select>
             </div>
 

@@ -30,6 +30,7 @@ class Charger(Base):
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     configurations: Mapped[list["ChargerConfiguration"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     messages: Mapped[list["OcppMessage"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+    certificates: Mapped[list["ChargerCertificate"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
 
 
 
@@ -70,5 +71,28 @@ class AvailabilityLog(Base):
     error_code: Mapped[str | None] = mapped_column(String(64))
     info: Mapped[str | None] = mapped_column(String(256))
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ChargerCertificate(Base):
+    __tablename__ = "certificates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    charger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("chargers.id"), nullable=True, index=True)
+    charge_point_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    certificate_type: Mapped[str] = mapped_column(String(64), default="CentralSystemRootCertificate")  # CentralSystemRootCertificate, ManufacturerRootCertificate, ChargePointCertificate
+    serial_number: Mapped[str] = mapped_column(String(128))
+    issuer_name_hash: Mapped[str | None] = mapped_column(String(128))
+    issuer_key_hash: Mapped[str | None] = mapped_column(String(128))
+    subject_cn: Mapped[str | None] = mapped_column(String(128))
+    issuer_cn: Mapped[str | None] = mapped_column(String(128))
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime)
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime)
+    certificate_pem: Mapped[str] = mapped_column(String(8192))
+    status: Mapped[str] = mapped_column(String(32), default="Active")  # Active, InstalledOnDevice, Revoked, Expired
+    installed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    charger: Mapped["Charger"] = relationship(back_populates="certificates")
+
 
 

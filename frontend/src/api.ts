@@ -1,6 +1,9 @@
 import axios from 'axios'
 import { API_BASE } from './config'
-import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken, GenerateKeyResponse, SyncKeyResponse } from './types'
+import type {
+  Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken,
+  GenerateKeyResponse, SyncKeyResponse, Certificate, IssueClientCertResponse
+} from './types'
 
 const http = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' })
 
@@ -106,6 +109,17 @@ export const api = {
     http.post<GenerateKeyResponse>(`/chargers/${cpId}/generate-key`).then(r => r.data),
   syncChargerKey: (cpId: string) =>
     http.post<SyncKeyResponse>(`/chargers/${cpId}/sync-key`).then(r => r.data),
+  getChargerCertificates: (cpId: string) =>
+    http.get<Certificate[]>(`/chargers/${cpId}/certificates`).then(r => r.data),
+  installCertificate: (cpId: string, data: { certificate_type?: string; certificate_pem?: string }) =>
+    http.post<{ charge_point_id: string; certificate_type: string; status: string; serial_number: string }>(`/chargers/${cpId}/certificates/install`, data).then(r => r.data),
+  queryInstalledCertificates: (cpId: string, certificate_type = 'CentralSystemRootCertificate') =>
+    http.post<{ charge_point_id: string; certificate_type: string; status: string; certificate_hash_data: any[] }>(`/chargers/${cpId}/certificates/query?certificate_type=${certificate_type}`).then(r => r.data),
+  issueClientCert: (cpId: string, data?: { validity_days?: number; organization?: string }) =>
+    http.post<IssueClientCertResponse>(`/chargers/${cpId}/certificates/issue-client`, data || {}).then(r => r.data),
+  deleteCertificate: (cpId: string, certId: number) =>
+    http.delete<{ charge_point_id: string; deleted_cert_id: number; remote_deletion_status: string }>(`/chargers/${cpId}/certificates/${certId}`).then(r => r.data),
+  getRootCaUrl: () => `${API_BASE ? `${API_BASE}/api` : '/api'}/chargers/ca/root-cert`,
   setChargerTimezone: (cpId: string, timezone: string) =>
     http.patch<{ charge_point_id: string; timezone: string }>(`/chargers/${cpId}/timezone`, { timezone }).then(r => r.data),
   getChargerAvailability: (cpId: string) =>

@@ -88,6 +88,40 @@ async def _seed_default_tags(session: AsyncSession) -> None:
         logger.warning(f"Error seeding default tags: {e}")
 
 
+async def _seed_root_ca(session: AsyncSession) -> None:
+    from models.charger import ChargerCertificate
+    from pki import get_or_create_root_ca, calculate_ocpp_certificate_hash
+    from sqlalchemy import select
+    from datetime import datetime, timezone, timedelta
+    try:
+        res = await session.execute(
+            select(ChargerCertificate).where(ChargerCertificate.certificate_type == "CentralSystemRootCertificate")
+        )
+        if not res.scalars().first():
+            ca_cert_pem, _ = get_or_create_root_ca()
+            hash_data = calculate_ocpp_certificate_hash(ca_cert_pem)
+            now = datetime.now(timezone.utc)
+            ca_entry = ChargerCertificate(
+                charger_id=None,
+                charge_point_id=None,
+                certificate_type="CentralSystemRootCertificate",
+                serial_number=hash_data["serial_number"],
+                issuer_name_hash=hash_data["issuer_name_hash"],
+                issuer_key_hash=hash_data["issuer_key_hash"],
+                subject_cn=hash_data["subject_cn"],
+                issuer_cn=hash_data["issuer_cn"],
+                valid_from=now,
+                valid_to=now + timedelta(days=3650),
+                certificate_pem=ca_cert_pem,
+                status="Active",
+            )
+            session.add(ca_entry)
+            await session.commit()
+            logger.info("Initialized and registered CSMS Root CA certificate in database")
+    except Exception as e:
+        logger.warning(f"Error seeding root CA certificate: {e}")
+
+
 async def init_db():
     from models import charger, transaction, configuration, auth_token, authorized_tag, charging_profile  # noqa: F401
     async with engine.begin() as conn:
@@ -96,3 +130,5 @@ async def init_db():
 
     async with AsyncSessionLocal() as session:
         await _seed_default_tags(session)
+        await _seed_root_ca(session)
+
