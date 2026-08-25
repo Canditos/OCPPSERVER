@@ -37,7 +37,11 @@ export function SimulatorModal({ isOpen, onClose }: SimulatorModalProps) {
       setFeedback(res.message)
       queryClient.invalidateQueries({ queryKey: ['chargers'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      refetch()
+      queryClient.invalidateQueries({ queryKey: ['simulatorStatus'] })
+      // Auto close modal smoothly so the user can watch the live charger on the Dashboard
+      setTimeout(() => {
+        onClose()
+      }, 500)
     },
     onError: (err: any) => {
       setFeedback(`Erro: ${err?.response?.data?.detail || err.message}`)

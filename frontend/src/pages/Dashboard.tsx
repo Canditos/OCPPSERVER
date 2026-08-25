@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Zap, Wifi, AlertTriangle, Server, Activity, ChevronDown, ChevronRight, Search, X, Filter } from 'lucide-react'
+import { Zap, Wifi, AlertTriangle, Server, Activity, ChevronDown, ChevronRight, Search, X, Filter, Square, Play, Sparkles } from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
 import { SimulatorModal } from '../components/SimulatorModal'
@@ -122,7 +122,23 @@ function GroupSection({ groupName, chargers, isNoGroup = false }: GroupSectionPr
 
 export function Dashboard() {
   const { t } = useI18n()
-  const { data: chargers = [], isLoading } = useQuery<Charger[]>({
+  const { data: simStatus, refetch: refetchSim } = useQuery({
+    queryKey: ['simulatorStatus'],
+    queryFn: api.getSimulatorStatus,
+    refetchInterval: 2500,
+  })
+
+  const stopSim = async () => {
+    try {
+      await api.stopSimulator()
+      refetchSim()
+      refetchChargers()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const { data: chargers = [], isLoading, refetch: refetchChargers } = useQuery<Charger[]>({
     queryKey: ['chargers'],
     queryFn: api.getChargers,
     refetchInterval: 5000,
@@ -233,6 +249,39 @@ export function Dashboard() {
           <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('dashboard.registeredEvents', { count: events.length })}</span>
         </div>
       </div>
+
+      {/* LIVE SIMULATION ACTIVE BANNER */}
+      {simStatus?.is_running && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-600/15 via-indigo-600/15 to-blue-600/15 border border-purple-500/40 flex items-center justify-between shadow-xl shadow-purple-500/10 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3 w-3 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-slate-900 dark:text-white">
+                  Simulação Virtual em Curso: <span className="font-mono text-purple-600 dark:text-purple-400">{simStatus.station_id}</span>
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-300 font-mono">
+                  {simStatus.ocpp_version}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
+                A transmitir pacotes OCPP em tempo real para os cartões abaixo.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={stopSim}
+            className="btn text-xs px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-red-600/20"
+          >
+            <Square className="w-3.5 h-3.5" />
+            <span>Parar Simulação</span>
+          </button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
