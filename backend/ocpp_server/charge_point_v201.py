@@ -479,3 +479,69 @@ class ChargePointV201(BaseChargePointV201):
             await db.commit()
 
         return call_result.NotifyReportPayload()
+
+
+    # ── Client Command Dispatchers (Called from REST API) ────────────────────
+
+    async def remote_start_transaction(self, id_tag: str, connector_id: int = 1, evse_id: int = 1):
+        from ocpp.v201 import call
+        from ocpp.v201.enums import IdTokenType
+        token_type = IdTokenType.e_maid if (id_tag.startswith("DEV2G") or id_tag.startswith("PT-CND")) else IdTokenType.iso14443
+        import random
+        req_id = random.randint(1000, 9999)
+        req = call.RequestStartTransactionPayload(
+            evse_id=evse_id,
+            remote_start_id=req_id,
+            id_token={"id_token": id_tag, "type": token_type},
+        )
+        return await self.call(req)
+
+    async def remote_stop_transaction(self, transaction_id: Any):
+        from ocpp.v201 import call
+        tx_guid = str(transaction_id)
+        for guid, num_id in self._tx_guid_map.items():
+            if num_id == transaction_id or str(num_id) == str(transaction_id):
+                tx_guid = guid
+                break
+        req = call.RequestStopTransactionPayload(transaction_id=tx_guid)
+        return await self.call(req)
+
+    async def reset(self, reset_type: str = "Soft"):
+        from ocpp.v201 import call
+        from ocpp.v201.enums import ResetType
+        v2_type = ResetType.immediate if reset_type.lower() == "hard" else ResetType.on_idle
+        req = call.ResetPayload(type=v2_type)
+        return await self.call(req)
+
+    async def unlock_connector(self, connector_id: int = 1, evse_id: int = 1):
+        from ocpp.v201 import call
+        req = call.UnlockConnectorPayload(evse_id=evse_id, connector_id=connector_id)
+        return await self.call(req)
+
+    async def clear_cache(self):
+        from ocpp.v201 import call
+        req = call.ClearCachePayload()
+        return await self.call(req)
+
+    async def change_availability(self, connector_id: int = 1, operational_status: str = "Operative", evse_id: int = 1):
+        from ocpp.v201 import call
+        from ocpp.v201.enums import OperationalStatusType
+        op_type = OperationalStatusType.operative if operational_status.lower() == "operative" else OperationalStatusType.inoperative
+        req = call.ChangeAvailabilityPayload(
+            operational_status=op_type,
+            evse={"id": evse_id, "connector_id": connector_id} if evse_id else None
+        )
+        return await self.call(req)
+
+    async def trigger_message(self, requested_message: str, connector_id: int | None = None):
+        from ocpp.v201 import call
+        from ocpp.v201.enums import MessageTriggerType
+        trigger_map = {
+            "BootNotification": MessageTriggerType.boot_notification,
+            "Heartbeat": MessageTriggerType.heartbeat,
+            "StatusNotification": MessageTriggerType.status_notification,
+            "MeterValues": MessageTriggerType.meter_values,
+        }
+        trig = trigger_map.get(requested_message, MessageTriggerType.heartbeat)
+        req = call.TriggerMessagePayload(requested_message=trig)
+        return await self.call(req)
