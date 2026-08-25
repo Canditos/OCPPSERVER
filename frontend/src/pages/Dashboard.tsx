@@ -1,12 +1,14 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Zap, Wifi, AlertTriangle, Server, Activity, ChevronDown, ChevronRight } from 'lucide-react'
+import { Zap, Wifi, AlertTriangle, Server, Activity, ChevronDown, ChevronRight, Search, X, Filter } from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
 import { useChargerStore } from '../store/chargerStore'
 import { useChargerUiStore } from '../store/chargerUiStore'
 import type { Charger } from '../types'
 import { useI18n } from '../i18n'
+
+type StatusFilterType = 'all' | 'online' | 'charging' | 'available' | 'faulted'
 
 interface KpiProps {
   label: string
@@ -16,6 +18,7 @@ interface KpiProps {
   color: 'blue' | 'emerald' | 'red' | 'amber' | 'violet'
   glow?: boolean
   delay?: number
+  isActive?: boolean
   onClick?: () => void
 }
 
@@ -27,7 +30,7 @@ const COLOR_MAP = {
   violet: { icon: 'bg-violet-500/15 text-violet-400', val: 'bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent', card: '' },
 }
 
-function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0, onClick }: KpiProps) {
+function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0, isActive = false, onClick }: KpiProps) {
   const c = COLOR_MAP[color]
   const content = (
     <>
@@ -45,8 +48,8 @@ function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0, onCl
       </div>
       <div>
         <p className={`text-3xl font-bold tabular-nums ${c.val}`}>{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-        <p className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">{label}</p>
+        {sub && <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">{sub}</p>}
+        <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 font-semibold uppercase tracking-wide">{label}</p>
       </div>
     </>
   )
@@ -56,7 +59,11 @@ function KpiCard({ label, value, sub, icon, color, glow = false, delay = 0, onCl
       <button
         type="button"
         onClick={onClick}
-        className={`kpi-card w-full text-left ${glow ? c.card : ''} animate-fade-up cursor-pointer hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-blue-500/40`}
+        className={`kpi-card w-full text-left transition-all cursor-pointer ${
+          isActive
+            ? 'ring-2 ring-blue-500 shadow-lg shadow-blue-500/20 scale-[1.02] border-blue-400/50 bg-blue-500/5 dark:bg-blue-500/10'
+            : glow ? c.card : ''
+        } animate-fade-up hover:scale-[1.01]`}
         style={{ animationDelay: `${delay}ms` }}
       >
         {content}
@@ -158,20 +165,45 @@ export function Dashboard() {
     .reduce((acc, [, m]) => acc + Number(m.value ?? 0), 0)
   const totalChargingKw = totalChargingWatts / 1000
 
+  const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+
   const scrollToSection = (id: string) => {
     const el = document.querySelector(`#${id}`) as HTMLElement | null
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    el?.classList.add('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
-    window.setTimeout(() => {
-      el?.classList.remove('ring-2', 'ring-blue-500/40', 'ring-offset-2', 'ring-offset-slate-950')
-    }, 1400)
   }
 
+  const handleKpiClick = (filter: StatusFilterType) => {
+    setStatusFilter((prev) => (prev === filter ? 'all' : filter))
+    scrollToSection('chargers-section')
+  }
+
+  const filteredChargers = useMemo(() => {
+    return chargers.filter((c) => {
+      if (statusFilter === 'online' && !isChargerOnline(c)) return false
+      if (statusFilter === 'charging' && !isChargerCharging(c)) return false
+      if (statusFilter === 'available') {
+        if (!isChargerOnline(c) || isChargerCharging(c) || isChargerFaulted(c)) return false
+      }
+      if (statusFilter === 'faulted' && !isChargerFaulted(c)) return false
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const idMatch = c.charge_point_id.toLowerCase().includes(q)
+        const modelMatch = (c.model || '').toLowerCase().includes(q)
+        const vendorMatch = (c.vendor || '').toLowerCase().includes(q)
+        const groupMatch = (groups[c.charge_point_id] || '').toLowerCase().includes(q)
+        if (!idMatch && !modelMatch && !vendorMatch && !groupMatch) return false
+      }
+      return true
+    })
+  }, [chargers, statusFilter, searchQuery, liveState, groups])
+
   // Group chargers: named groups sorted alphabetically, then ungrouped at the end
-  const grouped = React.useMemo(() => {
+  const grouped = useMemo(() => {
     const map: Record<string, Charger[]> = {}
     const ungrouped: Charger[] = []
-    for (const c of chargers) {
+    for (const c of filteredChargers) {
       const g = groups[c.charge_point_id]
       if (g && g.trim()) {
         if (!map[g]) map[g] = []
@@ -182,21 +214,21 @@ export function Dashboard() {
     }
     const sortedGroups = Object.keys(map).sort((a, b) => a.localeCompare(b))
     return { sortedGroups, map, ungrouped }
-  }, [chargers, groups])
+  }, [filteredChargers, groups])
 
   const hasGroups = grouped.sortedGroups.length > 0
 
   return (
     <div className="space-y-8 animate-fade-up">
       {/* page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-shimmer">Central System</h1>
-          <p className="text-sm text-gray-400 mt-1">OCPP 1.6 · @Canditos OCPP</p>
+          <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">OCPP 1.6-J & 2.0.1 Ready · @Canditos Mission Control</p>
         </div>
-        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm">
-          <Activity className="w-4 h-4 text-emerald-400 animate-pulse-slow" />
-          <span className="text-xs text-emerald-400 font-medium">{t('dashboard.registeredEvents', { count: events.length })}</span>
+        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm w-fit">
+          <Activity className="w-4 h-4 text-emerald-500 dark:text-emerald-400 animate-pulse-slow" />
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('dashboard.registeredEvents', { count: events.length })}</span>
         </div>
       </div>
 
@@ -208,7 +240,8 @@ export function Dashboard() {
           icon={<Server className="w-5 h-5" />}
           color="violet"
           delay={0}
-          onClick={() => scrollToSection('chargers-section')}
+          isActive={statusFilter === 'all'}
+          onClick={() => handleKpiClick('all')}
         />
         <KpiCard
           label={t('dashboard.online')}
@@ -218,7 +251,8 @@ export function Dashboard() {
           color="emerald"
           glow={online > 0}
           delay={60}
-          onClick={() => scrollToSection('chargers-section')}
+          isActive={statusFilter === 'online'}
+          onClick={() => handleKpiClick('online')}
         />
         <KpiCard
           label={t('dashboard.charging')}
@@ -228,7 +262,8 @@ export function Dashboard() {
           color="blue"
           glow={charging > 0}
           delay={120}
-          onClick={() => scrollToSection('chargers-section')}
+          isActive={statusFilter === 'charging'}
+          onClick={() => handleKpiClick('charging')}
         />
         <KpiCard
           label={t('dashboard.available')}
@@ -236,7 +271,8 @@ export function Dashboard() {
           icon={<Zap className="w-5 h-5" />}
           color="amber"
           delay={180}
-          onClick={() => scrollToSection('chargers-section')}
+          isActive={statusFilter === 'available'}
+          onClick={() => handleKpiClick('available')}
         />
         <KpiCard
           label={t('dashboard.faults')}
@@ -244,65 +280,169 @@ export function Dashboard() {
           icon={<AlertTriangle className="w-5 h-5" />}
           color="red"
           delay={240}
-          onClick={() => scrollToSection('chargers-section')}
+          isActive={statusFilter === 'faulted'}
+          onClick={() => handleKpiClick('faulted')}
         />
       </div>
 
-      {/* CHARGERS */}
-      <div id="chargers-section">
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{t('dashboard.chargingStations')}</h2>
-            <span className="text-xs text-gray-500 font-mono">{t('dashboard.registered', { count: chargers.length })}</span>
+      {/* CHARGERS SECTION */}
+      <div id="chargers-section" className="space-y-6">
+        {/* Filter & Search Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl bg-white/70 dark:bg-gray-900/60 border border-slate-200 dark:border-white/10 shadow-sm backdrop-blur-md">
+          {/* Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-500 dark:text-gray-400 mr-1 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5" /> Filtrar:
+            </span>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
+              }`}
+            >
+              Todos ({total})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('online')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'online'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> Online ({online})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('charging')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'charging'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
+              }`}
+            >
+              <Zap className="w-3 h-3 text-blue-400" /> A Carregar ({charging})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('available')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                statusFilter === 'available'
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
+              }`}
+            >
+              Disponíveis ({available})
+            </button>
+            {faulted > 0 && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter('faulted')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  statusFilter === 'faulted'
+                    ? 'bg-red-600 text-white shadow-md shadow-red-500/20'
+                    : 'bg-slate-100 dark:bg-white/5 text-red-500 dark:text-red-400 hover:bg-slate-200 dark:hover:bg-white/10'
+                }`}
+              >
+                <AlertTriangle className="w-3 h-3 text-red-400" /> Avarias ({faulted})
+              </button>
+            )}
           </div>
 
-          {isLoading && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="card h-44 animate-pulse bg-gray-800/40" />
-              ))}
-            </div>
-          )}
-
-          {!isLoading && chargers.length === 0 && (
-            <div className="card flex flex-col items-center justify-center py-16 text-center gap-4">
-              <div className="p-4 rounded-2xl bg-gray-800/60">
-                <Zap className="w-8 h-8 text-gray-600" />
-              </div>
-              <div>
-                <p className="text-gray-400 font-medium">{t('dashboard.noChargers')}</p>
-                <p className="text-gray-500 text-sm mt-1">{t('dashboard.connectStation')}</p>
-                <p className="text-xs font-mono mt-2 px-3 py-1.5 rounded-lg bg-gray-800/80 text-blue-400 border border-blue-500/20">
-                  wss://ocpp.gatoescondido.com/ocpp/&lt;charger-id&gt;
-                </p>
-              </div>
-            </div>
-          )}
-
-          {!isLoading && chargers.length > 0 && (
-            <div className="space-y-6">
-              {hasGroups ? (
-                <>
-                  {grouped.sortedGroups.map((g) => (
-                    <GroupSection key={g} groupName={g} chargers={grouped.map[g]} />
-                  ))}
-                  {grouped.ungrouped.length > 0 && (
-                    <GroupSection
-                      groupName={t('dashboard.noGroup')}
-                      chargers={grouped.ungrouped}
-                      isNoGroup
-                    />
-                  )}
-                </>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {chargers.map((c) => <ChargerCard key={c.id} charger={c} />)}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Real-time Search Bar */}
+          <div className="relative min-w-[240px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Pesquisar posto, modelo, grupo..."
+              className="input pl-9 pr-8 py-1.5 text-xs font-medium"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
+        {/* Loading Skeleton */}
+        {isLoading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="card h-44 animate-pulse bg-slate-200/60 dark:bg-gray-800/40" />
+            ))}
+          </div>
+        )}
+
+        {/* Empty State - No chargers registered */}
+        {!isLoading && chargers.length === 0 && (
+          <div className="card flex flex-col items-center justify-center py-16 text-center gap-4">
+            <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500">
+              <Zap className="w-8 h-8" />
+            </div>
+            <div>
+              <p className="text-slate-800 dark:text-gray-200 font-bold text-base">{t('dashboard.noChargers')}</p>
+              <p className="text-slate-500 dark:text-gray-400 text-sm mt-1">{t('dashboard.connectStation')}</p>
+              <p className="text-xs font-mono mt-3 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-black/60 text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-white/10 select-all inline-block">
+                wss://ocpp.gatoescondido.com/ocpp/&lt;charger-id&gt;
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State - Filter produced 0 results */}
+        {!isLoading && chargers.length > 0 && filteredChargers.length === 0 && (
+          <div className="card flex flex-col items-center justify-center py-12 text-center gap-3">
+            <Filter className="w-8 h-8 text-slate-400 dark:text-gray-500" />
+            <p className="text-slate-700 dark:text-gray-300 font-semibold text-sm">
+              Nenhum posto encontrado para o filtro "{statusFilter}" {searchQuery ? `e pesquisa "${searchQuery}"` : ''}.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('all')
+                setSearchQuery('')
+              }}
+              className="btn-secondary text-xs px-4 py-1.5 rounded-lg mt-1"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        )}
+
+        {/* Stations Grid with Groups */}
+        {!isLoading && filteredChargers.length > 0 && (
+          <div className="space-y-6">
+            {hasGroups ? (
+              <>
+                {grouped.sortedGroups.map((g) => (
+                  <GroupSection key={g} groupName={g} chargers={grouped.map[g]} />
+                ))}
+                {grouped.ungrouped.length > 0 && (
+                  <GroupSection
+                    groupName={t('dashboard.noGroup')}
+                    chargers={grouped.ungrouped}
+                    isNoGroup
+                  />
+                )}
+              </>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {filteredChargers.map((c) => <ChargerCard key={c.id} charger={c} />)}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
