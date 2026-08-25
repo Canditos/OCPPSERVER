@@ -292,7 +292,7 @@ export function Dashboard() {
           {/* Filter Pills */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-bold text-slate-500 dark:text-gray-400 mr-1 flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5" /> Filtrar:
+              <Filter className="w-3.5 h-3.5" /> {t('dashboard.filter')}
             </span>
             <button
               type="button"
@@ -303,7 +303,7 @@ export function Dashboard() {
                   : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
               }`}
             >
-              Todos ({total})
+              {t('dashboard.all')} ({total})
             </button>
             <button
               type="button"
@@ -314,7 +314,7 @@ export function Dashboard() {
                   : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> Online ({online})
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> {t('dashboard.online')} ({online})
             </button>
             <button
               type="button"
@@ -325,7 +325,7 @@ export function Dashboard() {
                   : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
               }`}
             >
-              <Zap className="w-3 h-3 text-blue-400" /> A Carregar ({charging})
+              <Zap className="w-3 h-3 text-blue-400" /> {t('dashboard.charging')} ({charging})
             </button>
             <button
               type="button"
@@ -336,7 +336,7 @@ export function Dashboard() {
                   : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10'
               }`}
             >
-              Disponíveis ({available})
+              {t('dashboard.available')} ({available})
             </button>
             {faulted > 0 && (
               <button
@@ -348,7 +348,7 @@ export function Dashboard() {
                     : 'bg-slate-100 dark:bg-white/5 text-red-500 dark:text-red-400 hover:bg-slate-200 dark:hover:bg-white/10'
                 }`}
               >
-                <AlertTriangle className="w-3 h-3 text-red-400" /> Avarias ({faulted})
+                <AlertTriangle className="w-3 h-3 text-red-400" /> {t('dashboard.faults')} ({faulted})
               </button>
             )}
           </div>
@@ -360,7 +360,7 @@ export function Dashboard() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pesquisar posto, modelo, grupo..."
+              placeholder={t('dashboard.searchPlaceholder')}
               className="input pl-9 pr-8 py-1.5 text-xs font-medium"
             />
             {searchQuery && (
@@ -405,7 +405,10 @@ export function Dashboard() {
           <div className="card flex flex-col items-center justify-center py-12 text-center gap-3">
             <Filter className="w-8 h-8 text-slate-400 dark:text-gray-500" />
             <p className="text-slate-700 dark:text-gray-300 font-semibold text-sm">
-              Nenhum posto encontrado para o filtro "{statusFilter}" {searchQuery ? `e pesquisa "${searchQuery}"` : ''}.
+              {t('dashboard.noResults', {
+                filter: statusFilter,
+                search: searchQuery ? t('dashboard.searchQueryLabel', { query: searchQuery }) : '',
+              })}
             </p>
             <button
               type="button"
@@ -415,7 +418,7 @@ export function Dashboard() {
               }}
               className="btn-secondary text-xs px-4 py-1.5 rounded-lg mt-1"
             >
-              Limpar Filtros
+              {t('dashboard.clearFilters')}
             </button>
           </div>
         )}

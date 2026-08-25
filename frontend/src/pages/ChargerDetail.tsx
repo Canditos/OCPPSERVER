@@ -16,6 +16,7 @@ import { EventLog } from '../components/EventLog'
 import { ConnectorBadge } from '../components/ConnectorBadge'
 import { AvailabilityMonitor } from '../components/AvailabilityMonitor'
 import { useChargerStore } from '../store/chargerStore'
+import { useI18n } from '../i18n'
 import type { Charger, OcppMessage, Certificate, IssueClientCertResponse } from '../types'
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -42,6 +43,7 @@ function DirectionBadge({ direction }: { direction: string }) {
 
 export function ChargerDetail() {
   const { id } = useParams<{ id: string }>()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
   const live    = useChargerStore((s) => s.liveState[id ?? ''])
   
@@ -652,7 +654,7 @@ export function ChargerDetail() {
               }`}
             >
               <BarChart3 className={`w-4 h-4 ${activeTab === 'telemetry' ? 'text-white' : 'text-blue-500 dark:text-blue-400'}`} />
-              <span>Telemetria & Monitorização</span>
+              <span>{t('chargerDetail.tabs.telemetry')}</span>
             </button>
 
             <button
@@ -665,7 +667,7 @@ export function ChargerDetail() {
               }`}
             >
               <Award className={`w-4 h-4 ${activeTab === 'security' ? 'text-white' : 'text-purple-500 dark:text-purple-400'}`} />
-              <span>Certificados X.509 & mTLS</span>
+              <span>{t('chargerDetail.tabs.certificates')}</span>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
                 activeTab === 'security'
                   ? 'bg-white/25 text-white'
@@ -685,7 +687,7 @@ export function ChargerDetail() {
               }`}
             >
               <MessageSquare className={`w-4 h-4 ${activeTab === 'logs' ? 'text-white' : 'text-emerald-500 dark:text-emerald-400'}`} />
-              <span>Logs & Eventos OCPP</span>
+              <span>{t('chargerDetail.tabs.logs')}</span>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
                 activeTab === 'logs'
                   ? 'bg-white/25 text-white'
@@ -887,7 +889,7 @@ export function ChargerDetail() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
                     <Activity className="w-4 h-4 text-blue-400" />
-                    Eventos Recentes
+                    {t('chargerDetail.recentEvents')}
                   </h3>
                 </div>
                 <EventLog cpId={charger.charge_point_id} maxHeight="300px" />
@@ -899,7 +901,7 @@ export function ChargerDetail() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2">
                       <MessageSquare className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-                      <h3 className="text-xs font-bold text-slate-900 dark:text-gray-200 uppercase tracking-wider">Log de Mensagens OCPP</h3>
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-gray-200 uppercase tracking-wider">{t('chargerDetail.ocppLogTitle')}</h3>
                       <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-gray-300 border border-slate-200 dark:border-white/10">
                         {filteredMessages.length}/{messages.length}
                       </span>
@@ -913,7 +915,7 @@ export function ChargerDetail() {
                           type="text"
                           value={msgSearch}
                           onChange={(e) => setMsgSearch(e.target.value)}
-                          placeholder="Filtrar payload / ação..."
+                          placeholder={t("chargerDetail.filterPlaceholder")}
                           className="text-xs pl-8 pr-6 py-1.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 w-44 sm:w-56"
                         />
                         {msgSearch && (
@@ -941,12 +943,12 @@ export function ChargerDetail() {
                   {/* Filter Action Pills */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {[
-                      { id: 'all', label: 'Todas' },
+                      { id: 'all', label: t('chargerDetail.filterAll') },
                       { id: 'MeterValues', label: 'MeterValues' },
                       { id: 'Heartbeat', label: 'Heartbeat' },
                       { id: 'StatusNotification', label: 'Status' },
                       { id: 'Authorize', label: 'Authorize' },
-                      { id: 'security', label: 'Segurança / Certs' },
+                      { id: 'security', label: t('chargerDetail.filterSecurity') },
                     ].map((f) => {
                       const active = msgFilterAction === f.id
                       return (
@@ -995,7 +997,7 @@ export function ChargerDetail() {
                           {filteredMessages.length === 0 && (
                             <tr>
                               <td colSpan={4} className="px-4 py-8 text-center text-slate-500 dark:text-gray-400">
-                                Nenhuma mensagem encontrada com os filtros selecionados.
+                                {t('chargerDetail.noMessagesFound')}
                               </td>
                             </tr>
                           )}
@@ -1304,10 +1306,10 @@ export function ChargerDetail() {
               <table className="w-full text-xs">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-gray-950">
-                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-24">Direção</th>
-                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-48">Ação OCPP</th>
-                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-36">Hora</th>
-                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">Conteúdo do Payload</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-24">{t("chargerDetail.colDir")}</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-48">{t("chargerDetail.colAction")}</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-36">{t("chargerDetail.colTime")}</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">{t("chargerDetail.colPayload")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/10">
@@ -1328,7 +1330,7 @@ export function ChargerDetail() {
                   {filteredMessages.length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-4 py-12 text-center text-slate-500 dark:text-gray-400">
-                        Nenhuma mensagem encontrada para os critérios selecionados.
+                        {t('chargerDetail.noMessagesFound')}
                       </td>
                     </tr>
                   )}
