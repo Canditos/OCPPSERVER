@@ -44,10 +44,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   if (!active || !payload?.length) return null
   return (
     <div
-      className="rounded-xl p-3 text-xs space-y-1.5 shadow-2xl backdrop-blur-md"
-      style={{ background: 'rgba(10,14,26,0.95)', border: '1px solid rgba(255,255,255,0.12)' }}
+      className="rounded-xl p-3 text-xs space-y-1.5 shadow-2xl backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border border-slate-200 dark:border-white/15"
     >
-      <p className="text-gray-400 font-mono mb-2 border-b border-white/10 pb-1">{label}</p>
+      <p className="text-slate-500 dark:text-gray-400 font-mono mb-2 border-b border-slate-200 dark:border-white/10 pb-1 font-semibold">{label}</p>
       {payload.map((p) => {
         const cfg = MEASURAND_CFG[p.name]
         const displayLabel = cfg ? cfg.label : p.name
@@ -56,9 +55,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <div key={p.name} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ background: p.color }} />
-              <span className="text-gray-300 font-medium">{displayLabel}:</span>
+              <span className="text-slate-600 dark:text-gray-300 font-medium">{displayLabel}:</span>
             </div>
-            <span className="text-white font-mono font-bold">
+            <span className="text-slate-900 dark:text-white font-mono font-bold">
               {Number(p.value).toLocaleString('pt-PT', { maximumFractionDigits: 2 })}{unit}
             </span>
           </div>

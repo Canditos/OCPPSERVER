@@ -617,17 +617,17 @@ export function ChargerDetail() {
         {/* right columns with Tab Navigation */}
         <div className="xl:col-span-2 space-y-5">
           {/* Tab navigation pills with High Visibility & Contrast */}
-          <div className="flex items-center gap-2 p-1.5 bg-gray-900/90 border border-white/15 rounded-2xl shadow-xl backdrop-blur-md">
+          <div className="flex items-center gap-2 p-1.5 bg-white dark:bg-gray-900/90 border border-slate-200 dark:border-white/15 rounded-2xl shadow-md dark:shadow-xl backdrop-blur-md">
             <button
               type="button"
               onClick={() => setActiveTab('telemetry')}
               className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'telemetry'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 border border-blue-400/50 scale-[1.01]'
-                  : 'text-gray-300 hover:text-white hover:bg-white/10 bg-white/5 border border-white/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-50 border border-slate-200/80 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/10 dark:bg-white/5 dark:border-white/5'
               }`}
             >
-              <BarChart3 className={`w-4 h-4 ${activeTab === 'telemetry' ? 'text-white' : 'text-blue-400'}`} />
+              <BarChart3 className={`w-4 h-4 ${activeTab === 'telemetry' ? 'text-white' : 'text-blue-500 dark:text-blue-400'}`} />
               <span>Telemetria & Monitorização</span>
             </button>
 
@@ -637,13 +637,15 @@ export function ChargerDetail() {
               className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'security'
                   ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 border border-purple-400/50 scale-[1.01]'
-                  : 'text-gray-300 hover:text-white hover:bg-white/10 bg-white/5 border border-white/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-50 border border-slate-200/80 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/10 dark:bg-white/5 dark:border-white/5'
               }`}
             >
-              <Award className={`w-4 h-4 ${activeTab === 'security' ? 'text-white' : 'text-purple-400'}`} />
+              <Award className={`w-4 h-4 ${activeTab === 'security' ? 'text-white' : 'text-purple-500 dark:text-purple-400'}`} />
               <span>Certificados X.509 & mTLS</span>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                activeTab === 'security' ? 'bg-white/25 text-white' : 'bg-purple-500/25 text-purple-300 border border-purple-500/40'
+                activeTab === 'security'
+                  ? 'bg-white/25 text-white'
+                  : 'bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-500/25 dark:text-purple-300 dark:border-purple-500/40'
               }`}>
                 {certs.length}
               </span>
@@ -655,13 +657,15 @@ export function ChargerDetail() {
               className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'logs'
                   ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 border border-emerald-400/50 scale-[1.01]'
-                  : 'text-gray-300 hover:text-white hover:bg-white/10 bg-white/5 border border-white/5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-50 border border-slate-200/80 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/10 dark:bg-white/5 dark:border-white/5'
               }`}
             >
-              <MessageSquare className={`w-4 h-4 ${activeTab === 'logs' ? 'text-white' : 'text-emerald-400'}`} />
+              <MessageSquare className={`w-4 h-4 ${activeTab === 'logs' ? 'text-white' : 'text-emerald-500 dark:text-emerald-400'}`} />
               <span>Logs & Eventos OCPP</span>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                activeTab === 'logs' ? 'bg-white/25 text-white' : 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
+                activeTab === 'logs'
+                  ? 'bg-white/25 text-white'
+                  : 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/25 dark:text-emerald-300 dark:border-emerald-500/40'
               }`}>
                 {messages.length}
               </span>

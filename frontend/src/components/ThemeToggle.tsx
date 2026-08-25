@@ -18,7 +18,7 @@ export function ThemeToggle({
   compact?: boolean
 }) {
   return (
-    <div className="w-full grid grid-cols-3 gap-1 rounded-xl border border-white/10 bg-white/5 p-1 box-border">
+    <div className="w-full grid grid-cols-3 gap-1 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 p-1 box-border shadow-inner">
       {OPTIONS.map((option) => {
         const active = option.value === value
         return (
@@ -26,10 +26,10 @@ export function ThemeToggle({
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
-            className={`flex items-center justify-center gap-1 rounded-lg py-1 px-1.5 text-[10px] font-medium transition-all ${
+            className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-2 text-[11px] font-semibold transition-all cursor-pointer ${
               active
-                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm font-semibold'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                ? 'bg-blue-600 text-white shadow-md dark:bg-blue-500/30 dark:text-blue-300 dark:border dark:border-blue-400/50'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-white/5'
             }`}
             title={option.label}
           >
