@@ -303,5 +303,9 @@ html:not(.dark) thead th {
 }
 
 html:not(.dark) tbody tr:hover {
-  background-color: #f8fafc !important;
+  background-color: rgba(226, 232, 240, 0.6) !important;
+}
+
+html.dark tbody tr:hover {
+  background-color: rgba(59, 130, 246, 0.12) !important;
 }

@@ -979,7 +979,7 @@ export function ChargerDetail() {
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-white/10">
                           {filteredMessages.slice(0, 100).map((m) => (
-                            <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-white/8 transition-colors">
+                            <tr key={m.id} className="hover:bg-blue-50/80 dark:hover:bg-blue-500/15 transition-colors group">
                               <td className="px-4 py-2.5 whitespace-nowrap"><DirectionBadge direction={m.direction} /></td>
                               <td className="px-4 py-2.5 font-mono text-slate-900 dark:text-white font-bold whitespace-nowrap">{m.action}</td>
                               <td className="px-4 py-2.5 text-slate-600 dark:text-gray-300 font-mono font-semibold whitespace-nowrap">
@@ -1312,7 +1312,7 @@ export function ChargerDetail() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/10">
                   {filteredMessages.map((m) => (
-                    <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-white/8 transition-colors">
+                    <tr key={m.id} className="hover:bg-blue-50/80 dark:hover:bg-blue-500/15 transition-colors group">
                       <td className="px-4 py-2.5 whitespace-nowrap"><DirectionBadge direction={m.direction} /></td>
                       <td className="px-4 py-2.5 font-mono text-slate-900 dark:text-white font-bold whitespace-nowrap">{m.action}</td>
                       <td className="px-4 py-2.5 text-slate-600 dark:text-gray-300 font-mono font-semibold whitespace-nowrap">
