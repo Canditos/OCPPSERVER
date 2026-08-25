@@ -8,6 +8,7 @@ from sqlalchemy import select, update, delete
 
 from database import get_db, AsyncSessionLocal
 from models.charging_profile import ChargingProfile, ChargingProfileModel
+from models.charger import Charger
 from ocpp_server.central_system import get_charge_point
 
 logger = logging.getLogger(__name__)
@@ -386,7 +387,11 @@ async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get
     if not cp:
         raise HTTPException(status_code=404, detail=f"Charger '{cp_id}' not connected")
 
-    ocpp_payload = profile.to_ocpp_dict()
+    r_ch = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    ch = r_ch.scalar_one_or_none()
+    ch_tz = (ch.timezone if ch and ch.timezone else "Europe/Lisbon")
+
+    ocpp_payload = profile.to_ocpp_dict(charger_timezone=ch_tz)
     connector_id = profile.connector_id
     if profile.purpose == "ChargePointMaxProfile":
         connector_id = 0

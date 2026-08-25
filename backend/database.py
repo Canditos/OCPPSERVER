@@ -41,6 +41,7 @@ async def _add_missing_columns(conn) -> None:
 
     cols_to_add = [
         ("chargers", "autocharge_enabled", "BOOLEAN NOT NULL DEFAULT 0" if is_sqlite else "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("chargers", "timezone", "VARCHAR(64) DEFAULT 'Europe/Lisbon'"),
         ("charging_profiles", "recurrency_kind", "VARCHAR(16)"),
         ("charging_profiles", "charging_rate_unit", "VARCHAR(8) DEFAULT 'A'"),
         ("charging_profiles", "min_charging_rate", "FLOAT"),

@@ -86,6 +86,7 @@ async def list_chargers(db: AsyncSession = Depends(get_db)):
             last_seen=ch.last_seen,
             registered_at=ch.registered_at,
             client_ip=ch.client_ip,
+            timezone=ch.timezone or "Europe/Lisbon",
             connectors=conns,
         )
         out.append(ch_out)
@@ -114,6 +115,7 @@ async def get_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
         last_seen=charger.last_seen,
         registered_at=charger.registered_at,
         client_ip=charger.client_ip,
+        timezone=charger.timezone or "Europe/Lisbon",
         connectors=conns,
     )
 
@@ -252,3 +254,25 @@ async def set_autocharge(cp_id: str, body: AutochargeUpdate, db: AsyncSession = 
     charger.autocharge_enabled = body.enabled
     await db.commit()
     return {"charge_point_id": cp_id, "autocharge_enabled": body.enabled}
+
+
+class TimezoneUpdate(BaseModel):
+    timezone: str = "Europe/Lisbon"
+
+
+@router.patch("/{cp_id}/timezone")
+async def set_timezone(cp_id: str, body: TimezoneUpdate, db: AsyncSession = Depends(get_db)):
+    import zoneinfo
+    try:
+        zoneinfo.ZoneInfo(body.timezone)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Fuso horário inválido: '{body.timezone}'. Exemplo válido: 'Europe/Lisbon', 'Atlantic/Madeira', 'Atlantic/Azores'")
+    
+    result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = result.scalar_one_or_none()
+    if not charger:
+        raise HTTPException(status_code=404, detail="Charger not found")
+    charger.timezone = body.timezone
+    await db.commit()
+    return {"charge_point_id": cp_id, "timezone": body.timezone}
+

@@ -185,6 +185,7 @@ export function ChargerDetail() {
             <InfoRow label="ICCID"       value={charger.iccid} />
             <InfoRow label="IMSI"        value={charger.imsi} />
             <InfoRow label="IP"          value={charger.client_ip} />
+            <InfoRow label="Fuso Horário" value={charger.timezone || "Europe/Lisbon"} />
             <InfoRow label="Registado"   value={safeFormatDate(charger.registered_at)} />
             <InfoRow label="Último sinal" value={safeFormatDistance(charger.last_seen)} />
 

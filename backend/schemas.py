@@ -33,6 +33,7 @@ class ChargerOut(BaseModel):
     last_seen: datetime | None
     registered_at: datetime | None
     client_ip: str | None
+    timezone: str | None = "Europe/Lisbon"
     connectors: list[ConnectorOut] = []
 
     class Config:

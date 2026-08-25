@@ -27,6 +27,7 @@ export interface Charger {
   last_seen: string | null
   registered_at: string | null
   client_ip: string | null
+  timezone?: string | null
   connectors: Connector[]
 }
 

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Zap, Calendar, Clock, Sun, Moon, Sparkles,
   Plus, Trash2, Send, RotateCcw, AlertTriangle, CheckCircle2,
-  ChevronDown, Activity, Info, BarChart3, Layers, Sliders, BatteryCharging
+  ChevronDown, Activity, Info, BarChart3, Layers, Sliders, BatteryCharging, Globe
 } from 'lucide-react'
 import { api, SmartChargingPreset, SmartChargingProfile } from '../api'
 import type { Charger } from '../types'
@@ -294,6 +294,20 @@ export function SmartCharging() {
     }
   }
 
+  const handleUpdateTimezone = async (newTz: string) => {
+    if (!selectedCpId) return
+    setLoadingAction('timezone')
+    try {
+      await api.setChargerTimezone(selectedCpId, newTz)
+      showToast('success', `Fuso horário do posto atualizado para: ${newTz}`)
+      qc.invalidateQueries({ queryKey: ['chargers'] })
+    } catch (err: any) {
+      showToast('error', `Erro ao atualizar fuso horário: ${err?.response?.data?.detail || err.message}`)
+    } finally {
+      setLoadingAction(null)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-up pb-12">
       {/* Header */}
@@ -322,22 +336,42 @@ export function SmartCharging() {
           </div>
         </div>
 
-        {/* Charger Selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-400 font-medium shrink-0">{t('smart.targetStation')}</label>
-          <div className="relative min-w-[220px]">
+        {/* Charger & Timezone Selectors */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400 font-medium shrink-0">{t('smart.targetStation')}</label>
+            <div className="relative min-w-[200px]">
+              <select
+                className="select appearance-none pr-10 text-xs py-2 bg-gray-900/80 border-white/10"
+                value={selectedCpId}
+                onChange={(e) => setSelectedCpId(e.target.value)}
+              >
+                {chargers.map((c) => (
+                  <option key={c.id} value={c.charge_point_id}>
+                    {isChargerOnline(c) ? '🟢' : '⚫'} {c.charge_point_id} ({c.vendor || t('smart.stationFallback')})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-900/80 border border-white/10 text-xs text-gray-300">
+            <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <select
-              className="select appearance-none pr-10 text-xs py-2 bg-gray-900/80 border-white/10"
-              value={selectedCpId}
-              onChange={(e) => setSelectedCpId(e.target.value)}
+              className="bg-transparent border-0 text-xs text-gray-200 focus:ring-0 focus:outline-none cursor-pointer pr-1"
+              value={currentCharger?.timezone || 'Europe/Lisbon'}
+              onChange={(e) => handleUpdateTimezone(e.target.value)}
+              disabled={loadingAction === 'timezone'}
+              title="Fuso Horário do Posto para Conversão Smart Charging"
             >
-              {chargers.map((c) => (
-                <option key={c.id} value={c.charge_point_id}>
-                  {isChargerOnline(c) ? '🟢' : '⚫'} {c.charge_point_id} ({c.vendor || t('smart.stationFallback')})
-                </option>
-              ))}
+              <option value="Europe/Lisbon" className="bg-gray-900 text-gray-100">🇵🇹 Lisboa / Portugal (UTC+1/0)</option>
+              <option value="Atlantic/Madeira" className="bg-gray-900 text-gray-100">🇵🇹 Madeira (UTC+1/0)</option>
+              <option value="Atlantic/Azores" className="bg-gray-900 text-gray-100">🇵🇹 Açores (UTC-1/0)</option>
+              <option value="Europe/Madrid" className="bg-gray-900 text-gray-100">🇪🇸 Madrid (UTC+2/1)</option>
+              <option value="Europe/London" className="bg-gray-900 text-gray-100">🇬🇧 Londres (UTC+1/0)</option>
+              <option value="UTC" className="bg-gray-900 text-gray-100">🌐 UTC Puro</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
           </div>
         </div>
       </div>
@@ -382,6 +416,10 @@ export function SmartCharging() {
                       : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                   }`}>
                     {activeProfile.charging_rate_unit === 'W' ? 'DC FAST (Watts / kW)' : 'AC (Amperes)'}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 font-medium flex items-center gap-1">
+                    <Globe className="w-3 h-3 text-blue-400" />
+                    {currentCharger?.timezone || 'Europe/Lisbon'} (UTC Anchor Sincronizado)
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">

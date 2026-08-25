@@ -100,6 +100,8 @@ export const api = {
 
   getChargers: () => http.get<Charger[]>('/chargers').then(r => r.data),
   getCharger: (id: string) => http.get<Charger>(`/chargers/${id}`).then(r => r.data),
+  setChargerTimezone: (cpId: string, timezone: string) =>
+    http.patch<{ charge_point_id: string; timezone: string }>(`/chargers/${cpId}/timezone`, { timezone }).then(r => r.data),
   getChargerAvailability: (cpId: string) =>
     http.get<AvailabilityData>(`/chargers/${cpId}/availability`).then(r => r.data),
   getMessages: (id: string, limit = 100) =>

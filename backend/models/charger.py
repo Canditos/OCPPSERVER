@@ -21,6 +21,7 @@ class Charger(Base):
     client_ip: Mapped[str | None] = mapped_column(String(64))
     is_online: Mapped[bool] = mapped_column(Boolean, default=False)
     autocharge_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="Europe/Lisbon")
 
     connectors: Mapped[list["Connector"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")

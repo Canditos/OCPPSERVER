@@ -40,8 +40,11 @@ class ChargingProfile(Base):
                 return None
         return None
 
-    def to_ocpp_dict(self) -> dict:
-        """Format as OCPP 1.6 csChargingProfiles dict payload."""
+    def to_ocpp_dict(self, charger_timezone: str = "Europe/Lisbon") -> dict:
+        """Format as OCPP 1.6 csChargingProfiles dict payload with timezone-aware UTC anchor."""
+        import zoneinfo
+        from datetime import timezone
+
         raw_periods = self.schedule_dict() or []
         schedule_periods = []
         for p in raw_periods:
@@ -65,9 +68,18 @@ class ChargingProfile(Base):
         if self.start_schedule:
             charging_schedule["startSchedule"] = self.start_schedule.strftime("%Y-%m-%dT%H:%M:%SZ") if hasattr(self.start_schedule, "strftime") else (str(self.start_schedule).rstrip("Z") + "Z")
         elif self.kind in ("Recurring", "Absolute"):
-            # OCPP 1.6: Recurring and Absolute schedules require a valid anchor startSchedule
-            today_midnight = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            charging_schedule["startSchedule"] = today_midnight.strftime("%Y-%m-%dT%H:%M:%SZ")
+            # OCPP 1.6: Recurring schedules need an anchor startSchedule.
+            # Anchor to local midnight in charger's timezone, converted to UTC.
+            tz_name = charger_timezone or "Europe/Lisbon"
+            try:
+                tz = zoneinfo.ZoneInfo(tz_name)
+            except Exception:
+                tz = zoneinfo.ZoneInfo("Europe/Lisbon")
+            
+            now_local = datetime.now(tz)
+            local_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            utc_anchor = local_midnight.astimezone(timezone.utc)
+            charging_schedule["startSchedule"] = utc_anchor.strftime("%Y-%m-%dT%H:%M:%SZ")
         if self.min_charging_rate is not None:
             charging_schedule["minChargingRate"] = float(self.min_charging_rate)
 
