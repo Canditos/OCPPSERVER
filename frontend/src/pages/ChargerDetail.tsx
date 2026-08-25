@@ -29,9 +29,13 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 
 function DirectionBadge({ direction }: { direction: string }) {
   return direction === 'IN' ? (
-    <span className="badge bg-blue-500/15 text-blue-400 border border-blue-500/20">↓ IN</span>
+    <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-500/25 text-blue-300 border border-blue-400/50">
+      ↓ IN
+    </span>
   ) : (
-    <span className="badge bg-violet-500/15 text-violet-400 border border-violet-500/20">↑ OUT</span>
+    <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-purple-500/25 text-purple-300 border border-purple-400/50">
+      ↑ OUT
+    </span>
   )
 }
 
@@ -612,33 +616,35 @@ export function ChargerDetail() {
 
         {/* right columns with Tab Navigation */}
         <div className="xl:col-span-2 space-y-5">
-          {/* Tab navigation pills */}
-          <div className="flex items-center gap-1.5 p-1 bg-white/3 border border-white/8 rounded-2xl">
+          {/* Tab navigation pills with High Visibility & Contrast */}
+          <div className="flex items-center gap-2 p-1.5 bg-gray-900/90 border border-white/15 rounded-2xl shadow-xl backdrop-blur-md">
             <button
               type="button"
               onClick={() => setActiveTab('telemetry')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'telemetry'
-                  ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/4'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 border border-blue-400/50 scale-[1.01]'
+                  : 'text-gray-300 hover:text-white hover:bg-white/10 bg-white/5 border border-white/5'
               }`}
             >
-              <BarChart3 className="w-3.5 h-3.5" />
+              <BarChart3 className={`w-4 h-4 ${activeTab === 'telemetry' ? 'text-white' : 'text-blue-400'}`} />
               <span>Telemetria & Monitorização</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('security')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'security'
-                  ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/4'
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 border border-purple-400/50 scale-[1.01]'
+                  : 'text-gray-300 hover:text-white hover:bg-white/10 bg-white/5 border border-white/5'
               }`}
             >
-              <Award className="w-3.5 h-3.5 text-purple-400" />
+              <Award className={`w-4 h-4 ${activeTab === 'security' ? 'text-white' : 'text-purple-400'}`} />
               <span>Certificados X.509 & mTLS</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                activeTab === 'security' ? 'bg-white/25 text-white' : 'bg-purple-500/25 text-purple-300 border border-purple-500/40'
+              }`}>
                 {certs.length}
               </span>
             </button>
@@ -646,15 +652,17 @@ export function ChargerDetail() {
             <button
               type="button"
               onClick={() => setActiveTab('logs')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'logs'
-                  ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/4'
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 border border-emerald-400/50 scale-[1.01]'
+                  : 'text-gray-300 hover:text-white hover:bg-white/10 bg-white/5 border border-white/5'
               }`}
             >
-              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+              <MessageSquare className={`w-4 h-4 ${activeTab === 'logs' ? 'text-white' : 'text-emerald-400'}`} />
               <span>Logs & Eventos OCPP</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                activeTab === 'logs' ? 'bg-white/25 text-white' : 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
+              }`}>
                 {messages.length}
               </span>
             </button>
@@ -764,50 +772,50 @@ export function ChargerDetail() {
                     <p className="text-[10px] text-gray-600 mt-0.5">Clica em "Emitir Certificado de Cliente" para gerar um par de chaves X.509 ou "Instalar CA no Posto".</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-white/10 bg-gray-950/60">
+                  <div className="overflow-x-auto rounded-xl border border-white/15 bg-gray-950/80 shadow-lg">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-white/5 border-b border-white/10 text-[11px] text-gray-400 font-semibold uppercase">
+                      <thead className="bg-gray-950 border-b border-white/15 text-[11px] text-gray-200 font-bold uppercase tracking-wider">
                         <tr>
-                          <th className="py-2.5 px-3">Tipo / Função</th>
-                          <th className="py-2.5 px-3">Common Name (CN)</th>
-                          <th className="py-2.5 px-3">Emissor</th>
-                          <th className="py-2.5 px-3">Nº Série</th>
-                          <th className="py-2.5 px-3">Validade</th>
-                          <th className="py-2.5 px-3">Estado</th>
-                          <th className="py-2.5 px-3 text-right">Ações</th>
+                          <th className="py-3 px-3">Tipo / Função</th>
+                          <th className="py-3 px-3">Common Name (CN)</th>
+                          <th className="py-3 px-3">Emissor</th>
+                          <th className="py-3 px-3">Nº Série</th>
+                          <th className="py-3 px-3">Validade</th>
+                          <th className="py-3 px-3">Estado</th>
+                          <th className="py-3 px-3 text-right">Ações</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5 font-mono">
+                      <tbody className="divide-y divide-white/10 font-mono">
                         {certs.map((c) => {
                           const isRootCa = c.certificate_type === 'CentralSystemRootCertificate'
                           return (
-                            <tr key={c.id} className="transition-colors hover:bg-white/5">
-                              <td className="py-2 px-3 whitespace-nowrap">
+                            <tr key={c.id} className="transition-colors hover:bg-white/8">
+                              <td className="py-2.5 px-3 whitespace-nowrap">
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  isRootCa ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                  isRootCa ? 'bg-purple-500/25 text-purple-300 border border-purple-500/40' : 'bg-blue-500/25 text-blue-300 border border-blue-500/40'
                                 }`}>
                                   {isRootCa ? '🏛️ CSMS Root CA' : '⚡ Client (EVSE)'}
                                 </span>
                               </td>
-                              <td className="py-2 px-3 text-gray-200 font-sans font-medium whitespace-nowrap">
+                              <td className="py-2.5 px-3 text-white font-sans font-bold whitespace-nowrap">
                                 {c.subject_cn || (isRootCa ? 'Canditos Root CA' : charger.charge_point_id)}
                               </td>
-                              <td className="py-2 px-3 text-gray-400 font-sans text-[11px] whitespace-nowrap">
+                              <td className="py-2.5 px-3 text-gray-300 font-sans text-xs whitespace-nowrap">
                                 {c.issuer_cn || 'Canditos CSMS Root CA'}
                               </td>
-                              <td className="py-2 px-3 text-gray-400 text-[11px] truncate max-w-[120px]" title={c.serial_number}>
+                              <td className="py-2.5 px-3 text-gray-300 font-mono text-xs truncate max-w-[120px]" title={c.serial_number}>
                                 {c.serial_number.slice(0, 12)}…
                               </td>
-                              <td className="py-2 px-3 text-gray-400 text-[11px] whitespace-nowrap">
+                              <td className="py-2.5 px-3 text-gray-300 font-mono text-xs whitespace-nowrap">
                                 {c.valid_to ? safeFormatDate(c.valid_to) : '—'}
                               </td>
-                              <td className="py-2 px-3 whitespace-nowrap">
+                              <td className="py-2.5 px-3 whitespace-nowrap">
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                   c.status === 'InstalledOnDevice'
-                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                     : c.status === 'Active'
-                                    ? 'bg-blue-500/15 text-blue-300 border-blue-500/25'
-                                    : 'bg-red-500/15 text-red-300 border-red-500/25'
+                                    ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                                    : 'bg-red-500/20 text-red-300 border-red-500/40'
                                 }`}>
                                   {c.status === 'InstalledOnDevice' ? 'Instalado no Posto' : c.status}
                                 </span>
@@ -849,40 +857,47 @@ export function ChargerDetail() {
               {/* events */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Eventos Recentes</h3>
+                  <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-blue-400" />
+                    Eventos Recentes
+                  </h3>
                 </div>
-                <EventLog cpId={charger.charge_point_id} maxHeight="280px" />
+                <EventLog cpId={charger.charge_point_id} maxHeight="300px" />
               </div>
 
               {/* message log */}
               {messages.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <MessageSquare className="w-4 h-4 text-gray-600" />
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Log de Mensagens OCPP</h3>
-                    <span className="text-xs text-gray-700 ml-auto">{messages.length} mensagens</span>
+                    <MessageSquare className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider">Log de Mensagens OCPP</h3>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-white/10 text-gray-300 border border-white/10 ml-auto">
+                      {messages.length} mensagens
+                    </span>
                   </div>
-                  <div className="card p-0 overflow-hidden">
+                  <div className="card p-0 bg-gray-900/90 border border-white/15 shadow-xl rounded-2xl overflow-hidden">
                     <div className="overflow-x-auto max-h-96 overflow-y-auto">
                       <table className="w-full text-xs">
-                        <thead className="sticky top-0">
-                          <tr className="border-b border-white/6" style={{ background: 'rgba(10,14,26,0.95)' }}>
-                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Dir</th>
-                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Action</th>
-                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Timestamp</th>
-                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Payload</th>
+                        <thead className="sticky top-0 z-10">
+                          <tr className="border-b border-white/15 bg-gray-950">
+                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Dir</th>
+                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Action</th>
+                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Timestamp</th>
+                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Payload</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {messages.slice(0, 50).map((m) => (
-                            <tr key={m.id} className="border-b border-white/4 hover:bg-white/2 transition-colors">
-                              <td className="px-4 py-2"><DirectionBadge direction={m.direction} /></td>
-                              <td className="px-4 py-2 font-mono text-gray-300">{m.action}</td>
-                              <td className="px-4 py-2 text-gray-600 font-mono whitespace-nowrap">
+                        <tbody className="divide-y divide-white/10">
+                          {messages.slice(0, 100).map((m) => (
+                            <tr key={m.id} className="hover:bg-white/8 transition-colors">
+                              <td className="px-4 py-2.5 whitespace-nowrap"><DirectionBadge direction={m.direction} /></td>
+                              <td className="px-4 py-2.5 font-mono text-white font-bold whitespace-nowrap">{m.action}</td>
+                              <td className="px-4 py-2.5 text-gray-300 font-mono font-semibold whitespace-nowrap">
                                 {format(new Date(m.timestamp), 'HH:mm:ss')}
                               </td>
-                              <td className="px-4 py-2 text-gray-700 font-mono truncate max-w-xs" title={typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}>
-                                {typeof m.payload === 'string' ? m.payload.substring(0, 80) : JSON.stringify(m.payload).substring(0, 80)}
+                              <td className="px-4 py-2.5 font-mono text-gray-200 text-xs">
+                                <span className="inline-block max-w-xl truncate bg-black/60 px-2.5 py-1 rounded border border-white/10 select-all" title={typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}>
+                                  {typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}
+                                </span>
                               </td>
                             </tr>
                           ))}
