@@ -123,15 +123,28 @@ function ChargerSelector({
           <p className="text-sm font-semibold text-gray-200">{t('commands.targetCharger')}</p>
           <p className="text-xs text-gray-600">{t('commands.selectTargetCharger')}</p>
         </div>
-        {value && (
-          <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
-            </span>
-            <span className="text-xs text-emerald-400 font-medium">{value}</span>
-          </div>
-        )}
+        {value && (() => {
+          const selectedCharger = chargers.find(c => c.charge_point_id === value);
+          const isV201 = selectedCharger?.ocpp_version === '2.0.1' || selectedCharger?.iso15118_pnc_enabled;
+          return (
+            <div className="ml-auto flex items-center gap-2">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                isV201 
+                  ? 'bg-purple-500/15 border-purple-500/30 text-purple-400 font-mono'
+                  : 'bg-blue-500/15 border-blue-500/30 text-blue-400 font-mono'
+              }`}>
+                {isV201 ? '⚡ OCPP 2.0.1 (PnC)' : 'OCPP 1.6-J'}
+              </span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                </span>
+                <span className="text-xs text-emerald-400 font-medium">{value}</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="relative">
