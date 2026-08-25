@@ -206,6 +206,7 @@ export function AvailabilityMonitor({ chargePointId, compact = false }: Availabi
                   )}
                 </div>
               </div>
+            ))}
           </div>
         </div>
       )}
