@@ -58,7 +58,51 @@ async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
     """
     OCPP 1.6 WebSocket endpoint.
     Charger connects to: ws(s)://HOST/ocpp/{charge_point_id}
+    Supports Security Profile 0 (Open), Profile 1 (Basic Auth), Profile 2 (TLS + Basic Auth).
     """
+    import base64
+    import hmac
+    from database import AsyncSessionLocal
+    from models.charger import Charger
+    from sqlalchemy import select
+
+    auth_header = websocket.headers.get("authorization")
+    client_ip = websocket.client.host if websocket.client else "unknown"
+
+    # Query charger security settings
+    requires_auth = False
+    expected_password = None
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Charger).where(Charger.charge_point_id == charge_point_id))
+        charger_record = result.scalar_one_or_none()
+        if charger_record:
+            if (charger_record.security_profile and charger_record.security_profile >= 1) or charger_record.auth_enabled:
+                requires_auth = True
+                expected_password = charger_record.auth_password
+
+    # Validate HTTP Basic Auth credentials if Security Profile >= 1
+    if requires_auth:
+        authenticated = False
+        if auth_header and auth_header.lower().startswith("basic "):
+            try:
+                encoded_creds = auth_header.split(" ", 1)[1].strip()
+                decoded_creds = base64.b64decode(encoded_creds).decode("utf-8")
+                if ":" in decoded_creds:
+                    user, pwd = decoded_creds.split(":", 1)
+                    if user == charge_point_id and expected_password and hmac.compare_digest(pwd, expected_password):
+                        authenticated = True
+            except Exception as err:
+                logging.warning(f"Error parsing Basic auth credentials from {charge_point_id}: {err}")
+
+        if not authenticated:
+            logging.warning(
+                f"OCPP Security Violation: Unauthorized connection rejected from {charge_point_id} (IP: {client_ip}) - "
+                f"Profile {charger_record.security_profile if charger_record else 1} requires valid HTTP Basic Auth credentials."
+            )
+            # 1008 = Policy Violation per RFC 6455 / OCPP 1.6 Security Whitepaper
+            await websocket.close(code=1008, reason="Policy Violation: Invalid OCPP Credentials")
+            return
+
     subprotocols = websocket.headers.get("sec-websocket-protocol", "")
     if "ocpp1.6" in subprotocols:
         await websocket.accept(subprotocol="ocpp1.6")

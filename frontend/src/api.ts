@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { API_BASE } from './config'
-import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken } from './types'
+import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken, GenerateKeyResponse, SyncKeyResponse } from './types'
 
 const http = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' })
 
@@ -100,6 +100,12 @@ export const api = {
 
   getChargers: () => http.get<Charger[]>('/chargers').then(r => r.data),
   getCharger: (id: string) => http.get<Charger>(`/chargers/${id}`).then(r => r.data),
+  updateChargerSecurity: (cpId: string, data: { security_profile: number; auth_password?: string | null; auth_enabled?: boolean }) =>
+    http.put<Charger>(`/chargers/${cpId}/security`, data).then(r => r.data),
+  generateChargerKey: (cpId: string) =>
+    http.post<GenerateKeyResponse>(`/chargers/${cpId}/generate-key`).then(r => r.data),
+  syncChargerKey: (cpId: string) =>
+    http.post<SyncKeyResponse>(`/chargers/${cpId}/sync-key`).then(r => r.data),
   setChargerTimezone: (cpId: string, timezone: string) =>
     http.patch<{ charge_point_id: string; timezone: string }>(`/chargers/${cpId}/timezone`, { timezone }).then(r => r.data),
   getChargerAvailability: (cpId: string) =>

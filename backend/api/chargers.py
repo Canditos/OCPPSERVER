@@ -7,10 +7,13 @@ from database import get_db
 from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
 from models.transaction import Transaction, MeterValue
 from models.user import User
-from schemas import ChargerOut, ConnectorOut, OcppMessageOut
+from schemas import (
+    ChargerOut, ConnectorOut, OcppMessageOut,
+    ChargerSecurityUpdate, GenerateKeyResponse, SyncKeyResponse
+)
 
 
-from ocpp_server.central_system import CONNECTED
+from ocpp_server.central_system import CONNECTED, get_charge_point
 
 
 class AutochargeUpdate(BaseModel):
@@ -87,6 +90,9 @@ async def list_chargers(db: AsyncSession = Depends(get_db)):
             registered_at=ch.registered_at,
             client_ip=ch.client_ip,
             timezone=ch.timezone or "Europe/Lisbon",
+            security_profile=ch.security_profile or 0,
+            auth_password=ch.auth_password,
+            auth_enabled=ch.auth_enabled or False,
             connectors=conns,
         )
         out.append(ch_out)
@@ -116,6 +122,9 @@ async def get_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
         registered_at=charger.registered_at,
         client_ip=charger.client_ip,
         timezone=charger.timezone or "Europe/Lisbon",
+        security_profile=charger.security_profile or 0,
+        auth_password=charger.auth_password,
+        auth_enabled=charger.auth_enabled or False,
         connectors=conns,
     )
 
@@ -275,4 +284,96 @@ async def set_timezone(cp_id: str, body: TimezoneUpdate, db: AsyncSession = Depe
     charger.timezone = body.timezone
     await db.commit()
     return {"charge_point_id": cp_id, "timezone": body.timezone}
+
+
+# ── OCPP Security Profile & AuthorizationKey Management ──────────────────────
+
+@router.put("/{cp_id}/security", response_model=ChargerOut)
+async def update_charger_security(cp_id: str, body: ChargerSecurityUpdate, db: AsyncSession = Depends(get_db)):
+    """Configure Security Profile (0=Open, 1=BasicAuth, 2=TLS+BasicAuth) and AuthorizationKey password."""
+    result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = result.scalar_one_or_none()
+    if not charger:
+        raise HTTPException(status_code=404, detail="Charger not found")
+
+    charger.security_profile = int(body.security_profile)
+    if body.auth_password is not None:
+        charger.auth_password = body.auth_password.strip() if body.auth_password else None
+    charger.auth_enabled = body.auth_enabled or (body.security_profile >= 1)
+    await db.commit()
+    await db.refresh(charger)
+
+    conns = await _enrich_connectors(charger, db)
+    return ChargerOut(
+        id=charger.id,
+        charge_point_id=charger.charge_point_id,
+        vendor=charger.vendor,
+        model=charger.model,
+        serial_number=charger.serial_number,
+        firmware_version=charger.firmware_version,
+        iccid=charger.iccid,
+        imsi=charger.imsi,
+        status=charger.status,
+        is_online=charger.charge_point_id in CONNECTED,
+        last_seen=charger.last_seen,
+        registered_at=charger.registered_at,
+        client_ip=charger.client_ip,
+        timezone=charger.timezone or "Europe/Lisbon",
+        security_profile=charger.security_profile or 0,
+        auth_password=charger.auth_password,
+        auth_enabled=charger.auth_enabled or False,
+        connectors=conns,
+    )
+
+
+@router.post("/{cp_id}/generate-key", response_model=GenerateKeyResponse)
+async def generate_authorization_key(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """Generate a 40-character cryptographic AuthorizationKey compliant with OCPP 1.6 Security Whitepaper."""
+    import secrets
+    import base64
+
+    # 40-character hexadecimal high-entropy token (20 bytes)
+    key = secrets.token_hex(20)
+    raw_credentials = f"{cp_id}:{key}"
+    basic_header = "Basic " + base64.b64encode(raw_credentials.encode("utf-8")).decode("utf-8")
+
+    result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = result.scalar_one_or_none()
+    if charger:
+        charger.auth_password = key
+        await db.commit()
+
+    return GenerateKeyResponse(
+        charge_point_id=cp_id,
+        authorization_key=key,
+        basic_auth_header=basic_header,
+    )
+
+
+@router.post("/{cp_id}/sync-key", response_model=SyncKeyResponse)
+async def sync_authorization_key_to_device(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """Remotely apply the stored AuthorizationKey on the connected charger via OCPP ChangeConfiguration."""
+    result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = result.scalar_one_or_none()
+    if not charger:
+        raise HTTPException(status_code=404, detail="Charger not found")
+
+    if not charger.auth_password:
+        raise HTTPException(status_code=400, detail="O carregador não tem nenhuma AuthorizationKey/Password configurada")
+
+    cp = get_charge_point(cp_id)
+    if not cp:
+        raise HTTPException(status_code=404, detail=f"O carregador '{cp_id}' não está online/conectado para receber o comando OCPP")
+
+    try:
+        resp = await cp.change_configuration(key="AuthorizationKey", value=charger.auth_password)
+        status_val = getattr(resp, "status", "Accepted")
+        return SyncKeyResponse(
+            charge_point_id=cp_id,
+            status=str(status_val),
+            key_applied=charger.auth_password,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao enviar ChangeConfiguration(AuthorizationKey) para o posto: {str(e)}")
+
 

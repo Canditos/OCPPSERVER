@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Zap, WifiOff, Clock, Plug, Play, Square, RotateCcw, Unlock,
   Loader2, CheckCircle2, AlertCircle, Tag, Plus, X, ShieldCheck, Mail,
-  Pencil, Check
+  Pencil, Check, Shield, Lock
 } from 'lucide-react'
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
@@ -500,6 +500,16 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 ? t('chargerCard.fault')
                 : t('common.available')}
             </span>
+          </span>
+
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold border ${
+            (charger.security_profile ?? 0) === 2
+              ? 'bg-blue-500/10 text-blue-400 border-blue-500/25'
+              : (charger.security_profile ?? 0) === 1
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/25'
+              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+          }`} title={`Security Profile ${charger.security_profile ?? 0}`}>
+            {(charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
           </span>
 
           <Link

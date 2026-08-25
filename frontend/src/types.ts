@@ -28,7 +28,22 @@ export interface Charger {
   registered_at: string | null
   client_ip: string | null
   timezone?: string | null
+  security_profile?: number
+  auth_password?: string | null
+  auth_enabled?: boolean
   connectors: Connector[]
+}
+
+export interface GenerateKeyResponse {
+  charge_point_id: string
+  authorization_key: string
+  basic_auth_header: string
+}
+
+export interface SyncKeyResponse {
+  charge_point_id: string
+  status: string
+  key_applied: string
 }
 
 export interface AuthToken {

@@ -34,6 +34,9 @@ class ChargerOut(BaseModel):
     registered_at: datetime | None
     client_ip: str | None
     timezone: str | None = "Europe/Lisbon"
+    security_profile: int = 0
+    auth_password: str | None = None
+    auth_enabled: bool = False
     connectors: list[ConnectorOut] = []
 
     class Config:
@@ -177,3 +180,22 @@ class SendLocalListRequest(BaseModel):
     version: int
     update_type: str
     local_authorization_list: list = []
+
+
+class ChargerSecurityUpdate(BaseModel):
+    security_profile: int = 0  # 0: Unsecure, 1: Basic Auth, 2: TLS + Basic Auth
+    auth_password: str | None = None
+    auth_enabled: bool = False
+
+
+class GenerateKeyResponse(BaseModel):
+    charge_point_id: str
+    authorization_key: str
+    basic_auth_header: str
+
+
+class SyncKeyResponse(BaseModel):
+    charge_point_id: str
+    status: str
+    key_applied: str
+
