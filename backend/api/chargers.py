@@ -202,9 +202,9 @@ async def get_charger_availability(cp_id: str, db: AsyncSession = Depends(get_db
             "is_operational": dominant_status not in ("Faulted", "Unavailable", "Offline"),
         })
 
-    # Recent availability events
+    # Recent availability events (up to 50 recent events)
     recent_events = []
-    for l in logs_24h[:15]:
+    for l in logs_24h[:50]:
         recent_events.append({
             "id": l.id,
             "timestamp": l.timestamp.isoformat() if l.timestamp else None,
