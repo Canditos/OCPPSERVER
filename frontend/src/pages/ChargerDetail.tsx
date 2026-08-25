@@ -43,6 +43,7 @@ export function ChargerDetail() {
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1)
   const [activeTab, setActiveTab] = useState<'telemetry' | 'security' | 'logs'>('telemetry')
   const [showHttpHeader, setShowHttpHeader] = useState<boolean>(false)
+  const [showSecurityCard, setShowSecurityCard] = useState<boolean>(false)
 
   const { data: charger } = useQuery<Charger>({
     queryKey: ['charger', id],
@@ -374,139 +375,154 @@ export function ChargerDetail() {
             <InfoRow label="Último sinal" value={safeFormatDistance(charger.last_seen)} />
           </div>
 
-          {/* Security Management Card */}
-          <div className="card space-y-4">
-            <div className="flex items-center justify-between">
+          {/* Security Management Card (Collapsible) */}
+          <div className="card space-y-3">
+            <div
+              onClick={() => setShowSecurityCard(!showSecurityCard)}
+              className="flex items-center justify-between cursor-pointer select-none group"
+            >
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-blue-400" />
                 <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Segurança & Autenticação</h3>
               </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border ${
-                secProfile === 3 ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                : secProfile === 2 ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-                : secProfile === 1 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                : 'bg-gray-800 text-gray-400 border-gray-700'
-              }`}>
-                {secProfile === 3 ? 'Profile 3 (mTLS)' : secProfile === 2 ? 'Profile 2 (TLS)' : secProfile === 1 ? 'Profile 1 (Basic)' : 'Profile 0 (Open)'}
-              </span>
-            </div>
-
-            {/* Feedback alert */}
-            {secFeedback && (
-              <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
-                secFeedback.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
-              }`}>
-                {secFeedback.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-red-400" />}
-                <span>{secFeedback.message}</span>
-              </div>
-            )}
-
-            {/* Profile Selector */}
-            <div className="space-y-1.5">
-              <label className="text-xs text-gray-400 font-medium">Perfil de Segurança (OCPP 1.6)</label>
-              <select
-                value={secProfile}
-                onChange={(e) => {
-                  const val = Number(e.target.value)
-                  setSecProfile(val)
-                  if (val >= 1) setAuthEnabled(true)
-                }}
-                className="select w-full text-xs py-2 bg-gray-900/90 border-white/10"
-              >
-                <option value={0}>Profile 0 — Não seguro / Aberto (ws:// sem password)</option>
-                <option value={1}>Profile 1 — HTTP Basic Auth (ws:// com password)</option>
-                <option value={2}>Profile 2 — TLS + Basic Auth (wss:// encriptado com password)</option>
-                <option value={3}>Profile 3 — mTLS (TLS Mútuo com Certificados Digitais X.509)</option>
-              </select>
-            </div>
-
-            {/* AuthorizationKey (Password) */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs text-gray-400 font-medium">AuthorizationKey (Password)</label>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border ${
+                  secProfile === 3 ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                  : secProfile === 2 ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                  : secProfile === 1 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : 'bg-gray-800 text-gray-400 border-gray-700'
+                }`}>
+                  {secProfile === 3 ? 'Profile 3 (mTLS)' : secProfile === 2 ? 'Profile 2 (TLS)' : secProfile === 1 ? 'Profile 1 (Basic)' : 'Profile 0 (Open)'}
+                </span>
                 <button
                   type="button"
-                  onClick={handleGenerateKey}
-                  disabled={savingSec}
-                  className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors"
+                  className="p-1 rounded-lg bg-white/5 text-gray-400 group-hover:text-white"
                 >
-                  <Sparkles className="w-3 h-3" /> Gerar Chave Segura
+                  {showSecurityCard ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
               </div>
+            </div>
 
-              <div className="relative flex items-center">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={authKey}
-                  onChange={(e) => setAuthKey(e.target.value)}
-                  placeholder="Introduza ou gere a password do posto"
-                  className="input pr-20 text-xs font-mono bg-gray-900/90 border-white/10 w-full"
-                />
-                <div className="absolute right-1.5 flex items-center gap-1">
+            {showSecurityCard && (
+              <div className="space-y-4 pt-3 border-t border-white/6 animate-fade-in">
+                {/* Feedback alert */}
+                {secFeedback && (
+                  <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                    secFeedback.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                  }`}>
+                    {secFeedback.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-red-400" />}
+                    <span>{secFeedback.message}</span>
+                  </div>
+                )}
+
+                {/* Profile Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-400 font-medium">Perfil de Segurança (OCPP 1.6)</label>
+                  <select
+                    value={secProfile}
+                    onChange={(e) => {
+                      const val = Number(e.target.value)
+                      setSecProfile(val)
+                      if (val >= 1) setAuthEnabled(true)
+                    }}
+                    className="select w-full text-xs py-2 bg-gray-900/90 border-white/10"
+                  >
+                    <option value={0}>Profile 0 — Não seguro / Aberto (ws:// sem password)</option>
+                    <option value={1}>Profile 1 — HTTP Basic Auth (ws:// com password)</option>
+                    <option value={2}>Profile 2 — TLS + Basic Auth (wss:// encriptado com password)</option>
+                    <option value={3}>Profile 3 — mTLS (TLS Mútuo com Certificados Digitais X.509)</option>
+                  </select>
+                </div>
+
+                {/* AuthorizationKey (Password) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-400 font-medium">AuthorizationKey (Password)</label>
+                    <button
+                      type="button"
+                      onClick={handleGenerateKey}
+                      disabled={savingSec}
+                      className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" /> Gerar Chave Segura
+                    </button>
+                  </div>
+
+                  <div className="relative flex items-center">
+                    <input
+                      type={showKey ? 'text' : 'password'}
+                      value={authKey}
+                      onChange={(e) => setAuthKey(e.target.value)}
+                      placeholder="Introduza ou gere a password do posto"
+                      className="input pr-20 text-xs font-mono bg-gray-900/90 border-white/10 w-full"
+                    />
+                    <div className="absolute right-1.5 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className="p-1 text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
+                        title={showKey ? 'Ocultar' : 'Mostrar'}
+                      >
+                        {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopyKey}
+                        disabled={!authKey}
+                        className="p-1 text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
+                        title="Copiar Chave"
+                      >
+                        {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
-                    title={showKey ? 'Ocultar' : 'Mostrar'}
+                    onClick={handleSaveSecurity}
+                    disabled={savingSec}
+                    className="btn-primary flex-1 text-xs py-2 rounded-lg flex items-center justify-center gap-1.5"
                   >
-                    {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>{savingSec ? 'A guardar...' : 'Guardar Segurança'}</span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={handleCopyKey}
-                    disabled={!authKey}
-                    className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
-                    title="Copiar Chave"
+                    onClick={handleSyncKey}
+                    disabled={savingSec || !isOnline || !authKey}
+                    className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-2 px-3 rounded-lg flex items-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer"
+                    title={isOnline ? 'Enviar chave ao posto via OCPP ChangeConfiguration' : 'Posto offline'}
                   >
-                    {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Sincronizar no Posto</span>
                   </button>
                 </div>
-              </div>
-            </div>
 
-            {/* Action buttons */}
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleSaveSecurity}
-                disabled={savingSec}
-                className="btn-primary flex-1 text-xs py-2 rounded-lg flex items-center justify-center gap-1.5"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>{savingSec ? 'A guardar...' : 'Guardar Segurança'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSyncKey}
-                disabled={savingSec || !isOnline || !authKey}
-                className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-2 px-3 rounded-lg flex items-center gap-1.5 disabled:opacity-50 transition-all"
-                title={isOnline ? 'Enviar chave ao posto via OCPP ChangeConfiguration' : 'Posto offline'}
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Sincronizar no Posto</span>
-              </button>
-            </div>
-
-            {/* Connection instructions preview (collapsible) */}
-            {authKey && secProfile >= 1 && (
-              <div className="rounded-lg bg-white/4 border border-white/8 overflow-hidden text-xs">
-                <button
-                  type="button"
-                  onClick={() => setShowHttpHeader(!showHttpHeader)}
-                  className="w-full p-2.5 flex items-center justify-between text-gray-400 hover:text-gray-200 transition-colors text-[11px] font-medium cursor-pointer"
-                >
-                  <span>Cabeçalho HTTP Basic</span>
-                  <span className="flex items-center gap-1 text-[10px] text-blue-400">
-                    {showHttpHeader ? 'Ocultar' : 'Ver cabeçalho'}
-                    {showHttpHeader ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  </span>
-                </button>
-                {showHttpHeader && (
-                  <div className="p-2.5 pt-0 border-t border-white/5 space-y-1">
-                    <p className="text-[10px] font-mono text-gray-300 break-all bg-gray-900/90 p-2 rounded border border-white/5 select-all">
-                      Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
-                    </p>
+                {/* Connection instructions preview (collapsible) */}
+                {authKey && secProfile >= 1 && (
+                  <div className="rounded-lg bg-white/4 border border-white/8 overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setShowHttpHeader(!showHttpHeader)}
+                      className="w-full p-2.5 flex items-center justify-between text-gray-400 hover:text-gray-200 transition-colors text-[11px] font-medium cursor-pointer"
+                    >
+                      <span>Cabeçalho HTTP Basic</span>
+                      <span className="flex items-center gap-1 text-[10px] text-blue-400">
+                        {showHttpHeader ? 'Ocultar' : 'Ver cabeçalho'}
+                        {showHttpHeader ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </span>
+                    </button>
+                    {showHttpHeader && (
+                      <div className="p-2.5 pt-0 border-t border-white/5 space-y-1">
+                        <p className="text-[10px] font-mono text-gray-300 break-all bg-gray-900/90 p-2 rounded border border-white/5 select-all">
+                          Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
