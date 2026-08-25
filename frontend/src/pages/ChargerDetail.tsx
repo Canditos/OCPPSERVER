@@ -306,7 +306,8 @@ export function ChargerDetail() {
             <div>
               <h1 className="text-xl font-bold text-gray-100">{charger.charge_point_id}</h1>
               <p className="text-sm text-gray-600">{charger.vendor} · {charger.model}</p>
-                    <div className="ml-auto flex items-center gap-2">
+            </div>
+            <div className="ml-auto flex items-center gap-2">
               <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
                 (charger.security_profile ?? 0) === 3
                   ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
