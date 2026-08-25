@@ -6,7 +6,8 @@ import { safeFormatDate, safeFormatDistance } from '../utils/date'
 import {
   ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap, CheckCircle2,
   Shield, Key, Lock, Unlock, Copy, Eye, EyeOff, Sparkles, RefreshCw, Send, AlertTriangle, Check,
-  FileText, Download, Trash2, ShieldAlert, Award, X, ChevronDown, ChevronUp, BarChart3, Layers
+  FileText, Download, Trash2, ShieldAlert, Award, X, ChevronDown, ChevronUp, BarChart3, Layers,
+  Maximize2, Minimize2, Search, Filter
 } from 'lucide-react'
 
 import { api } from '../api'
@@ -143,6 +144,10 @@ export function ChargerDetail() {
   const [inspectCert, setInspectCert] = useState<Certificate | null>(null)
   const [newClientCert, setNewClientCert] = useState<IssueClientCertResponse | null>(null)
 
+  const [msgFilterAction, setMsgFilterAction] = useState<string>('all')
+  const [msgSearch, setMsgSearch] = useState<string>('')
+  const [isLogExpanded, setIsLogExpanded] = useState<boolean>(false)
+
   const handleInstallRootCa = async () => {
     if (!charger) return
     setCertLoading(true)
@@ -214,6 +219,25 @@ export function ChargerDetail() {
     queryFn:  () => api.getMessages(id!),
     enabled:  !!id,
     refetchInterval: 5000,
+  })
+
+  const filteredMessages = messages.filter((m) => {
+    if (msgFilterAction !== 'all') {
+      if (msgFilterAction === 'security') {
+        const secActions = ['InstallCertificate', 'GetInstalledCertificateIds', 'DeleteCertificate', 'ExtendedTriggerMessage', 'CertificateSigned', 'SignCertificate']
+        if (!secActions.includes(m.action)) return false
+      } else if (m.action !== msgFilterAction) {
+        return false
+      }
+    }
+    if (msgSearch.trim()) {
+      const q = msgSearch.toLowerCase()
+      const payloadStr = typeof m.payload === 'string' ? m.payload.toLowerCase() : JSON.stringify(m.payload).toLowerCase()
+      if (!m.action.toLowerCase().includes(q) && !payloadStr.includes(q)) {
+        return false
+      }
+    }
+    return true
   })
 
   const { data: successRates = {} } = useQuery({
@@ -871,40 +895,110 @@ export function ChargerDetail() {
 
               {/* message log */}
               {messages.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <MessageSquare className="w-4 h-4 text-emerald-400" />
-                    <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider">Log de Mensagens OCPP</h3>
-                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-white/10 text-gray-300 border border-white/10 ml-auto">
-                      {messages.length} mensagens
-                    </span>
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-gray-200 uppercase tracking-wider">Log de Mensagens OCPP</h3>
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-gray-300 border border-slate-200 dark:border-white/10">
+                        {filteredMessages.length}/{messages.length}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Search box */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" />
+                        <input
+                          type="text"
+                          value={msgSearch}
+                          onChange={(e) => setMsgSearch(e.target.value)}
+                          placeholder="Filtrar payload / ação..."
+                          className="text-xs pl-8 pr-6 py-1.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 w-44 sm:w-56"
+                        />
+                        {msgSearch && (
+                          <button
+                            onClick={() => setMsgSearch('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Expand / Maximize button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsLogExpanded(true)}
+                        className="btn-ghost p-1.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                        title="Modo Zen / Expandir Log em Ecrã Inteiro"
+                      >
+                        <Maximize2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="card p-0 bg-gray-900/90 border border-white/15 shadow-xl rounded-2xl overflow-hidden">
+
+                  {/* Filter Action Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { id: 'all', label: 'Todas' },
+                      { id: 'MeterValues', label: 'MeterValues' },
+                      { id: 'Heartbeat', label: 'Heartbeat' },
+                      { id: 'StatusNotification', label: 'Status' },
+                      { id: 'Authorize', label: 'Authorize' },
+                      { id: 'security', label: 'Segurança / Certs' },
+                    ].map((f) => {
+                      const active = msgFilterAction === f.id
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setMsgFilterAction(f.id)}
+                          className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                            active
+                              ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-400 dark:border-white/5'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="card p-0 bg-white dark:bg-gray-900/90 border border-slate-200 dark:border-white/15 shadow-md dark:shadow-xl rounded-2xl overflow-hidden">
                     <div className="overflow-x-auto max-h-96 overflow-y-auto">
                       <table className="w-full text-xs">
                         <thead className="sticky top-0 z-10">
-                          <tr className="border-b border-white/15 bg-gray-950">
-                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Dir</th>
-                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Action</th>
-                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Timestamp</th>
-                            <th className="text-left px-4 py-3 text-gray-200 font-bold uppercase tracking-wider text-[11px]">Payload</th>
+                          <tr className="border-b border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-gray-950">
+                            <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">Dir</th>
+                            <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">Action</th>
+                            <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">Timestamp</th>
+                            <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">Payload</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/10">
-                          {messages.slice(0, 100).map((m) => (
-                            <tr key={m.id} className="hover:bg-white/8 transition-colors">
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/10">
+                          {filteredMessages.slice(0, 100).map((m) => (
+                            <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-white/8 transition-colors">
                               <td className="px-4 py-2.5 whitespace-nowrap"><DirectionBadge direction={m.direction} /></td>
-                              <td className="px-4 py-2.5 font-mono text-white font-bold whitespace-nowrap">{m.action}</td>
-                              <td className="px-4 py-2.5 text-gray-300 font-mono font-semibold whitespace-nowrap">
+                              <td className="px-4 py-2.5 font-mono text-slate-900 dark:text-white font-bold whitespace-nowrap">{m.action}</td>
+                              <td className="px-4 py-2.5 text-slate-600 dark:text-gray-300 font-mono font-semibold whitespace-nowrap">
                                 {format(new Date(m.timestamp), 'HH:mm:ss')}
                               </td>
-                              <td className="px-4 py-2.5 font-mono text-gray-200 text-xs">
-                                <span className="inline-block max-w-xl truncate bg-black/60 px-2.5 py-1 rounded border border-white/10 select-all" title={typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}>
+                              <td className="px-4 py-2.5 font-mono text-slate-800 dark:text-gray-200 text-xs">
+                                <span className="inline-block max-w-xl truncate bg-slate-100 dark:bg-black/60 px-2.5 py-1 rounded border border-slate-200 dark:border-white/10 select-all" title={typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}>
                                   {typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}
                                 </span>
                               </td>
                             </tr>
                           ))}
+                          {filteredMessages.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-4 py-8 text-center text-slate-500 dark:text-gray-400">
+                                Nenhuma mensagem encontrada com os filtros selecionados.
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -1111,6 +1205,135 @@ export function ChargerDetail() {
               >
                 Concluir
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Zen Mode OCPP Log Modal */}
+      {isLogExpanded && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col p-4 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in"
+          onClick={() => setIsLogExpanded(false)}
+        >
+          <div
+            className="flex-1 flex flex-col w-full max-w-7xl mx-auto bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950/80">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Terminal OCPP em Tempo Real · Modo Zen
+                    <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      {filteredMessages.length} msgs
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 font-mono">
+                    Posto: {charger?.charge_point_id}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Search in modal */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" />
+                  <input
+                    type="text"
+                    value={msgSearch}
+                    onChange={(e) => setMsgSearch(e.target.value)}
+                    placeholder="Pesquisar payload ou ação..."
+                    className="text-xs pl-8 pr-6 py-1.5 rounded-xl bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 w-56 sm:w-72"
+                  />
+                  {msgSearch && (
+                    <button
+                      onClick={() => setMsgSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsLogExpanded(false)}
+                  className="btn-ghost p-1.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                  title="Fechar Modo Zen (Esc)"
+                >
+                  <Minimize2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Filter Pills */}
+            <div className="flex items-center gap-1.5 p-3 border-b border-slate-200 dark:border-white/10 bg-slate-100/50 dark:bg-gray-950/40 flex-wrap">
+              {[
+                { id: 'all', label: 'Todas as Ações' },
+                { id: 'MeterValues', label: 'MeterValues' },
+                { id: 'Heartbeat', label: 'Heartbeat' },
+                { id: 'StatusNotification', label: 'StatusNotification' },
+                { id: 'Authorize', label: 'Authorize' },
+                { id: 'security', label: 'Segurança / Certificados' },
+              ].map((f) => {
+                const active = msgFilterAction === f.id
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setMsgFilterAction(f.id)}
+                    className={`text-xs font-semibold px-3 py-1 rounded-lg border transition-all cursor-pointer ${
+                      active
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-400 dark:border-white/5'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Modal Table Content */}
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-gray-950">
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-24">Direção</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-48">Ação OCPP</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-36">Hora</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">Conteúdo do Payload</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/10">
+                  {filteredMessages.map((m) => (
+                    <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-white/8 transition-colors">
+                      <td className="px-4 py-2.5 whitespace-nowrap"><DirectionBadge direction={m.direction} /></td>
+                      <td className="px-4 py-2.5 font-mono text-slate-900 dark:text-white font-bold whitespace-nowrap">{m.action}</td>
+                      <td className="px-4 py-2.5 text-slate-600 dark:text-gray-300 font-mono font-semibold whitespace-nowrap">
+                        {format(new Date(m.timestamp), 'HH:mm:ss')}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-slate-800 dark:text-gray-200 text-xs">
+                        <span className="inline-block w-full break-all bg-slate-100 dark:bg-black/60 p-2 rounded-lg border border-slate-200 dark:border-white/10 select-all" title={typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload, null, 2)}>
+                          {typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredMessages.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-12 text-center text-slate-500 dark:text-gray-400">
+                        Nenhuma mensagem encontrada para os critérios selecionados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

@@ -26,12 +26,12 @@ const STATUS_CONFIG: Record<string, {
   },
   Charging: {
     label: 'A carregar',
-    bg:     'bg-blue-500/15',
-    text:   'text-blue-400',
-    border: 'border-blue-500/35',
-    icon:   <Zap className="w-3 h-3" fill="currentColor" />,
-    ping:   'bg-blue-400',
-    glow:   'shadow-[0_0_10px_rgba(59,130,246,0.4)]',
+    bg:     'bg-blue-500/20 dark:bg-blue-500/25',
+    text:   'text-blue-600 dark:text-blue-300 font-bold',
+    border: 'border-blue-500/40 dark:border-blue-400/50',
+    icon:   <Zap className="w-3.5 h-3.5 animate-pulse text-blue-500 dark:text-blue-300" fill="currentColor" />,
+    ping:   'bg-blue-500 dark:bg-blue-400',
+    glow:   'shadow-[0_0_15px_rgba(59,130,246,0.45)] ring-1 ring-blue-400/40',
   },
   Preparing: {
     label: 'A preparar',
