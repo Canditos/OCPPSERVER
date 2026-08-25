@@ -9,10 +9,11 @@ from models.charger import Charger
 from sqlalchemy import update, select
 
 from ocpp_server.charge_point import ChargePoint
+from ocpp_server.charge_point_v201 import ChargePointV201
 
 logger = logging.getLogger(__name__)
 
-CONNECTED: dict[str, ChargePoint] = {}
+CONNECTED: dict[str, ChargePoint | ChargePointV201] = {}
 
 
 # ── FastAPI WebSocket adapter ────────────────────────────────────────────────
@@ -50,8 +51,8 @@ async def _cleanup(charge_point_id: str) -> None:
     logger.info(f"Charger cleaned up: {charge_point_id}")
 
 
-async def on_connect_fastapi(websocket, charge_point_id: str) -> None:
-    """Handle OCPP connection coming in through a FastAPI WebSocket route."""
+async def on_connect_fastapi(websocket, charge_point_id: str, ocpp_version: str = "1.6") -> None:
+    """Handle OCPP connection coming in through a FastAPI WebSocket route (1.6 or 2.0.1)."""
     from starlette.websockets import WebSocketDisconnect
 
     client_ip = "unknown"
@@ -62,9 +63,14 @@ async def on_connect_fastapi(websocket, charge_point_id: str) -> None:
         logger.warning(f"Charger {charge_point_id} reconnected, replacing old connection")
 
     adapter = _FastAPIWSAdapter(websocket)
-    cp = ChargePoint(charge_point_id, adapter, client_ip)
+    if ocpp_version == "2.0.1":
+        cp = ChargePointV201(charge_point_id, adapter)
+        logger.info(f"Dual-Stack: Charger connected as OCPP 2.0.1 (Plug & Charge): {charge_point_id} from {client_ip}")
+    else:
+        cp = ChargePoint(charge_point_id, adapter, client_ip)
+        logger.info(f"Dual-Stack: Charger connected as OCPP 1.6-J: {charge_point_id} from {client_ip}")
+
     CONNECTED[charge_point_id] = cp
-    logger.info(f"Charger connected: {charge_point_id} from {client_ip}")
 
     # Immediately mark as online in database
     try:
@@ -74,6 +80,7 @@ async def on_connect_fastapi(websocket, charge_point_id: str) -> None:
             charger_row = result.scalar_one_or_none()
             if charger_row:
                 charger_row.is_online = True
+                charger_row.ocpp_version = ocpp_version
                 charger_row.last_seen = datetime.utcnow()
                 if charger_row.status == "Offline":
                     charger_row.status = "Available"
@@ -85,6 +92,7 @@ async def on_connect_fastapi(websocket, charge_point_id: str) -> None:
         "charge_point_id": charge_point_id,
         "is_online": True,
         "status": "Available",
+        "ocpp_version": ocpp_version,
     })
 
     try:

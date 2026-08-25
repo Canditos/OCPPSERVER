@@ -26,11 +26,16 @@ class Charger(Base):
     auth_password: Mapped[str | None] = mapped_column(String(128), nullable=True)
     auth_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # OCPP Dual-Stack & ISO 15118 fields
+    ocpp_version: Mapped[str] = mapped_column(String(16), default="1.6")  # "1.6" or "2.0.1"
+    iso15118_pnc_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
     connectors: Mapped[list["Connector"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     configurations: Mapped[list["ChargerConfiguration"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     messages: Mapped[list["OcppMessage"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     certificates: Mapped[list["ChargerCertificate"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+    device_components: Mapped[list["DeviceComponent"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
 
 
 
@@ -40,6 +45,7 @@ class Connector(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
     connector_id: Mapped[int] = mapped_column(Integer)
+    evse_id: Mapped[int | None] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(32), default="Available")
     error_code: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -54,7 +60,7 @@ class OcppMessage(Base):
     charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
     direction: Mapped[str] = mapped_column(String(8))  # "IN" or "OUT"
     action: Mapped[str] = mapped_column(String(64))
-    payload: Mapped[str] = mapped_column(String(4096))
+    payload: Mapped[str] = mapped_column(String(8192))
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     charger: Mapped["Charger"] = relationship(back_populates="messages")
@@ -79,7 +85,7 @@ class ChargerCertificate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     charger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("chargers.id"), nullable=True, index=True)
     charge_point_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    certificate_type: Mapped[str] = mapped_column(String(64), default="CentralSystemRootCertificate")  # CentralSystemRootCertificate, ManufacturerRootCertificate, ChargePointCertificate
+    certificate_type: Mapped[str] = mapped_column(String(64), default="CentralSystemRootCertificate")  # CentralSystemRootCertificate, ManufacturerRootCertificate, ChargePointCertificate, V2GRootCertificate, MORootCertificate
     serial_number: Mapped[str] = mapped_column(String(128))
     issuer_name_hash: Mapped[str | None] = mapped_column(String(128))
     issuer_key_hash: Mapped[str | None] = mapped_column(String(128))
@@ -93,6 +99,42 @@ class ChargerCertificate(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     charger: Mapped["Charger"] = relationship(back_populates="certificates")
+
+
+# ── OCPP 2.0.1 Device Model Tables ───────────────────────────────────────────
+
+class DeviceComponent(Base):
+    __tablename__ = "device_components"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    instance: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evse_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    connector_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    charger: Mapped["Charger"] = relationship(back_populates="device_components")
+    variables: Mapped[list["DeviceVariable"]] = relationship(back_populates="component", cascade="all, delete-orphan", lazy="selectin")
+
+
+class DeviceVariable(Base):
+    __tablename__ = "device_variables"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    component_id: Mapped[int] = mapped_column(Integer, ForeignKey("device_components.id"), index=True)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    instance: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    value: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    mutability: Mapped[str | None] = mapped_column(String(32), default="ReadWrite")  # ReadOnly, WriteOnly, ReadWrite
+    data_type: Mapped[str | None] = mapped_column(String(32), default="string")  # string, integer, decimal, boolean, dateTime, OptionList, MemberList
+    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    min_limit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_limit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    component: Mapped["DeviceComponent"] = relationship(back_populates="variables")
+
 
 
 

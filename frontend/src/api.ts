@@ -1,8 +1,18 @@
 import axios from 'axios'
 import { API_BASE } from './config'
 import type {
-  Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken,
-  GenerateKeyResponse, SyncKeyResponse, Certificate, IssueClientCertResponse
+  Charger,
+  Transaction,
+  MeterValue,
+  ConfigurationItem,
+  OcppMessage,
+  AuthToken,
+  GenerateKeyResponse,
+  SyncKeyResponse,
+  Certificate,
+  IssueClientCertResponse,
+  DeviceComponent,
+  DeviceVariable,
 } from './types'
 
 const http = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' })
@@ -111,6 +121,14 @@ export const api = {
     http.post<SyncKeyResponse>(`/chargers/${cpId}/sync-key`).then(r => r.data),
   getChargerCertificates: (cpId: string) =>
     http.get<Certificate[]>(`/chargers/${cpId}/certificates`).then(r => r.data),
+  getDeviceModel: (cpId: string) =>
+    http.get<DeviceComponent[]>(`/chargers/${cpId}/device-model`).then(r => r.data),
+  requestBaseReport: (cpId: string) =>
+    http.post<{ status: string; request_id?: number; detail?: string }>(`/chargers/${cpId}/device-model/request-base-report`).then(r => r.data),
+  setDeviceVariable: (cpId: string, data: { component_name: string; variable_name: string; value: string; component_instance?: string; variable_instance?: string }) =>
+    http.post<{ status: string; component: string; variable: string; value: string }>(`/chargers/${cpId}/device-model/set-variable`, data).then(r => r.data),
+  issuePncContract: (cpId: string, data: { emaid: string; validity_days: number }) =>
+    http.post<{ status: string; emaid: string; serial_number: string; valid_from: string; valid_to: string; certificate_pem: string; ca_chain_pem: string }>(`/chargers/${cpId}/device-model/pnc/issue-contract`, data).then(r => r.data),
   installCertificate: (cpId: string, data: { certificate_type?: string; certificate_pem?: string }) =>
     http.post<{ charge_point_id: string; certificate_type: string; status: string; serial_number: string }>(`/chargers/${cpId}/certificates/install`, data).then(r => r.data),
   queryInstalledCertificates: (cpId: string, certificate_type = 'CentralSystemRootCertificate') =>

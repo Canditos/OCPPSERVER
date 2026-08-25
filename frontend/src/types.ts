@@ -31,7 +31,31 @@ export interface Charger {
   security_profile?: number
   auth_password?: string | null
   auth_enabled?: boolean
+  ocpp_version?: string
+  iso15118_pnc_enabled?: boolean
   connectors: Connector[]
+}
+
+export interface DeviceVariable {
+  id: number
+  name: string
+  instance?: string | null
+  value?: string | null
+  mutability?: string | null
+  data_type?: string | null
+  unit?: string | null
+  min_limit?: number | null
+  max_limit?: number | null
+  updated_at?: string | null
+}
+
+export interface DeviceComponent {
+  id: number
+  name: string
+  instance?: string | null
+  evse_id?: number | null
+  connector_id?: number | null
+  variables: DeviceVariable[]
 }
 
 export interface GenerateKeyResponse {

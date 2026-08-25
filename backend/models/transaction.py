@@ -12,7 +12,10 @@ class Transaction(Base):
     charger_id: Mapped[int] = mapped_column(Integer, ForeignKey("chargers.id"), index=True)
     charge_point_id: Mapped[str] = mapped_column(String(64))
     connector_id: Mapped[int] = mapped_column(Integer)
+    evse_id: Mapped[int | None] = mapped_column(Integer, default=1)
     id_tag: Mapped[str] = mapped_column(String(64))
+    id_token_type: Mapped[str | None] = mapped_column(String(32), default="ISO14443")  # ISO14443, eMAID, MacAddress, Central
+    transaction_guid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     meter_start: Mapped[int] = mapped_column(Integer, default=0)
     meter_stop: Mapped[int | None] = mapped_column(Integer)
     start_time: Mapped[datetime] = mapped_column(DateTime)

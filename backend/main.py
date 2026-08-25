@@ -19,6 +19,7 @@ from api.tags import router as tags_router
 from api.auth_tokens import router as auth_tokens_router
 from api.smart_charging import router as smart_charging_router
 from api.auth import router as auth_router, hash_password
+from api.device_model import router as device_model_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,7 +27,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-app = FastAPI(title="OCPP 1.6 Central System", version="1.0.0")
+app = FastAPI(title="OCPP 1.6 & 2.0.1 Dual-Stack Central System", version="2.0.0")
 
 # ── CORS & Security Headers Middleware ─────────────────────────────────────────
 cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
@@ -60,6 +61,7 @@ app.include_router(ws_router)
 app.include_router(tags_router)
 app.include_router(auth_tokens_router)
 app.include_router(smart_charging_router)
+app.include_router(device_model_router)
 
 
 @app.get("/health")
@@ -69,11 +71,13 @@ async def health():
 
 
 @app.websocket("/ocpp/{charge_point_id}")
+@app.websocket("/ws/{charge_point_id}")
+@app.websocket("/ws/v201/{charge_point_id}")
 async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
     """
-    OCPP 1.6 WebSocket endpoint.
-    Charger connects to: ws(s)://HOST/ocpp/{charge_point_id}
-    Supports Security Profile 0 (Open), Profile 1 (Basic Auth), Profile 2 (TLS + Basic Auth).
+    Dual-Stack OCPP 1.6-J & OCPP 2.0.1 WebSocket endpoint.
+    Supports Security Profile 0 (Open), Profile 1 (Basic Auth), Profile 2 (TLS + Basic Auth), Profile 3 (mTLS).
+    Negotiates 'ocpp2.0.1' or 'ocpp1.6' based on Sec-WebSocket-Protocol header.
     """
     import base64
     import hmac
@@ -114,17 +118,22 @@ async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
                 f"OCPP Security Violation: Unauthorized connection rejected from {charge_point_id} (IP: {client_ip}) - "
                 f"Profile {charger_record.security_profile if charger_record else 1} requires valid HTTP Basic Auth credentials."
             )
-            # 1008 = Policy Violation per RFC 6455 / OCPP 1.6 Security Whitepaper
+            # 1008 = Policy Violation per RFC 6455 / OCPP 1.6 & 2.0.1 Security Whitepaper
             await websocket.close(code=1008, reason="Policy Violation: Invalid OCPP Credentials")
             return
 
+    # Dual-Stack Subprotocol Negotiation
     subprotocols = websocket.headers.get("sec-websocket-protocol", "")
-    if "ocpp1.6" in subprotocols:
+    ocpp_version = "1.6"
+    if "ocpp2.0.1" in subprotocols or "v201" in websocket.url.path:
+        ocpp_version = "2.0.1"
+        await websocket.accept(subprotocol="ocpp2.0.1")
+    elif "ocpp1.6" in subprotocols:
         await websocket.accept(subprotocol="ocpp1.6")
     else:
         await websocket.accept()
 
-    await on_connect_fastapi(websocket, charge_point_id)
+    await on_connect_fastapi(websocket, charge_point_id, ocpp_version=ocpp_version)
 
 
 @app.on_event("startup")

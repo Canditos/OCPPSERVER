@@ -15,6 +15,7 @@ import { MeterChart } from '../components/MeterChart'
 import { EventLog } from '../components/EventLog'
 import { ConnectorBadge } from '../components/ConnectorBadge'
 import { AvailabilityMonitor } from '../components/AvailabilityMonitor'
+import { DeviceModelTab } from '../components/DeviceModelTab'
 import { useChargerStore } from '../store/chargerStore'
 import { useI18n } from '../i18n'
 import type { Charger, OcppMessage, Certificate, IssueClientCertResponse } from '../types'
@@ -48,7 +49,7 @@ export function ChargerDetail() {
   const live    = useChargerStore((s) => s.liveState[id ?? ''])
   
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1)
-  const [activeTab, setActiveTab] = useState<'telemetry' | 'security' | 'logs'>('telemetry')
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'devicemodel' | 'security' | 'logs'>('telemetry')
   const [showHttpHeader, setShowHttpHeader] = useState<boolean>(false)
   const [showSecurityCard, setShowSecurityCard] = useState<boolean>(false)
 
@@ -365,6 +366,15 @@ export function ChargerDetail() {
                   : 'Profile 0 (Aberto)'}
               </button>
 
+              <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold font-mono border ${
+                charger.ocpp_version === '2.0.1'
+                  ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                  : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+              }`}>
+                <Cpu className="w-3.5 h-3.5" />
+                {charger.ocpp_version === '2.0.1' ? 'OCPP 2.0.1 (PnC)' : 'OCPP 1.6-J'}
+              </span>
+
               {isOnline ? (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20">
                   <span className="relative flex h-1.5 w-1.5">
@@ -659,6 +669,19 @@ export function ChargerDetail() {
 
             <button
               type="button"
+              onClick={() => setActiveTab('devicemodel')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'devicemodel'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 border border-indigo-400/50 scale-[1.01]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-50 border border-slate-200/80 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/10 dark:bg-white/5 dark:border-white/5'
+              }`}
+            >
+              <Layers className={`w-4 h-4 ${activeTab === 'devicemodel' ? 'text-white' : 'text-indigo-500 dark:text-indigo-400'}`} />
+              <span>{t('chargerDetail.tabs.deviceModel')}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('security')}
               className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'security'
@@ -697,6 +720,15 @@ export function ChargerDetail() {
               </span>
             </button>
           </div>
+
+          {/* TAB: Device Model (OCPP 2.0.1) */}
+          {activeTab === 'devicemodel' && (
+            <DeviceModelTab
+              chargerId={charger.charge_point_id}
+              isOnline={isOnline}
+              ocppVersion={charger.ocpp_version}
+            />
+          )}
 
           {/* TAB 1: Telemetry & Monitoring */}
           {activeTab === 'telemetry' && (
