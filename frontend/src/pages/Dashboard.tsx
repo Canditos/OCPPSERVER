@@ -462,6 +462,9 @@ export function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* VIRTUAL SIMULATOR MODAL */}
+      <SimulatorModal isOpen={isSimulatorOpen} onClose={() => setIsSimulatorOpen(false)} />
     </div>
   )
 }
