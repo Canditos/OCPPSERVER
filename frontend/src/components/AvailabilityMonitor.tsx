@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, ShieldCheck, AlertTriangle, CheckCircle2,
-  Clock, Wifi, WifiOff, HeartPulse, RefreshCw, Layers, ShieldAlert
+  Clock, Wifi, WifiOff, HeartPulse, RefreshCw, Layers, ShieldAlert,
+  ChevronDown, ChevronUp
 } from 'lucide-react'
 import { api, AvailabilityData } from '../api'
 import { safeFormatDate } from '../utils/date'
@@ -14,6 +15,7 @@ interface AvailabilityMonitorProps {
 
 export function AvailabilityMonitor({ chargePointId, compact = false }: AvailabilityMonitorProps) {
   const [filterErrorsOnly, setFilterErrorsOnly] = useState(false)
+  const [showEventsTable, setShowEventsTable] = useState(false)
   const { data: avail, isLoading, refetch } = useQuery<AvailabilityData>({
     queryKey: ['chargerAvailability', chargePointId],
     queryFn: () => api.getChargerAvailability(chargePointId),
@@ -204,110 +206,131 @@ export function AvailabilityMonitor({ chargePointId, compact = false }: Availabi
                   )}
                 </div>
               </div>
-            ))}
           </div>
         </div>
       )}
 
-      {/* Detailed Error & Fault Events Log */}
-      <div className="space-y-3 pt-3 border-t border-white/8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* Detailed Error & Fault Events Log (Collapsible Accordion) */}
+      <div className="pt-2 border-t border-white/8">
+        <div
+          onClick={() => setShowEventsTable(!showEventsTable)}
+          className="flex items-center justify-between p-2.5 rounded-xl bg-white/3 hover:bg-white/6 border border-white/6 cursor-pointer transition-all select-none group"
+        >
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-red-400" />
-            <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+            <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
+            <span className="text-xs font-bold text-gray-200">
               Registo de Falhas & Eventos Recentes (Últimas 24h)
-            </h4>
+            </span>
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
               avail.total_faults_24h > 0 ? 'bg-red-500/15 text-red-400 border border-red-500/30' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
             }`}>
-              {avail.total_faults_24h} falhas registadas
+              {avail.total_faults_24h} falhas
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 group-hover:text-gray-300 transition-colors hidden sm:inline">
+              {showEventsTable ? 'Clique para recolher' : 'Clique para expandir'}
+            </span>
             <button
               type="button"
-              onClick={() => setFilterErrorsOnly(!filterErrorsOnly)}
-              className={`text-xs px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 ${
-                filterErrorsOnly
-                  ? 'bg-red-500/20 text-red-300 border-red-500/40 font-semibold'
-                  : 'bg-white/5 text-gray-400 border-white/10 hover:text-gray-200'
-              }`}
+              className="p-1 rounded-lg bg-white/5 text-gray-400 group-hover:text-white"
             >
-              <AlertTriangle className="w-3 h-3" />
-              <span>{filterErrorsOnly ? 'A mostrar Apenas Erros' : 'Mostrar Apenas Falhas/Erros'}</span>
+              {showEventsTable ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
           </div>
         </div>
 
-        {displayedEvents.length === 0 ? (
-          <div className="p-4 rounded-xl bg-white/2 border border-white/5 text-center">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 mx-auto mb-1.5 opacity-80" />
-            <p className="text-xs text-gray-400 font-medium">Nenhum erro ou anomalia registado nas últimas 24 horas.</p>
-            <p className="text-[10px] text-gray-600 mt-0.5">O carregador e os conectores mantiveram operação estável.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-white/10 bg-gray-950/60 max-h-72 overflow-y-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-white/5 border-b border-white/10 sticky top-0 backdrop-blur-md text-[11px] text-gray-400 font-semibold uppercase">
-                <tr>
-                  <th className="py-2.5 px-3">Data / Hora</th>
-                  <th className="py-2.5 px-3">Tomada</th>
-                  <th className="py-2.5 px-3">Estado</th>
-                  <th className="py-2.5 px-3">Código de Erro OCPP</th>
-                  <th className="py-2.5 px-3">Detalhes / Info</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 font-mono">
-                {displayedEvents.map((evt) => {
-                  const isFault = (evt.error_code && evt.error_code !== 'NoError') || ['Faulted', 'Unavailable', 'Inoperative'].includes(evt.status)
-                  return (
-                    <tr
-                      key={evt.id}
-                      className={`transition-colors hover:bg-white/5 ${isFault ? 'bg-red-500/5' : ''}`}
-                    >
-                      <td className="py-2 px-3 text-gray-300 whitespace-nowrap">
-                        {evt.timestamp ? safeFormatDate(evt.timestamp) : '—'}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap text-gray-300">
-                        {evt.connector_id > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded bg-white/5 text-gray-300 text-[11px]">
-                            Tomada #{evt.connector_id}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500 text-[11px]">Posto Geral</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                          evt.status === 'Faulted'
-                            ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                            : evt.status === 'Unavailable' || evt.status === 'Inoperative'
-                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                            : evt.status === 'Charging'
-                            ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                            : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                        }`}>
-                          {evt.status}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 whitespace-nowrap">
-                        {evt.error_code && evt.error_code !== 'NoError' ? (
-                          <span className="px-2 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/30 text-[11px] font-bold">
-                            ⚠️ {evt.error_code}
-                          </span>
-                        ) : (
-                          <span className="text-gray-600 text-[11px]">NoError</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 text-gray-400 text-[11px] font-sans truncate max-w-xs" title={evt.info || ''}>
-                        {evt.info || (isFault ? 'Sem informação adicional transmitida pelo posto' : '—')}
-                      </td>
+        {showEventsTable && (
+          <div className="space-y-3 pt-3 animate-fade-in">
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setFilterErrorsOnly(!filterErrorsOnly)
+                }}
+                className={`text-xs px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 ${
+                  filterErrorsOnly
+                    ? 'bg-red-500/20 text-red-300 border-red-500/40 font-semibold'
+                    : 'bg-white/5 text-gray-400 border-white/10 hover:text-gray-200'
+                }`}
+              >
+                <AlertTriangle className="w-3 h-3" />
+                <span>{filterErrorsOnly ? 'A mostrar Apenas Erros' : 'Mostrar Apenas Falhas/Erros'}</span>
+              </button>
+            </div>
+
+            {displayedEvents.length === 0 ? (
+              <div className="p-4 rounded-xl bg-white/2 border border-white/5 text-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 mx-auto mb-1.5 opacity-80" />
+                <p className="text-xs text-gray-400 font-medium">Nenhum erro ou anomalia registado nas últimas 24 horas.</p>
+                <p className="text-[10px] text-gray-600 mt-0.5">O carregador e os conectores mantiveram operação estável.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-gray-950/60 max-h-72 overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-white/5 border-b border-white/10 sticky top-0 backdrop-blur-md text-[11px] text-gray-400 font-semibold uppercase">
+                    <tr>
+                      <th className="py-2.5 px-3">Data / Hora</th>
+                      <th className="py-2.5 px-3">Tomada</th>
+                      <th className="py-2.5 px-3">Estado</th>
+                      <th className="py-2.5 px-3">Código de Erro OCPP</th>
+                      <th className="py-2.5 px-3">Detalhes / Info</th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 font-mono">
+                    {displayedEvents.map((evt) => {
+                      const isFault = (evt.error_code && evt.error_code !== 'NoError') || ['Faulted', 'Unavailable', 'Inoperative'].includes(evt.status)
+                      return (
+                        <tr
+                          key={evt.id}
+                          className={`transition-colors hover:bg-white/5 ${isFault ? 'bg-red-500/5' : ''}`}
+                        >
+                          <td className="py-2 px-3 text-gray-300 whitespace-nowrap">
+                            {evt.timestamp ? safeFormatDate(evt.timestamp) : '—'}
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap text-gray-300">
+                            {evt.connector_id > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-white/5 text-gray-300 text-[11px]">
+                                Tomada #{evt.connector_id}
+                              </span>
+                            ) : (
+                              <span className="text-gray-500 text-[11px]">Posto Geral</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              evt.status === 'Faulted'
+                                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                : evt.status === 'Unavailable' || evt.status === 'Inoperative'
+                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                : evt.status === 'Charging'
+                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            }`}>
+                              {evt.status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            {evt.error_code && evt.error_code !== 'NoError' ? (
+                              <span className="px-2 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/30 text-[11px] font-bold">
+                                ⚠️ {evt.error_code}
+                              </span>
+                            ) : (
+                              <span className="text-gray-600 text-[11px]">NoError</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-gray-400 text-[11px] font-sans truncate max-w-xs" title={evt.info || ''}>
+                            {evt.info || (isFault ? 'Sem informação adicional transmitida pelo posto' : '—')}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

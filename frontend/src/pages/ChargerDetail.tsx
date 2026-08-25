@@ -6,7 +6,7 @@ import { safeFormatDate, safeFormatDistance } from '../utils/date'
 import {
   ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap, CheckCircle2,
   Shield, Key, Lock, Unlock, Copy, Eye, EyeOff, Sparkles, RefreshCw, Send, AlertTriangle, Check,
-  FileText, Download, Trash2, ShieldAlert, Award, X
+  FileText, Download, Trash2, ShieldAlert, Award, X, ChevronDown, ChevronUp, BarChart3, Layers
 } from 'lucide-react'
 
 import { api } from '../api'
@@ -41,6 +41,8 @@ export function ChargerDetail() {
   const live    = useChargerStore((s) => s.liveState[id ?? ''])
   
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1)
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'security' | 'logs'>('telemetry')
+  const [showHttpHeader, setShowHttpHeader] = useState<boolean>(false)
 
   const { data: charger } = useQuery<Charger>({
     queryKey: ['charger', id],
@@ -308,15 +310,20 @@ export function ChargerDetail() {
               <p className="text-sm text-gray-600">{charger.vendor} · {charger.model}</p>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
-                (charger.security_profile ?? 0) === 3
-                  ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                  : (charger.security_profile ?? 0) === 2
-                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                  : (charger.security_profile ?? 0) === 1
-                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-              }`}>
+              <button
+                type="button"
+                onClick={() => setActiveTab('security')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer hover:scale-105 transition-all ${
+                  (charger.security_profile ?? 0) === 3
+                    ? 'bg-purple-500/15 text-purple-300 border-purple-500/30 hover:bg-purple-500/25'
+                    : (charger.security_profile ?? 0) === 2
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20'
+                    : (charger.security_profile ?? 0) === 1
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                }`}
+                title="Clique para abrir o separador de Certificados & Segurança"
+              >
                 <Shield className="w-3.5 h-3.5" />
                 {(charger.security_profile ?? 0) === 3
                   ? 'Profile 3 (mTLS)'
@@ -325,7 +332,7 @@ export function ChargerDetail() {
                   : (charger.security_profile ?? 0) === 1
                   ? 'Profile 1 (Basic Auth)'
                   : 'Profile 0 (Aberto)'}
-              </span>
+              </button>
 
               {isOnline ? (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20">
@@ -481,13 +488,27 @@ export function ChargerDetail() {
               </button>
             </div>
 
-            {/* Connection instructions preview */}
+            {/* Connection instructions preview (collapsible) */}
             {authKey && secProfile >= 1 && (
-              <div className="p-2.5 rounded-lg bg-white/4 border border-white/8 space-y-1">
-                <span className="text-[10px] text-gray-400 font-medium">Cabeçalho HTTP Basic para o Carregador:</span>
-                <p className="text-[10px] font-mono text-gray-300 break-all bg-gray-900/80 p-1.5 rounded border border-white/5 select-all">
-                  Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
-                </p>
+              <div className="rounded-lg bg-white/4 border border-white/8 overflow-hidden text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowHttpHeader(!showHttpHeader)}
+                  className="w-full p-2.5 flex items-center justify-between text-gray-400 hover:text-gray-200 transition-colors text-[11px] font-medium cursor-pointer"
+                >
+                  <span>Cabeçalho HTTP Basic</span>
+                  <span className="flex items-center gap-1 text-[10px] text-blue-400">
+                    {showHttpHeader ? 'Ocultar' : 'Ver cabeçalho'}
+                    {showHttpHeader ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </span>
+                </button>
+                {showHttpHeader && (
+                  <div className="p-2.5 pt-0 border-t border-white/5 space-y-1">
+                    <p className="text-[10px] font-mono text-gray-300 break-all bg-gray-900/90 p-2 rounded border border-white/5 select-all">
+                      Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -573,225 +594,288 @@ export function ChargerDetail() {
           )}
         </div>
 
-        {/* right columns */}
+        {/* right columns with Tab Navigation */}
         <div className="xl:col-span-2 space-y-5">
-          {/* Certificate Management Card (Security Profile 3) */}
-          <div className="card space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/8 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/25">
-                  <Award className="w-5 h-5" />
+          {/* Tab navigation pills */}
+          <div className="flex items-center gap-1.5 p-1 bg-white/3 border border-white/8 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setActiveTab('telemetry')}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'telemetry'
+                  ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/4'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Telemetria & Monitorização</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('security')}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'security'
+                  ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/4'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 text-purple-400" />
+              <span>Certificados X.509 & mTLS</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+                {certs.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('logs')}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'logs'
+                  ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/4'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Logs & Eventos OCPP</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                {messages.length}
+              </span>
+            </button>
+          </div>
+
+          {/* TAB 1: Telemetry & Monitoring */}
+          {activeTab === 'telemetry' && (
+            <div className="space-y-5 animate-fade-in">
+              {/* availability monitor */}
+              <AvailabilityMonitor chargePointId={charger.charge_point_id} />
+
+              {/* meter chart */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">MeterValues</h3>
+                  <span className="text-xs text-gray-600 font-mono">Conector #{selectedConnectorId}</span>
                 </div>
+                <MeterChart key={`${charger.charge_point_id}-${selectedConnectorId}`} cpId={charger.charge_point_id} connectorId={selectedConnectorId} />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: X.509 Certificates & mTLS */}
+          {activeTab === 'security' && (
+            <div className="space-y-5 animate-fade-in">
+              {/* Certificate Management Card (Security Profile 3) */}
+              <div className="card space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/8 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/25">
+                      <Award className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                        Certificados Digitais X.509 & mTLS
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono">
+                          Profile 3
+                        </span>
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Infraestrutura de Chaves Públicas (PKI), Root CA do CSMS e certificados de hardware
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href={api.getRootCaUrl()}
+                      download="csms_root_ca.crt"
+                      className="btn bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 text-xs py-1.5 px-2.5 rounded-lg flex items-center gap-1.5 transition-all"
+                      title="Descarregar certificado Root CA (.crt) para importar no posto ou browser"
+                    >
+                      <Download className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Baixar Root CA</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={handleInstallRootCa}
+                      disabled={certLoading || !isOnline}
+                      className="btn bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs py-1.5 px-2.5 rounded-lg flex items-center gap-1.5 disabled:opacity-40 transition-all"
+                      title={isOnline ? 'Enviar Root CA do CSMS ao posto via OCPP InstallCertificate' : 'Posto offline'}
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Instalar CA no Posto</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleQueryDeviceCerts}
+                      disabled={certLoading || !isOnline}
+                      className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-1.5 px-2.5 rounded-lg flex items-center gap-1.5 disabled:opacity-40 transition-all"
+                      title={isOnline ? 'Consultar certificados no posto via OCPP GetInstalledCertificateIds' : 'Posto offline'}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${certLoading ? 'animate-spin' : ''}`} />
+                      <span>Consultar no Posto</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleIssueClientCert}
+                      disabled={certLoading}
+                      className="btn-primary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Emitir Certificado de Cliente</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Feedback alert */}
+                {certFeedback && (
+                  <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                    certFeedback.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                  }`}>
+                    {certFeedback.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-red-400" />}
+                    <span>{certFeedback.message}</span>
+                  </div>
+                )}
+
+                {/* Certificates Table */}
+                {certs.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-white/2 border border-white/5 text-center">
+                    <FileText className="w-5 h-5 text-gray-500 mx-auto mb-1 opacity-70" />
+                    <p className="text-xs text-gray-400 font-medium">Nenhum certificado registado para este carregador.</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5">Clica em "Emitir Certificado de Cliente" para gerar um par de chaves X.509 ou "Instalar CA no Posto".</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-white/10 bg-gray-950/60">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-white/5 border-b border-white/10 text-[11px] text-gray-400 font-semibold uppercase">
+                        <tr>
+                          <th className="py-2.5 px-3">Tipo / Função</th>
+                          <th className="py-2.5 px-3">Common Name (CN)</th>
+                          <th className="py-2.5 px-3">Emissor</th>
+                          <th className="py-2.5 px-3">Nº Série</th>
+                          <th className="py-2.5 px-3">Validade</th>
+                          <th className="py-2.5 px-3">Estado</th>
+                          <th className="py-2.5 px-3 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 font-mono">
+                        {certs.map((c) => {
+                          const isRootCa = c.certificate_type === 'CentralSystemRootCertificate'
+                          return (
+                            <tr key={c.id} className="transition-colors hover:bg-white/5">
+                              <td className="py-2 px-3 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  isRootCa ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                }`}>
+                                  {isRootCa ? '🏛️ CSMS Root CA' : '⚡ Client (EVSE)'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-gray-200 font-sans font-medium whitespace-nowrap">
+                                {c.subject_cn || (isRootCa ? 'Canditos Root CA' : charger.charge_point_id)}
+                              </td>
+                              <td className="py-2 px-3 text-gray-400 font-sans text-[11px] whitespace-nowrap">
+                                {c.issuer_cn || 'Canditos CSMS Root CA'}
+                              </td>
+                              <td className="py-2 px-3 text-gray-400 text-[11px] truncate max-w-[120px]" title={c.serial_number}>
+                                {c.serial_number.slice(0, 12)}…
+                              </td>
+                              <td className="py-2 px-3 text-gray-400 text-[11px] whitespace-nowrap">
+                                {c.valid_to ? safeFormatDate(c.valid_to) : '—'}
+                              </td>
+                              <td className="py-2 px-3 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  c.status === 'InstalledOnDevice'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                    : c.status === 'Active'
+                                    ? 'bg-blue-500/15 text-blue-300 border-blue-500/25'
+                                    : 'bg-red-500/15 text-red-300 border-red-500/25'
+                                }`}>
+                                  {c.status === 'InstalledOnDevice' ? 'Instalado no Posto' : c.status}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-right whitespace-nowrap space-x-1 font-sans">
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectCert(c)}
+                                  className="btn-ghost p-1 text-gray-400 hover:text-white rounded"
+                                  title="Ver Detalhes do Certificado (PEM)"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                {!isRootCa && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCert(c.id)}
+                                    className="btn-ghost p-1 text-red-400 hover:text-red-300 rounded"
+                                    title="Remover Certificado"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Logs & Events */}
+          {activeTab === 'logs' && (
+            <div className="space-y-5 animate-fade-in">
+              {/* events */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Eventos Recentes</h3>
+                </div>
+                <EventLog cpId={charger.charge_point_id} maxHeight="280px" />
+              </div>
+
+              {/* message log */}
+              {messages.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
-                    Certificados Digitais X.509 & mTLS
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono">
-                      Profile 3
-                    </span>
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Infraestrutura de Chaves Públicas (PKI), Root CA do CSMS e certificados de hardware
-                  </p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <MessageSquare className="w-4 h-4 text-gray-600" />
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Log de Mensagens OCPP</h3>
+                    <span className="text-xs text-gray-700 ml-auto">{messages.length} mensagens</span>
+                  </div>
+                  <div className="card p-0 overflow-hidden">
+                    <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0">
+                          <tr className="border-b border-white/6" style={{ background: 'rgba(10,14,26,0.95)' }}>
+                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Dir</th>
+                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Action</th>
+                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Timestamp</th>
+                            <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Payload</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {messages.slice(0, 50).map((m) => (
+                            <tr key={m.id} className="border-b border-white/4 hover:bg-white/2 transition-colors">
+                              <td className="px-4 py-2"><DirectionBadge direction={m.direction} /></td>
+                              <td className="px-4 py-2 font-mono text-gray-300">{m.action}</td>
+                              <td className="px-4 py-2 text-gray-600 font-mono whitespace-nowrap">
+                                {format(new Date(m.timestamp), 'HH:mm:ss')}
+                              </td>
+                              <td className="px-4 py-2 text-gray-700 font-mono truncate max-w-xs" title={typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}>
+                                {typeof m.payload === 'string' ? m.payload.substring(0, 80) : JSON.stringify(m.payload).substring(0, 80)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <a
-                  href={api.getRootCaUrl()}
-                  download="csms_root_ca.crt"
-                  className="btn bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 text-xs py-1.5 px-2.5 rounded-lg flex items-center gap-1.5 transition-all"
-                  title="Descarregar certificado Root CA (.crt) para importar no posto ou browser"
-                >
-                  <Download className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Baixar Root CA</span>
-                </a>
-
-                <button
-                  type="button"
-                  onClick={handleInstallRootCa}
-                  disabled={certLoading || !isOnline}
-                  className="btn bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs py-1.5 px-2.5 rounded-lg flex items-center gap-1.5 disabled:opacity-40 transition-all"
-                  title={isOnline ? 'Enviar Root CA do CSMS ao posto via OCPP InstallCertificate' : 'Posto offline'}
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Instalar CA no Posto</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleQueryDeviceCerts}
-                  disabled={certLoading || !isOnline}
-                  className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-1.5 px-2.5 rounded-lg flex items-center gap-1.5 disabled:opacity-40 transition-all"
-                  title={isOnline ? 'Consultar certificados no posto via OCPP GetInstalledCertificateIds' : 'Posto offline'}
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${certLoading ? 'animate-spin' : ''}`} />
-                  <span>Consultar no Posto</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleIssueClientCert}
-                  disabled={certLoading}
-                  className="btn-primary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Emitir Certificado de Cliente</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Feedback alert */}
-            {certFeedback && (
-              <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
-                certFeedback.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
-              }`}>
-                {certFeedback.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-red-400" />}
-                <span>{certFeedback.message}</span>
-              </div>
-            )}
-
-            {/* Certificates Table */}
-            {certs.length === 0 ? (
-              <div className="p-4 rounded-xl bg-white/2 border border-white/5 text-center">
-                <FileText className="w-5 h-5 text-gray-500 mx-auto mb-1 opacity-70" />
-                <p className="text-xs text-gray-400 font-medium">Nenhum certificado registado para este carregador.</p>
-                <p className="text-[10px] text-gray-600 mt-0.5">Clica em "Emitir Certificado de Cliente" para gerar um par de chaves X.509 ou "Instalar CA no Posto".</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-white/10 bg-gray-950/60">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-white/5 border-b border-white/10 text-[11px] text-gray-400 font-semibold uppercase">
-                    <tr>
-                      <th className="py-2.5 px-3">Tipo / Função</th>
-                      <th className="py-2.5 px-3">Common Name (CN)</th>
-                      <th className="py-2.5 px-3">Emissor</th>
-                      <th className="py-2.5 px-3">Nº Série</th>
-                      <th className="py-2.5 px-3">Validade</th>
-                      <th className="py-2.5 px-3">Estado</th>
-                      <th className="py-2.5 px-3 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 font-mono">
-                    {certs.map((c) => {
-                      const isRootCa = c.certificate_type === 'CentralSystemRootCertificate'
-                      return (
-                        <tr key={c.id} className="transition-colors hover:bg-white/5">
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              isRootCa ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                            }`}>
-                              {isRootCa ? '🏛️ CSMS Root CA' : '⚡ Client (EVSE)'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-gray-200 font-sans font-medium whitespace-nowrap">
-                            {c.subject_cn || (isRootCa ? 'Canditos Root CA' : charger.charge_point_id)}
-                          </td>
-                          <td className="py-2 px-3 text-gray-400 font-sans text-[11px] whitespace-nowrap">
-                            {c.issuer_cn || 'Canditos CSMS Root CA'}
-                          </td>
-                          <td className="py-2 px-3 text-gray-400 text-[11px] truncate max-w-[120px]" title={c.serial_number}>
-                            {c.serial_number.slice(0, 12)}…
-                          </td>
-                          <td className="py-2 px-3 text-gray-400 text-[11px] whitespace-nowrap">
-                            {c.valid_to ? safeFormatDate(c.valid_to) : '—'}
-                          </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              c.status === 'InstalledOnDevice'
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                : c.status === 'Active'
-                                ? 'bg-blue-500/15 text-blue-300 border-blue-500/25'
-                                : 'bg-red-500/15 text-red-300 border-red-500/25'
-                            }`}>
-                              {c.status === 'InstalledOnDevice' ? 'Instalado no Posto' : c.status}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right whitespace-nowrap space-x-1 font-sans">
-                            <button
-                              type="button"
-                              onClick={() => setInspectCert(c)}
-                              className="btn-ghost p-1 text-gray-400 hover:text-white rounded"
-                              title="Ver Detalhes do Certificado (PEM)"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            {!isRootCa && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteCert(c.id)}
-                                className="btn-ghost p-1 text-red-400 hover:text-red-300 rounded"
-                                title="Remover Certificado"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* availability monitor */}
-          <AvailabilityMonitor chargePointId={charger.charge_point_id} />
-
-          {/* meter chart */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">MeterValues</h3>
-              <span className="text-xs text-gray-600 font-mono">Conector #{selectedConnectorId}</span>
-            </div>
-            <MeterChart key={`${charger.charge_point_id}-${selectedConnectorId}`} cpId={charger.charge_point_id} connectorId={selectedConnectorId} />
-          </div>
-
-          {/* events */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Eventos</h3>
-            </div>
-            <EventLog cpId={charger.charge_point_id} maxHeight="280px" />
-          </div>
-
-          {/* message log */}
-          {messages.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <MessageSquare className="w-4 h-4 text-gray-600" />
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Log OCPP</h3>
-                <span className="text-xs text-gray-700 ml-auto">{messages.length} msgs</span>
-              </div>
-              <div className="card p-0 overflow-hidden">
-                <div className="overflow-x-auto max-h-72 overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0">
-                      <tr className="border-b border-white/6" style={{ background: 'rgba(10,14,26,0.95)' }}>
-                        <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Dir</th>
-                        <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Action</th>
-                        <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Timestamp</th>
-                        <th className="text-left px-4 py-2.5 text-gray-600 font-medium">Payload</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {messages.slice(0, 50).map((m) => (
-                        <tr key={m.id} className="border-b border-white/4 hover:bg-white/2 transition-colors">
-                          <td className="px-4 py-2"><DirectionBadge direction={m.direction} /></td>
-                          <td className="px-4 py-2 font-mono text-gray-300">{m.action}</td>
-                          <td className="px-4 py-2 text-gray-600 font-mono whitespace-nowrap">
-                            {format(new Date(m.timestamp), 'HH:mm:ss')}
-                          </td>
-                          <td className="px-4 py-2 text-gray-700 font-mono truncate max-w-xs">
-                            {typeof m.payload === 'string' ? m.payload.substring(0, 80) : JSON.stringify(m.payload).substring(0, 80)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
