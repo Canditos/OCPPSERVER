@@ -1,3 +1,6 @@
+import os
+import time
+from collections import defaultdict
 import hmac
 import hashlib
 import json
@@ -6,7 +9,7 @@ import secrets
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -19,9 +22,35 @@ from models.charger import Charger
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-JWT_SECRET = "ocpp_canditos_secret_key_2026_super_secure_jwt_token"
+# ── Dynamic Security Configuration ───────────────────────────────────────────
+JWT_SECRET = os.environ.get("JWT_SECRET", "ocpp_canditos_secret_key_2026_super_secure_jwt_token")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 72
+JWT_EXPIRATION_HOURS = int(os.environ.get("JWT_EXPIRATION_HOURS", "72"))
+
+# ── In-Memory Rate Limiter (Brute-Force & DDoS Mitigation) ───────────────────
+_rate_limits: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_WINDOW = 60  # 1 minute window
+RATE_LIMIT_MAX_ATTEMPTS = 15  # Max 15 attempts per minute per IP
+
+def check_rate_limit(request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    # Honor X-Forwarded-For if behind trusted proxy
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+        
+    now = time.time()
+    valid_attempts = [t for t in _rate_limits[client_ip] if now - t < RATE_LIMIT_WINDOW]
+    _rate_limits[client_ip] = valid_attempts
+    
+    if len(valid_attempts) >= RATE_LIMIT_MAX_ATTEMPTS:
+        logger.warning(f"Rate limit exceeded for IP {client_ip} on auth endpoint")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiadas tentativas de acesso. Por favor, aguarda 1 minuto antes de tentar novamente.",
+            headers={"Retry-After": str(RATE_LIMIT_WINDOW)},
+        )
+    _rate_limits[client_ip].append(now)
 
 
 # ── Password & Token Helpers ──────────────────────────────────────────────────
@@ -199,8 +228,9 @@ class UpdateUserRequest(BaseModel):
 # ── Routes ──────────────────────────────────────────────────────────────────
 
 @router.post("/register")
-async def register_driver(req: RegisterDriverRequest, db: AsyncSession = Depends(get_db)):
+async def register_driver(req: RegisterDriverRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Public self-registration for new drivers (pending admin approval)."""
+    check_rate_limit(request)
     import random
     from services.email_service import notify_driver_registration_received
 
@@ -263,8 +293,9 @@ async def register_driver(req: RegisterDriverRequest, db: AsyncSession = Depends
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Authenticate user with username OR email and password, returning JWT token."""
+    check_rate_limit(request)
     login_input = req.username.strip().lower()
     
     # Check by username OR email (case-insensitive)

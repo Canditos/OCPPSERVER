@@ -28,13 +28,28 @@ logging.basicConfig(
 
 app = FastAPI(title="OCPP 1.6 Central System", version="1.0.0")
 
+# ── CORS & Security Headers Middleware ─────────────────────────────────────────
+cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
+cors_origins = [orig.strip() for orig in cors_origins_env.split(",") if orig.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins if cors_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 
 app.include_router(auth_router)
 app.include_router(chargers_router)
@@ -125,10 +140,12 @@ async def startup():
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(User).limit(1))
         if not result.scalar_one_or_none():
+            admin_initial_pwd = os.environ.get("ADMIN_INITIAL_PASSWORD", "admin123")
+            user_initial_pwd = os.environ.get("USER_INITIAL_PASSWORD", "user123")
             admin = User(
                 username="admin",
                 email="admin@canditos.com",
-                hashed_password=hash_password("admin123"),
+                hashed_password=hash_password(admin_initial_pwd),
                 role="admin",
                 rfid_tag="ADMIN_MASTER",
                 is_active=True,
@@ -136,7 +153,7 @@ async def startup():
             sample_user = User(
                 username="condutor",
                 email="condutor@canditos.com",
-                hashed_password=hash_password("user123"),
+                hashed_password=hash_password(user_initial_pwd),
                 role="user",
                 rfid_tag="VERSICHARGE_TAG",
                 is_active=True,
