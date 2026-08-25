@@ -27,7 +27,7 @@ SIMULATION_STATE = {
 
 class LaunchSimulationRequest(BaseModel):
     station_id: str = Field("chargerPT_v201", min_length=3, max_length=64)
-    ocpp_version: str = Field("2.0.1", regex="^(1.6|2.0.1)$")
+    ocpp_version: str = Field("2.0.1", pattern="^(1.6|2.0.1)$")
     duration_seconds: int = Field(15, ge=5, le=120)
     server_port: int = Field(8000, ge=80, le=65535)
 

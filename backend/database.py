@@ -129,7 +129,7 @@ async def _seed_root_ca(session: AsyncSession) -> None:
 
 
 async def init_db():
-    from models import charger, transaction, configuration, auth_token, authorized_tag, charging_profile  # noqa: F401
+    from models import charger, transaction, configuration, auth_token, authorized_tag, charging_profile, user  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _add_missing_columns(conn)
