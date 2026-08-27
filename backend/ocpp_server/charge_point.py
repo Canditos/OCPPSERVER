@@ -209,18 +209,34 @@ class ChargePoint(OcppChargePoint):
 
     @on(Action.StartTransaction)
     async def on_start_transaction(self, connector_id, id_tag, meter_start, timestamp, **kwargs):
-        await self._log_message("IN", "StartTransaction", {
-            "connector_id": connector_id, "id_tag": id_tag, "meter_start": meter_start
-        })
-
         auth_status = await self._check_auth(id_tag)
         if auth_status != AuthorizationStatus.accepted:
+            await self._log_message("IN", "StartTransaction", {
+                "connector_id": connector_id,
+                "id_tag": id_tag,
+                "meter_start": meter_start,
+                "status": "Rejected",
+                "timestamp": timestamp,
+                **kwargs,
+            })
             return call_result.StartTransactionPayload(
                 transaction_id=0,
                 id_tag_info={"status": auth_status}
             )
 
         tx_id = _next_tx_id()
+        await self._log_message("IN", "StartTransaction", {
+            "connector_id": connector_id,
+            "id_tag": id_tag,
+            "meter_start": meter_start,
+            "transaction_id": tx_id,
+            "timestamp": timestamp,
+            **kwargs,
+        })
+        await self._log_message("OUT", "StartTransactionResponse", {
+            "transaction_id": tx_id,
+            "id_tag_info": {"status": "Accepted"}
+        })
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = result.scalar_one_or_none()

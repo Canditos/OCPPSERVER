@@ -253,7 +253,7 @@ async def get_charger_availability(cp_id: str, db: AsyncSession = Depends(get_db
 
 
 @router.get("/{cp_id}/messages", response_model=list[OcppMessageOut])
-async def get_messages(cp_id: str, limit: int = 250, db: AsyncSession = Depends(get_db)):
+async def get_messages(cp_id: str, limit: int = 10000, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
     charger = result.scalar_one_or_none()
     if not charger:

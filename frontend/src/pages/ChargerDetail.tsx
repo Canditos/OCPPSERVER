@@ -241,7 +241,7 @@ export function ChargerDetail() {
 
   const { data: messages = [] } = useQuery<OcppMessage[]>({
     queryKey: ['messages', id],
-    queryFn:  () => api.getMessages(id!),
+    queryFn:  () => api.getMessages(id!, 1000),
     enabled:  !!id,
     refetchInterval: 5000,
   })
