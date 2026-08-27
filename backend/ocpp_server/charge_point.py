@@ -353,6 +353,12 @@ class ChargePoint(OcppChargePoint):
     @on(Action.MeterValues)
     async def on_meter_values(self, connector_id, meter_value, **kwargs):
         tx_id_ocpp = kwargs.get("transaction_id")
+        await self._log_message("IN", "MeterValues", {
+            "connector_id": connector_id,
+            "transaction_id": tx_id_ocpp,
+            "meter_value": meter_value,
+            **kwargs,
+        })
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = result.scalar_one_or_none()
