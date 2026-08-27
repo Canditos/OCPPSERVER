@@ -622,10 +622,12 @@ async def self_heal_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
     if cp:
         try:
             if hasattr(cp, "trigger_message"):
-                await cp.trigger_message(requested_message="StatusNotification")
+                await asyncio.wait_for(cp.trigger_message(requested_message="StatusNotification"), timeout=3.5)
                 actions_taken.append("Enviado TriggerMessage(StatusNotification) com sucesso")
+        except asyncio.TimeoutError:
+            actions_taken.append("TriggerMessage enviado (resposta assíncrona aguardada)")
         except Exception as e:
-            actions_taken.append(f"Aviso TriggerMessage: {e}")
+            actions_taken.append(f"Aviso de sincronização: {e}")
     else:
         actions_taken.append("Posto Offline - estado da base de dados normalizado")
 

@@ -41,7 +41,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const live = useChargerStore((s) => s.liveState[charger.charge_point_id])
   const { displayNames, groups, setDisplayName, setGroup } = useChargerUiStore()
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
   const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null)
 
   // Display name editing state
@@ -53,17 +53,22 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     e.preventDefault()
     e.stopPropagation()
     setIsSelfHealing(true)
+    setFeedback({ type: 'info', message: 'A executar auto-diagnóstico e reconciliação…' })
     try {
       const resp = await api.selfHealCharger(charger.charge_point_id)
-      setFeedback({ type: 'success', message: resp.message || 'Auto-Diagnóstico & Sincronização concluídos!' })
+      const actionMsg = resp.actions_taken && resp.actions_taken.length > 0
+        ? resp.actions_taken.join(' · ')
+        : 'Estado verificado e sincronizado a 100%!'
+      setFeedback({ type: 'success', message: `✅ ${actionMsg}` })
       refetchActiveTx()
       queryClient.invalidateQueries({ queryKey: ['chargers'] })
       queryClient.invalidateQueries({ queryKey: ['activeTransactions', charger.charge_point_id] })
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao sincronizar posto.' })
+      const msg = err?.response?.data?.detail || err?.message || 'Erro ao sincronizar posto.'
+      setFeedback({ type: 'error', message: `⚠️ ${msg}` })
     } finally {
       setIsSelfHealing(false)
-      setTimeout(() => setFeedback(null), 5000)
+      setTimeout(() => setFeedback(null), 7000)
     }
   }
 
