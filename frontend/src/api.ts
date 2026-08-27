@@ -159,8 +159,12 @@ export const api = {
     if (status) params.set('status', status)
     return http.get<Transaction[]>(`/transactions?${params}`).then(r => r.data)
   },
-  getActiveTransaction: (cp_id: string) =>
-    http.get<Transaction | null>(`/transactions/active/${cp_id}`).then(r => r.data),
+  getActiveTransaction: (cp_id: string, connector_id?: number) => {
+    const query = connector_id !== undefined ? `?connector_id=${connector_id}` : ''
+    return http.get<Transaction | null>(`/transactions/active/${cp_id}${query}`).then(r => r.data)
+  },
+  getAllActiveTransactions: (cp_id: string) =>
+    http.get<Record<number, Transaction>>(`/transactions/active-all/${cp_id}`).then(r => r.data),
   getMeterValues: (txId: number) =>
     http.get<MeterValue[]>(`/transactions/${txId}/meter-values`).then(r => r.data),
   getLiveMeterValues: (cpId: string, connectorId = 1) =>

@@ -250,10 +250,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     rawConnectors.length > 0 ? rawConnectors[0].connector_id : 1
   )
 
-  // Fetch active transaction for this charger
-  const { data: activeTransaction, refetch: refetchActiveTx } = useQuery({
-    queryKey: ['activeTransaction', charger.charge_point_id],
-    queryFn: () => api.getActiveTransaction(charger.charge_point_id),
+  // Fetch active transactions for ALL connectors of this charger
+  const { data: allActiveTransactions = {}, refetch: refetchActiveTx } = useQuery({
+    queryKey: ['activeTransactions', charger.charge_point_id],
+    queryFn: () => api.getAllActiveTransactions(charger.charge_point_id),
     refetchInterval: 5000,
   })
 
@@ -264,10 +264,18 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     refetchInterval: 30000,
   })
 
-  // Filter active transaction by selected connector
-  const activeTransactionForSelectedConnector = activeTransaction && activeTransaction.connector_id === selectedConnectorId
-    ? activeTransaction
-    : null
+  // Find active transaction for the selected connector (from real query or enriched REST connectors)
+  const restSelectedConn = (charger.connectors || []).find((c) => c.connector_id === selectedConnectorId)
+  const activeTransactionForSelectedConnector: any = allActiveTransactions[selectedConnectorId] ||
+    (restSelectedConn?.active_transaction_id ? {
+      transaction_id: restSelectedConn.active_transaction_id,
+      id_tag: restSelectedConn.active_id_tag || '',
+      user_username: restSelectedConn.active_username,
+      user_role: restSelectedConn.active_user_role,
+      energy_kwh: restSelectedConn.active_energy_kwh,
+      start_time: restSelectedConn.active_start_time,
+      connector_id: selectedConnectorId,
+    } : null)
 
   // Reset optimistic status when real live status updates
   useEffect(() => {
@@ -303,7 +311,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     activeChargingConnectors.length > 0 ||
     isSelectedConnectorActive ||
     (live?.meters && Object.keys(live.meters).length > 0) ||
-    Boolean(activeTransaction)
+    Object.keys(allActiveTransactions).length > 0 ||
+    Boolean(activeTransactionForSelectedConnector)
   )
   const isSessionActive = isAnySessionActive
   const isPreparing = isOnline && (computedStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing'))
@@ -447,7 +456,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     setLoadingAction('stop')
     setFeedback(null)
     try {
-      const txId = activeTransaction?.transaction_id ?? null
+      const txId = activeTransactionForSelectedConnector?.transaction_id ?? null
       const resp = await api.remoteStop(charger.charge_point_id, txId)
       setOptimisticStatus('Available')
       setFeedback({ type: 'success', message: resp?.message || t('chargerCard.stopSent', { txId: resp.transaction_id ?? txId ?? '' }) })
@@ -924,24 +933,24 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           )}
         </div>
 
-        {activeTransaction && (
+        {activeTransactionForSelectedConnector && (
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-medium">
-            TX #{activeTransaction.transaction_id}
+            TX #{activeTransactionForSelectedConnector.transaction_id} (Tomada #{selectedConnectorId})
           </span>
         )}
       </div>
 
-      {/* Quick Controls Toolbar */}
-      <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-1.5" onClick={(e) => e.stopPropagation()}>
-        {isSessionActive ? (
+      {/* Quick Controls Toolbar - Context-Aware for Selected Plug */}
+      <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {Boolean(activeTransactionForSelectedConnector) || isSelectedConnectorActive ? (
           <button
             type="button"
             onClick={handleRemoteStop}
             disabled={!isOnline || loadingAction !== null}
-            className="flex-1 btn bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all"
+            className="flex-1 btn bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
           >
             {loadingAction === 'stop' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" fill="currentColor" />}
-            <span>{t('chargerCard.stop', { target: activeTransaction ? `TX #${activeTransaction.transaction_id}` : t('remoteStart.connectorLabel', { id: selectedConnectorId }) })}</span>
+            <span>{t('chargerCard.stop', { target: activeTransactionForSelectedConnector ? `TX #${activeTransactionForSelectedConnector.transaction_id}` : `Tomada #${selectedConnectorId}` })}</span>
           </button>
         ) : (
           <button

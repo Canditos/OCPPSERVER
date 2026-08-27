@@ -130,14 +130,14 @@ async def live_meter_values(cp_id: str, connector_id: int = Query(1), limit: int
 
 
 @router.get("/active/{cp_id}", response_model=TransactionOut | None)
-async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db)):
-    """Get the currently active transaction for a charger."""
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.charge_point_id == cp_id, Transaction.status == "Active")
-        .order_by(Transaction.start_time.desc())
-        .limit(1)
-    )
+async def get_active_transaction(cp_id: str, connector_id: int | None = None, db: AsyncSession = Depends(get_db)):
+    """Get the currently active transaction for a charger, optionally filtered by connector_id."""
+    q = select(Transaction).where(Transaction.charge_point_id == cp_id, Transaction.status == "Active")
+    if connector_id is not None:
+        q = q.where(Transaction.connector_id == connector_id)
+    q = q.order_by(Transaction.start_time.desc()).limit(1)
+    
+    result = await db.execute(q)
     tx = result.scalar_one_or_none()
     if not tx:
         return None
@@ -153,7 +153,6 @@ async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db))
             d.user_email = user.email
             d.user_role = user.role
 
-    # For active transactions, query latest energy reading
     if d.energy_kwh is None:
         meter_result = await db.execute(
             select(MeterValue)
@@ -172,6 +171,54 @@ async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db))
             d.energy_kwh = 0.0
 
     return d
+
+
+@router.get("/active-all/{cp_id}", response_model=dict[int, TransactionOut])
+async def get_all_active_transactions(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """Get all active transactions mapped by connector_id for a charger."""
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.charge_point_id == cp_id, Transaction.status == "Active")
+        .order_by(Transaction.start_time.desc())
+    )
+    txs = result.scalars().all()
+    out = {}
+    
+    r_u = await db.execute(select(User))
+    users_by_tag = {u.rfid_tag: u for u in r_u.scalars().all() if u.rfid_tag}
+
+    for tx in txs:
+        if tx.connector_id in out:
+            continue
+        d = TransactionOut.model_validate(tx)
+        if tx.meter_stop is not None:
+            d.energy_kwh = round((tx.meter_stop - tx.meter_start) / 1000, 3)
+        
+        user = users_by_tag.get(tx.id_tag)
+        if user:
+            d.user_username = user.username
+            d.user_email = user.email
+            d.user_role = user.role
+
+        if d.energy_kwh is None:
+            meter_result = await db.execute(
+                select(MeterValue)
+                .where(
+                    MeterValue.transaction_id == tx.id,
+                    MeterValue.measurand == 'Energy.Active.Import.Register'
+                )
+                .order_by(MeterValue.timestamp.desc())
+                .limit(1)
+            )
+            latest_meter = meter_result.scalar_one_or_none()
+            if latest_meter:
+                meter_value = float(latest_meter.value)
+                d.energy_kwh = round(max(0.0, meter_value - (tx.meter_start or 0)) / 1000, 3)
+            else:
+                d.energy_kwh = 0.0
+        
+        out[tx.connector_id] = d
+    return out
 
 @router.get("/{cp_id}/success-rate", response_model=dict)
 async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_db)):
