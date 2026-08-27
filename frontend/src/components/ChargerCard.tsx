@@ -303,9 +303,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   // Active charging connectors list
   const activeChargingConnectors = rawConnectors.filter((c) => ACTIVE_STATUSES.includes(c.status))
 
-  // Helper to extract isolated Power and SoC for any connector
+  // Helper to extract isolated Power and SoC for any connector (with immediate REST hydration)
   const getConnectorTelemetry = (connId: number) => {
     const connMeters = live?.connectorMeters?.[connId]
+    const restConn = (charger.connectors || []).find((c) => c.connector_id === connId)
     let rawPower: number | null = null
     let rawSoC: number | null = null
 
@@ -322,7 +323,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       }
     }
 
-    // Fallback to global meters ONLY if this is the only active connector
+    // Fallback to global live meters ONLY if this is the only active connector
     if (activeChargingConnectors.length <= 1) {
       if (rawPower === null && live?.meters) {
         const pValues = Object.entries(live.meters)
@@ -337,6 +338,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           if (!isNaN(parsed)) rawSoC = Math.min(100, Math.max(0, parsed))
         }
       }
+    }
+
+    // Immediate REST Hydration fallback (displays instantly on page load without waiting for WebSocket packet)
+    if (rawPower === null && restConn?.active_power_kw !== undefined && restConn?.active_power_kw !== null) {
+      rawPower = restConn.active_power_kw * 1000
+    }
+    if (rawSoC === null && restConn?.active_soc !== undefined && restConn?.active_soc !== null) {
+      rawSoC = Math.min(100, Math.max(0, Number(restConn.active_soc)))
     }
 
     return {

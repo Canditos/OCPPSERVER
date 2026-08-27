@@ -52,20 +52,27 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
                 c_out.active_username = user.username
                 c_out.active_user_role = user.role
 
-            # Get latest power & energy
+            # Get latest power, energy & SoC from database
             r_mv = await db.execute(
                 select(MeterValue)
-                .where(MeterValue.transaction_id == tx.transaction_id)
+                .where(MeterValue.transaction_id == tx.id)
                 .order_by(MeterValue.timestamp.desc())
-                .limit(6)
+                .limit(15)
             )
             mvs = r_mv.scalars().all()
             for mv in mvs:
-                if mv.measurand and 'power' in mv.measurand.lower() and c_out.active_power_kw is None:
+                m_name = (mv.measurand or "").lower()
+                if ('power' in m_name or 'active.power' in m_name) and c_out.active_power_kw is None:
+                    c_out.active_power_w = float(mv.value)
                     c_out.active_power_kw = round(float(mv.value) / 1000.0, 2)
-                elif mv.measurand and 'energy' in mv.measurand.lower() and c_out.active_energy_kwh is None:
-                    consumed = max(0, float(mv.value) - (tx.meter_start or 0))
+                elif ('energy' in m_name) and c_out.active_energy_kwh is None:
+                    consumed = max(0.0, float(mv.value) - (tx.meter_start or 0))
                     c_out.active_energy_kwh = round(consumed / 1000.0, 2)
+                elif ('soc' in m_name) and c_out.active_soc is None:
+                    try:
+                        c_out.active_soc = float(mv.value)
+                    except (ValueError, TypeError):
+                        pass
         enriched.append(c_out)
     return enriched
 
@@ -87,7 +94,11 @@ async def list_chargers(db: AsyncSession = Depends(get_db)):
             iccid=ch.iccid,
             imsi=ch.imsi,
             status=ch.status,
-            is_online=ch.charge_point_id in CONNECTED,
+            is_online=bool(
+                (ch.charge_point_id in CONNECTED)
+                or (get_charge_point(ch.charge_point_id) is not None)
+                or (ch.is_online and ch.last_seen and (datetime.utcnow() - ch.last_seen.replace(tzinfo=None) < timedelta(minutes=5)))
+            ),
             last_seen=ch.last_seen,
             registered_at=ch.registered_at,
             client_ip=ch.client_ip,

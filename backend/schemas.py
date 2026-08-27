@@ -12,7 +12,9 @@ class ConnectorOut(BaseModel):
     active_username: str | None = None
     active_user_role: str | None = None
     active_power_kw: float | None = None
+    active_power_w: float | None = None
     active_energy_kwh: float | None = None
+    active_soc: float | None = None
     active_start_time: datetime | None = None
 
     class Config:

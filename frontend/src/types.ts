@@ -8,7 +8,9 @@ export interface Connector {
   active_username?: string | null
   active_user_role?: string | null
   active_power_kw?: number | null
+  active_power_w?: number | null
   active_energy_kwh?: number | null
+  active_soc?: number | null
   active_start_time?: string | null
 }
 
