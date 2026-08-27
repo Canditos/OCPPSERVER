@@ -62,6 +62,12 @@ class TransactionOut(BaseModel):
     user_username: str | None = None
     user_email: str | None = None
     user_role: str | None = None
+    ocmf_start_raw: str | None = None
+    ocmf_stop_raw: str | None = None
+    ocmf_verified: bool | None = None
+    ocmf_verification_error: str | None = None
+    ocmf_meter_serial: str | None = None
+    signed_energy_kwh: float | None = None
 
     class Config:
         from_attributes = True
