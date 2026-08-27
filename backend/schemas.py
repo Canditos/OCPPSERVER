@@ -39,6 +39,7 @@ class ChargerOut(BaseModel):
     security_profile: int = 0
     auth_password: str | None = None
     auth_enabled: bool = False
+    is_eichrecht_compliant: bool = False
     connectors: list[ConnectorOut] = []
 
     class Config:

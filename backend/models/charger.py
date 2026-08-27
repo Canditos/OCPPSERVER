@@ -29,6 +29,7 @@ class Charger(Base):
     # OCPP Dual-Stack & ISO 15118 fields
     ocpp_version: Mapped[str] = mapped_column(String(16), default="1.6")  # "1.6" or "2.0.1"
     iso15118_pnc_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_eichrecht_compliant: Mapped[bool] = mapped_column(Boolean, default=False)
 
     connectors: Mapped[list["Connector"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")

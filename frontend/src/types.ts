@@ -35,6 +35,7 @@ export interface Charger {
   auth_enabled?: boolean
   ocpp_version?: string
   iso15118_pnc_enabled?: boolean
+  is_eichrecht_compliant?: boolean
   connectors: Connector[]
 }
 

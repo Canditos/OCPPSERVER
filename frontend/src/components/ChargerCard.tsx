@@ -572,6 +572,15 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                     DC
                   </span>
                 )}
+                {(charger.is_eichrecht_compliant || (charger.model && /sicharge|dcbm|alpitronic|kempower|erk|eichrecht/i.test(charger.model)) || (charger.vendor && /siemens|lem|alpitronic/i.test(charger.vendor)) || /chargerpt21|erk/i.test(charger.charge_point_id)) && (
+                  <span
+                    className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-blue-500/20 text-purple-300 dark:text-purple-200 border border-purple-500/30 shadow-sm shadow-purple-500/10 flex items-center gap-1 font-mono tracking-wider"
+                    title="Carregador em Conformidade Legal ERK / Eichrecht (Medição OCMF & LEM DCBM Certificada S.A.F.E.)"
+                  >
+                    <ShieldCheck className="w-3 h-3 text-purple-400" />
+                    <span>ERK / OCMF</span>
+                  </span>
+                )}
                 <button
                   onClick={startEditName}
                   className="shrink-0 p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
