@@ -1,0 +1,293 @@
+"""
+OCMF (Open Charge Metering Format) Engine
+Supports OCMF V1.0.x through V1.4.1 specification by S.A.F.E. e.V.
+Handles parsing, OBIS code mapping, cable loss compensation, and ECDSA cryptographic verification.
+"""
+
+import base64
+import binascii
+import json
+import logging
+import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, utils
+from cryptography.hazmat.primitives.serialization import (
+    load_der_public_key,
+    load_pem_public_key,
+)
+
+logger = logging.getLogger(__name__)
+
+# Standard OBIS code mappings
+OBIS_DESCRIPTIONS = {
+    "1-0:1.8.0": "Energia Ativa Importada Total (Active Energy Import)",
+    "1-0:1.8.0*ff": "Energia Ativa Importada Total (Active Energy Import)",
+    "1-0:2.8.0": "Energia Ativa Exportada Total (Active Energy Export)",
+    "1-0:1.4.0": "Potência Ativa Atual (Active Power)",
+    "1-0:1.2.0": "Compensação de Perdas no Cabo (Cable Loss Compensation)",
+    "1-0:31.7.0": "Corrente Linha 1 / Fase DC (Current L1/DC)",
+    "1-0:51.7.0": "Corrente Linha 2 (Current L2)",
+    "1-0:71.7.0": "Corrente Linha 3 (Current L3)",
+    "1-0:32.7.0": "Tensão Linha 1 / DC (Voltage L1/DC)",
+    "1-0:52.7.0": "Tensão Linha 2 (Voltage L2)",
+    "1-0:72.7.0": "Tensão Linha 3 (Voltage L3)",
+}
+
+
+class OcmfParseResult:
+    def __init__(
+        self,
+        is_valid_format: bool,
+        raw_ocmf: str,
+        version: str = "1.0",
+        gateway_id: str = "",
+        status: str = "",  # G (Start), I (Intermediate), T (Stop)
+        timestamp: Optional[str] = None,
+        identification_status: Optional[str] = None,
+        meter_readings: Optional[List[Dict[str, Any]]] = None,
+        signature_data: str = "",
+        signature_algo: str = "ECDSA-secp256r1-SHA256",
+        raw_data_to_verify: str = "",
+        error: Optional[str] = None,
+    ):
+        self.is_valid_format = is_valid_format
+        self.raw_ocmf = raw_ocmf
+        self.version = version
+        self.gateway_id = gateway_id
+        self.status = status
+        self.timestamp = timestamp
+        self.identification_status = identification_status
+        self.meter_readings = meter_readings or []
+        self.signature_data = signature_data
+        self.signature_algo = signature_algo
+        self.raw_data_to_verify = raw_data_to_verify
+        self.error = error
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "is_valid_format": self.is_valid_format,
+            "version": self.version,
+            "gateway_id": self.gateway_id,
+            "status": self.status,
+            "status_label": {
+                "G": "Início de Transação (Start / ST=G)",
+                "I": "Leitura Periódica (Intermediate / ST=I)",
+                "T": "Fim de Transação (Stop / ST=T)",
+            }.get(self.status, self.status),
+            "timestamp": self.timestamp,
+            "identification_status": self.identification_status,
+            "meter_readings": self.meter_readings,
+            "signature_data": self.signature_data,
+            "signature_algo": self.signature_algo,
+            "error": self.error,
+        }
+
+
+def parse_ocmf(ocmf_str: str) -> OcmfParseResult:
+    """
+    Parse an OCMF formatted string according to S.A.F.E. specification.
+    Format: OCMF|<DATA_JSON>|<SIGNATURE_JSON> or plain JSON containing OCMF properties.
+    """
+    if not ocmf_str or not isinstance(ocmf_str, str):
+        return OcmfParseResult(False, str(ocmf_str), error="Payload OCMF vazio ou inválido")
+
+    clean_str = ocmf_str.strip()
+
+    # Pipe-separated standard format: OCMF|{...}|{...}
+    if clean_str.startswith("OCMF|"):
+        parts = clean_str.split("|")
+        if len(parts) < 3:
+            return OcmfParseResult(False, clean_str, error="Estrutura OCMF incompleta (esperado OCMF|<DATA>|<SIG>)")
+
+        data_part = parts[1]
+        sig_part = parts[2]
+        raw_data_to_verify = data_part
+
+        try:
+            data_json = json.loads(data_part)
+            sig_json = json.loads(sig_part) if sig_part else {}
+        except Exception as e:
+            return OcmfParseResult(False, clean_str, error=f"Erro ao interpretar JSON OCMF: {e}")
+    else:
+        # Check if plain JSON
+        try:
+            data_json = json.loads(clean_str)
+            sig_json = data_json.get("SD", {}) if isinstance(data_json.get("SD"), dict) else {}
+            raw_data_to_verify = clean_str
+        except Exception:
+            return OcmfParseResult(False, clean_str, error="Formato OCMF não reconhecido (deve iniciar com OCMF| ou ser JSON)")
+
+    # Extract standard fields
+    version = data_json.get("FV", data_json.get("ver", "1.0"))
+    gateway_id = data_json.get("GI", data_json.get("gateway_id", ""))
+    status = data_json.get("ST", data_json.get("status", ""))
+    is_status = data_json.get("IS", None)
+    t_val = data_json.get("t", data_json.get("timestamp", None))
+
+    # Read readings (RV array or direct OBIS entries)
+    readings: List[Dict[str, Any]] = []
+    raw_rv = data_json.get("RV", data_json.get("readings", []))
+    if isinstance(raw_rv, list):
+        for item in raw_rv:
+            if isinstance(item, dict):
+                obis = item.get("t", item.get("obis", ""))
+                val = item.get("v", item.get("value", 0))
+                unit = item.get("u", item.get("unit", "Wh"))
+                loss = item.get("l", item.get("loss", None))
+                readings.append({
+                    "obis": obis,
+                    "description": OBIS_DESCRIPTIONS.get(obis, f"Código OBIS {obis}"),
+                    "value": val,
+                    "unit": unit,
+                    "cable_loss": loss,
+                })
+
+    # Extract signature
+    sig_data = sig_json.get("SD", "") if isinstance(sig_json, dict) else ""
+    if not sig_data and isinstance(data_json.get("SD"), str):
+        sig_data = data_json["SD"]
+
+    sig_algo = sig_json.get("SA", "ECDSA-secp256r1-SHA256") if isinstance(sig_json, dict) else "ECDSA-secp256r1-SHA256"
+
+    return OcmfParseResult(
+        is_valid_format=True,
+        raw_ocmf=clean_str,
+        version=str(version),
+        gateway_id=str(gateway_id),
+        status=str(status),
+        timestamp=str(t_val) if t_val else None,
+        identification_status=str(is_status) if is_status is not None else None,
+        meter_readings=readings,
+        signature_data=sig_data,
+        signature_algo=sig_algo,
+        raw_data_to_verify=raw_data_to_verify,
+    )
+
+
+def load_public_key_from_string(key_str: str, curve_hint: str = "secp256r1") -> Any:
+    """
+    Load an ECDSA public key from Hex (compressed/uncompressed), PEM, or Base64.
+    Supports secp256r1 (NIST P-256) and brainpoolP256r1.
+    """
+    clean_key = key_str.strip()
+
+    # 1. PEM format
+    if "BEGIN PUBLIC KEY" in clean_key or "BEGIN EC PUBLIC KEY" in clean_key:
+        return load_pem_public_key(clean_key.encode("utf-8"))
+
+    # 2. Hex format (Uncompressed 04... 65 bytes / 130 hex chars or Compressed 02/03... 33 bytes / 66 hex chars)
+    hex_clean = re.sub(r"[^0-9a-fA-F]", "", clean_key)
+    try:
+        raw_bytes = binascii.unhexlify(hex_clean)
+        
+        # Select curve
+        if "brainpool" in curve_hint.lower():
+            curve = ec.BrainpoolP256R1()
+        else:
+            curve = ec.SECP256R1()
+
+        if len(raw_bytes) in (65, 33):
+            return ec.EllipticCurvePublicKey.from_encoded_point(curve, raw_bytes)
+        elif len(raw_bytes) == 64:
+            uncompressed = b"\x04" + raw_bytes
+            return ec.EllipticCurvePublicKey.from_encoded_point(curve, uncompressed)
+        else:
+            return load_der_public_key(raw_bytes)
+    except Exception as e:
+        logger.debug(f"Hex public key decode fallback: {e}")
+
+    # 3. Base64 DER format
+    try:
+        der_bytes = base64.b64decode(clean_key)
+        return load_der_public_key(der_bytes)
+    except Exception:
+        pass
+
+    raise ValueError("Formato de Chave Pública não reconhecido (use Hexadecimal 04..., PEM ou DER)")
+
+
+def verify_ocmf_signature(
+    ocmf_str: str,
+    public_key_str: str,
+    curve_name: str = "secp256r1"
+) -> Dict[str, Any]:
+    """
+    Verify the ECDSA signature of an OCMF message using the meter's public key.
+    Returns validation verdict, decoded readings, and audit report.
+    """
+    parsed = parse_ocmf(ocmf_str)
+    if not parsed.is_valid_format or not parsed.signature_data:
+        return {
+            "verified": False,
+            "error": parsed.error or "Assinatura digital não encontrada no payload OCMF",
+            "parsed": parsed.to_dict() if parsed else None,
+        }
+
+    try:
+        public_key = load_public_key_from_string(public_key_str, curve_hint=curve_name)
+    except Exception as e:
+        return {
+            "verified": False,
+            "error": f"Chave Pública do medidor LEM inválida: {e}",
+            "parsed": parsed.to_dict(),
+        }
+
+    # Prepare signature bytes
+    sig_raw = parsed.signature_data.strip()
+    sig_bytes = None
+
+    try:
+        sig_bytes = base64.b64decode(sig_raw)
+    except Exception:
+        pass
+
+    if not sig_bytes:
+        try:
+            sig_bytes = binascii.unhexlify(re.sub(r"[^0-9a-fA-F]", "", sig_raw))
+        except Exception:
+            return {
+                "verified": False,
+                "error": "Assinatura digital 'SD' não está em formato Base64 ou Hexadecimal válido",
+                "parsed": parsed.to_dict(),
+            }
+
+    # Convert raw IEEE P1363 (R || S, 64 bytes) to ASN.1 DER if necessary
+    der_signature = sig_bytes
+    if len(sig_bytes) == 64:
+        r = int.from_bytes(sig_bytes[:32], byteorder="big")
+        s = int.from_bytes(sig_bytes[32:], byteorder="big")
+        der_signature = utils.encode_dss_signature(r, s)
+
+    data_to_verify = parsed.raw_data_to_verify.encode("utf-8")
+
+    try:
+        public_key.verify(
+            der_signature,
+            data_to_verify,
+            ec.ECDSA(hashes.SHA256())
+        )
+        is_valid = True
+        error_msg = None
+    except InvalidSignature:
+        is_valid = False
+        error_msg = "Assinatura Criptográfica ECDSA Inválida (os dados foram alterados ou a chave pública não corresponde ao medidor)"
+    except Exception as e:
+        is_valid = False
+        error_msg = f"Erro na validação criptográfica: {e}"
+
+    return {
+        "verified": is_valid,
+        "error": error_msg,
+        "algorithm": parsed.signature_algo,
+        "curve": curve_name,
+        "meter_serial": parsed.gateway_id,
+        "ocmf_version": parsed.version,
+        "status": parsed.status,
+        "timestamp": parsed.timestamp,
+        "readings": parsed.meter_readings,
+        "parsed": parsed.to_dict(),
+    }

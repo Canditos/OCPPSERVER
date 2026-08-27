@@ -1,3 +1,4 @@
+import { OcmfTool } from './pages/OcmfTool'
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
@@ -125,6 +126,17 @@ function AppInner() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/ocmf"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AppShell>
+              <OcmfTool />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

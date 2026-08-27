@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, DateTime, Integer, Float, ForeignKey
+from sqlalchemy import String, DateTime, Integer, Float, ForeignKey, Boolean, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 
@@ -23,10 +23,16 @@ class Transaction(Base):
     stop_reason: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), default="Active")
 
+    # OCMF / Eichrecht Certification
+    ocmf_start_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ocmf_stop_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ocmf_verified: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
+    ocmf_verification_error: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    ocmf_meter_serial: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    signed_energy_kwh: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     charger: Mapped["Charger"] = relationship(back_populates="transactions")
     meter_values: Mapped[list["MeterValue"]] = relationship(back_populates="transaction", cascade="all, delete-orphan", lazy="selectin")
-
-
 
 
 class MeterValue(Base):
@@ -42,5 +48,6 @@ class MeterValue(Base):
     unit: Mapped[str | None] = mapped_column(String(16))
     context: Mapped[str | None] = mapped_column(String(32))
     phase: Mapped[str | None] = mapped_column(String(16))
+    format: Mapped[str | None] = mapped_column(String(32), default="Raw")  # Raw, SignedData
 
     transaction: Mapped["Transaction"] = relationship(back_populates="meter_values")

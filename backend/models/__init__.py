@@ -16,3 +16,5 @@ __all__ = [
     "ChargingProfileModel",
     "User",
 ]
+
+from models.meter_key import MeterPublicKey

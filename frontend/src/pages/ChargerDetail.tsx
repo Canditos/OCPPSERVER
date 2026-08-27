@@ -5,12 +5,12 @@ import React, { useState, useEffect } from 'react'
 import { safeFormatDate, safeFormatDistance } from '../utils/date'
 import {
   ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap, CheckCircle2,
-  Shield, Key, Lock, Unlock, Copy, Eye, EyeOff, Sparkles, RefreshCw, Send, AlertTriangle, Check,
+  Shield, ShieldCheck, Key, Lock, Unlock, Copy, Eye, EyeOff, Sparkles, RefreshCw, Send, AlertTriangle, Check,
   FileText, Download, Trash2, ShieldAlert, Award, X, ChevronDown, ChevronUp, BarChart3, Layers,
   Maximize2, Minimize2, Search, Filter, Code, ChevronRight
 } from 'lucide-react'
 
-import { api } from '../api'
+import { api, MeterKeyData } from '../api'
 import { MeterChart } from '../components/MeterChart'
 import { EventLog } from '../components/EventLog'
 import { ConnectorBadge } from '../components/ConnectorBadge'
@@ -49,6 +49,55 @@ export function ChargerDetail() {
   const live    = useChargerStore((s) => s.liveState[id ?? ''])
   
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1)
+
+  // LEM DCBM Meter Keys (Eichrecht / OCMF)
+  const { data: meterKeys = [], refetch: refetchMeterKeys } = useQuery<MeterKeyData[]>({
+    queryKey: ['meterKeys', id],
+    queryFn: () => api.getMeterKeys(id!),
+    enabled: Boolean(id),
+  })
+
+  const [lemConnectorId, setLemConnectorId] = useState<number>(1)
+  const [lemModel, setLemModel] = useState<string>('LEM DCBM 400')
+  const [lemSerial, setLemSerial] = useState<string>('')
+  const [lemPubKeyHex, setLemPubKeyHex] = useState<string>('')
+  const [lemCurve, setLemCurve] = useState<string>('secp256r1')
+  const [lemSaving, setLemSaving] = useState<boolean>(false)
+  const [lemFeedback, setLemFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  const handleSaveMeterKey = async () => {
+    if (!id || !lemPubKeyHex.trim()) return
+    setLemSaving(true)
+    setLemFeedback(null)
+    try {
+      await api.createOrUpdateMeterKey(id, {
+        connector_id: lemConnectorId,
+        meter_model: lemModel,
+        serial_number: lemSerial.trim() || undefined,
+        public_key_hex: lemPubKeyHex.trim(),
+        curve_name: lemCurve,
+      })
+      setLemFeedback({ type: 'success', message: `Chave pública do medidor LEM guardada com sucesso para a Tomada #${lemConnectorId}!` })
+      setLemPubKeyHex('')
+      setLemSerial('')
+      refetchMeterKeys()
+    } catch (err: any) {
+      setLemFeedback({ type: 'error', message: err?.response?.data?.detail || err?.message || 'Erro ao guardar chave' })
+    } finally {
+      setLemSaving(false)
+      setTimeout(() => setLemFeedback(null), 5000)
+    }
+  }
+
+  const handleDeleteMeterKey = async (keyId: number) => {
+    if (!id || !confirm('Deseja remover esta chave de medidor LEM?')) return
+    try {
+      await api.deleteMeterKey(id, keyId)
+      refetchMeterKeys()
+    } catch (err: any) {
+      alert('Erro ao remover: ' + (err?.response?.data?.detail || err.message))
+    }
+  }
   const [activeTab, setActiveTab] = useState<'telemetry' | 'devicemodel' | 'security' | 'logs'>('telemetry')
   const [showHttpHeader, setShowHttpHeader] = useState<boolean>(false)
   const [showSecurityCard, setShowSecurityCard] = useState<boolean>(false)
@@ -619,6 +668,122 @@ export function ChargerDetail() {
                 )}
               </div>
             )}
+          </div>
+
+          {/* LEM DCBM Meters & Eichrecht (OCMF) Configuration Card */}
+          <div className="card space-y-3.5 border border-slate-200 dark:border-white/10">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/8 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-gray-200 uppercase tracking-wider">
+                    Medidores LEM & Eichrecht (OCMF)
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-gray-400">
+                    Chaves públicas ECDSA para validação de medições legais S.A.F.E.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                {meterKeys.length} configurados
+              </span>
+            </div>
+
+            {/* List of Configured Keys */}
+            {meterKeys.length > 0 && (
+              <div className="space-y-2">
+                {meterKeys.map((mk) => (
+                  <div key={mk.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/6 flex items-center justify-between text-xs">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 dark:text-white">Tomada #{mk.connector_id}</span>
+                        <span className="text-[11px] font-mono text-purple-600 dark:text-purple-400 font-bold">{mk.meter_model}</span>
+                        {mk.serial_number && (
+                          <span className="text-[10px] font-mono text-slate-500 dark:text-gray-400">S/N: {mk.serial_number}</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-500 dark:text-gray-400 truncate max-w-xs mt-0.5 select-all">
+                        Key: {mk.public_key_hex.slice(0, 24)}… ({mk.curve_name})
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMeterKey(mk.id)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                      title="Remover Chave"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Form to Add/Update Meter Key */}
+            <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-2.5">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-gray-300 block">
+                Registar / Atualizar Chave Pública do Medidor
+              </span>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">Tomada / Conector:</label>
+                  <select
+                    value={lemConnectorId}
+                    onChange={(e) => setLemConnectorId(Number(e.target.value))}
+                    className="select text-xs py-1.5 w-full"
+                  >
+                    <option value={1}>Tomada #1</option>
+                    <option value={2}>Tomada #2</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">Modelo do Medidor:</label>
+                  <select
+                    value={lemModel}
+                    onChange={(e) => setLemModel(e.target.value)}
+                    className="select text-xs py-1.5 w-full"
+                  >
+                    <option value="LEM DCBM 400">LEM DCBM 400 (DC)</option>
+                    <option value="LEM DCBM 600">LEM DCBM 600 (DC)</option>
+                    <option value="LEM DCBM 100">LEM DCBM 100 (DC)</option>
+                    <option value="Isabellenhuette">Isabellenhütte (DC)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-0.5">Chave Pública ECDSA (Hex 04... ou PEM):</label>
+                <input
+                  type="text"
+                  value={lemPubKeyHex}
+                  onChange={(e) => setLemPubKeyHex(e.target.value)}
+                  placeholder="04039b53..."
+                  className="input text-xs font-mono py-1.5 w-full"
+                />
+              </div>
+
+              {lemFeedback && (
+                <div className={`p-2 rounded-lg text-xs ${
+                  lemFeedback.type === 'success' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                }`}>
+                  {lemFeedback.message}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSaveMeterKey}
+                disabled={lemSaving || !lemPubKeyHex.trim()}
+                className="btn bg-purple-600 hover:bg-purple-500 text-white text-xs w-full py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>{lemSaving ? 'A guardar…' : 'Guardar Chave do Medidor LEM'}</span>
+              </button>
+            </div>
           </div>
 
           {/* connectors */}

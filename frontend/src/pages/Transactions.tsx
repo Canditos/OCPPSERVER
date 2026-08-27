@@ -1,9 +1,10 @@
+import { OcmfValidationModal } from '../components/OcmfValidationModal'
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { formatDuration, intervalToDuration, isToday, isWithinInterval, subDays, startOfMonth } from 'date-fns'
 import {
   ChevronDown, ChevronRight, Zap, User as UserIcon,
-  Shield, CreditCard, Clock, Activity, ArrowLeftRight,
+  Shield, ShieldCheck, CreditCard, Clock, Activity, ArrowLeftRight,
   Download, Search, Filter, Calendar, Euro, BatteryCharging,
   FileText, MessageSquare, Code, Check, Copy, Eye, X
 } from 'lucide-react'
@@ -57,6 +58,7 @@ export function Transactions() {
   const [txLogSearch, setTxLogSearch] = useState<string>('')
   const [inspectMessage, setInspectMessage] = useState<OcppMessage | null>(null)
   const [copiedPayloadId, setCopiedPayloadId] = useState<number | null>(null)
+  const [selectedTxForOcmf, setSelectedTxForOcmf] = useState<number | null>(null)
 
   const { data: rawTxMessages = [], isLoading: isTxLogsLoading } = useQuery<OcppMessage[]>({
     queryKey: ['txOcppMessages', selectedTxForLogs?.charge_point_id],
@@ -444,19 +446,34 @@ export function Transactions() {
                       Telemetria & Curva de Carga da Transação #{tx.transaction_id}
                     </h4>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setTxLogActionFilter('all')
-                        setTxLogSearch('')
-                        setSelectedTxForLogs(tx)
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/25 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Ver Logs OCPP da TX #{tx.transaction_id}</span>
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedTxForOcmf(tx.transaction_id)
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/25 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                        title="Auditoria Legal Eichrecht & Certificação OCMF"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Auditoria OCMF (Eichrecht)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setTxLogActionFilter('all')
+                          setTxLogSearch('')
+                          setSelectedTxForLogs(tx)
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/25 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Ver Logs OCPP da TX #{tx.transaction_id}</span>
+                      </button>
+                    </div>
                   </div>
                   <MeterChart cpId={tx.charge_point_id} transactionId={tx.id} />
                 </div>
@@ -625,6 +642,14 @@ export function Transactions() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Dedicated OCMF Eichrecht Validation Modal */}
+      {selectedTxForOcmf && (
+        <OcmfValidationModal
+          transactionId={selectedTxForOcmf}
+          onClose={() => setSelectedTxForOcmf(null)}
+        />
       )}
 
       {/* Dedicated Payload JSON Inspector Modal */}

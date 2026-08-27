@@ -2,7 +2,7 @@ import React from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   Zap, LayoutDashboard, ArrowLeftRight, Terminal, Settings,
-  Activity, ShieldCheck, Gauge, Users, LogOut, User as UserIcon, ScrollText
+  Activity, ShieldCheck, Shield, Gauge, Users, LogOut, User as UserIcon, ScrollText
 } from 'lucide-react'
 import { useChargerStore } from '../store/chargerStore'
 import { useAuthStore } from '../store/authStore'
@@ -20,6 +20,7 @@ const ADMIN_NAV = [
   { to: '/authentication', icon: ShieldCheck,     labelKey: 'nav.authentication' },
   { to: '/users',          icon: Users,           labelKey: 'nav.users' },
   { to: '/logs',           icon: ScrollText,      labelKey: 'nav.logs' },
+  { to: '/ocmf',           icon: Shield,          labelKey: 'nav.ocmf' },
 ]
 
 const USER_NAV = [

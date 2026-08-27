@@ -18,6 +18,8 @@ import event_bus
 from database import AsyncSessionLocal
 from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
 from models.transaction import Transaction, MeterValue
+from models.meter_key import MeterPublicKey
+from services.ocmf_service import parse_ocmf, verify_ocmf_signature
 from models.configuration import ChargerConfiguration
 from models.auth_token import AuthToken
 from models.authorized_tag import AuthorizedTag
@@ -283,6 +285,31 @@ class ChargePoint(OcppChargePoint):
                 tx.stop_reason = reason
                 tx.status = "Completed"
                 stopped_connector_id = tx.connector_id
+
+                # Check if transaction_data contains OCMF SignedData
+                tx_data = kwargs.get("transaction_data", [])
+                if isinstance(tx_data, list):
+                    for mv_entry in tx_data:
+                        for sv in mv_entry.get("sampled_value", []):
+                            val_str = str(sv.get("value", ""))
+                            if sv.get("format") == "SignedData" or val_str.startswith("OCMF|"):
+                                tx.ocmf_stop_raw = val_str
+                                # Verify with meter key if available
+                                r_key = await db.execute(
+                                    select(MeterPublicKey).where(
+                                        MeterPublicKey.charge_point_id == self.id,
+                                        MeterPublicKey.connector_id == tx.connector_id
+                                    )
+                                )
+                                m_key = r_key.scalar_one_or_none()
+                                if m_key:
+                                    v_res = verify_ocmf_signature(val_str, m_key.public_key_hex, m_key.curve_name)
+                                    tx.ocmf_verified = v_res.get("verified", False)
+                                    tx.ocmf_verification_error = v_res.get("error")
+                                    tx.ocmf_meter_serial = v_res.get("meter_serial")
+                                else:
+                                    parsed_oc = parse_ocmf(val_str)
+                                    tx.ocmf_meter_serial = parsed_oc.gateway_id
 
             # Update charger and connector status
             r_charger = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))

@@ -276,6 +276,20 @@ export const api = {
     purpose?: string | null
     stack_level?: number | null
   }) => http.delete('/smart-charging/clear', { data }).then(r => r.data),
+
+  // OCMF & Eichrecht / LEM DCBM Meters
+  verifyManualOcmf: (data: { ocmf_data: string; public_key: string; curve_name?: string }) =>
+    http.post<OcmfVerificationResponse>('/ocmf/verify-manual', data).then(r => r.data),
+  getMeterKeys: (cpId: string) =>
+    http.get<MeterKeyData[]>(`/ocmf/chargers/${cpId}/keys`).then(r => r.data),
+  createOrUpdateMeterKey: (cpId: string, data: { connector_id: number; meter_model: string; serial_number?: string; public_key_hex: string; curve_name?: string }) =>
+    http.post<MeterKeyData>(`/ocmf/chargers/${cpId}/keys`, data).then(r => r.data),
+  deleteMeterKey: (cpId: string, keyId: number) =>
+    http.delete(`/ocmf/chargers/${cpId}/keys/${keyId}`).then(r => r.data),
+  getTransactionOcmf: (txId: number) =>
+    http.get<TransactionOcmfReport>(`/ocmf/transactions/${txId}`).then(r => r.data),
+  getOcmfDownloadUrl: (txId: number) =>
+    `/api/ocmf/transactions/${txId}/download`,
 }
 
 export interface SchedulePeriod {
@@ -356,3 +370,67 @@ export interface AvailabilityData {
 
 
 
+
+export interface MeterKeyData {
+  id: number
+  charge_point_id: string
+  connector_id: number
+  meter_model: string
+  serial_number?: string | null
+  public_key_hex: string
+  curve_name: string
+  is_active: boolean
+}
+
+export interface OcmfReading {
+  obis: string
+  description: string
+  value: number
+  unit: string
+  cable_loss?: number | null
+}
+
+export interface OcmfParsedData {
+  is_valid_format: boolean
+  version: string
+  gateway_id: string
+  status: string
+  status_label: string
+  timestamp?: string | null
+  identification_status?: string | null
+  meter_readings: OcmfReading[]
+  signature_data: string
+  signature_algo: string
+  error?: string | null
+}
+
+export interface OcmfVerificationResponse {
+  verified: boolean
+  error?: string | null
+  algorithm?: string
+  curve?: string
+  meter_serial?: string
+  ocmf_version?: string
+  status?: string
+  timestamp?: string | null
+  readings?: OcmfReading[]
+  parsed?: OcmfParsedData | null
+}
+
+export interface TransactionOcmfReport {
+  transaction_id: number
+  charge_point_id: string
+  connector_id: number
+  meter_serial?: string | null
+  meter_model: string
+  has_meter_key: boolean
+  public_key_hex?: string | null
+  curve_name: string
+  ocmf_verified?: boolean | null
+  ocmf_verification_error?: string | null
+  signed_energy_kwh?: number | null
+  start_report?: OcmfVerificationResponse | null
+  stop_report?: OcmfVerificationResponse | null
+  ocmf_start_raw?: string | null
+  ocmf_stop_raw?: string | null
+}
