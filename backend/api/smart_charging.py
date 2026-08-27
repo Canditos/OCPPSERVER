@@ -377,10 +377,14 @@ async def delete_profile(profile_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/apply")
 async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get_db)):
     """Send SetChargingProfile to the connected charger or stage in database if offline."""
-    result = await db.execute(select(ChargingProfileModel).where(ChargingProfileModel.id == req.profile_id))
+    result = await db.execute(
+        select(ChargingProfileModel).where(
+            (ChargingProfileModel.id == req.profile_id) | (ChargingProfileModel.profile_id == req.profile_id)
+        )
+    )
     profile = result.scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise HTTPException(status_code=404, detail=f"Perfil com ID {req.profile_id} não encontrado na base de dados.")
 
     cp_id = req.charge_point_id or profile.charge_point_id
     if req.charge_point_id:

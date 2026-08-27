@@ -19,6 +19,9 @@ from ocpp.v16.enums import (
     RemoteStartStopStatus,
     ResetStatus,
     UnlockStatus,
+    ChargingProfileStatus,
+    ClearChargingProfileStatus,
+    GetCompositeScheduleStatus,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [SIM-1.6] %(levelname)s: %(message)s")
@@ -26,6 +29,51 @@ logger = logging.getLogger("SimulatorV16")
 
 
 class VirtualVersiChargeV16(BaseClientV16):
+    _active_profiles: dict = {}
+
+    @on(Action.SetChargingProfile)
+    async def on_set_charging_profile(self, connector_id: int, cs_charging_profiles: dict, **kwargs):
+        logger.info(f"[SIM-1.6] Received SetChargingProfile for connector={connector_id}: {cs_charging_profiles}")
+        self._active_profiles[connector_id] = cs_charging_profiles
+        return call_result.SetChargingProfilePayload(status=ChargingProfileStatus.accepted)
+
+    @on(Action.ClearChargingProfile)
+    async def on_clear_charging_profile(self, id: int = None, connector_id: int = None, **kwargs):
+        logger.info(f"[SIM-1.6] Received ClearChargingProfile id={id}, conn={connector_id}")
+        if connector_id is not None and connector_id in self._active_profiles:
+            del self._active_profiles[connector_id]
+        else:
+            self._active_profiles.clear()
+        return call_result.ClearChargingProfilePayload(status=ClearChargingProfileStatus.accepted)
+
+    @on(Action.GetCompositeSchedule)
+    async def on_get_composite_schedule(self, connector_id: int, duration: int, charging_rate_unit: str = "A", **kwargs):
+        logger.info(f"[SIM-1.6] Received GetCompositeSchedule connector={connector_id}, duration={duration}, unit={charging_rate_unit}")
+        active_prof = self._active_profiles.get(connector_id) or self._active_profiles.get(0)
+        
+        if active_prof and "chargingSchedule" in active_prof:
+            schedule = active_prof["chargingSchedule"]
+            return call_result.GetCompositeSchedulePayload(
+                status=GetCompositeScheduleStatus.accepted,
+                connector_id=connector_id,
+                schedule_start=schedule.get("startSchedule", datetime.now(timezone.utc).isoformat()),
+                charging_schedule=schedule,
+            )
+        
+        # Default schedule if none set
+        return call_result.GetCompositeSchedulePayload(
+            status=GetCompositeScheduleStatus.accepted,
+            connector_id=connector_id,
+            schedule_start=datetime.now(timezone.utc).isoformat(),
+            charging_schedule={
+                "chargingRateUnit": charging_rate_unit or "A",
+                "duration": duration,
+                "chargingSchedulePeriod": [
+                    {"startPeriod": 0, "limit": 32.0 if charging_rate_unit == "A" else 22000.0}
+                ]
+            }
+        )
+
     _stop_requested: bool = False
     @on(Action.RemoteStartTransaction)
     async def on_remote_start(self, id_tag: str, connector_id: int = 1, **kwargs):
