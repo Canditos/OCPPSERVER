@@ -113,6 +113,7 @@ async def create_or_update_meter_key(cp_id: str, req: MeterKeyCreate, db: AsyncS
             curve_name=req.curve_name,
             is_active=True,
         )
+        charger.is_eichrecht_compliant = True
         db.add(new_key)
         await db.commit()
         await db.refresh(new_key)

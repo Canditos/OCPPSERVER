@@ -691,6 +691,32 @@ export function ChargerDetail() {
               </span>
             </div>
 
+            {/* Toggle Eichrecht/ERK Compliance */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/6 text-xs">
+              <div>
+                <span className="font-bold text-slate-900 dark:text-white block">Certificação ERK / Eichrecht</span>
+                <span className="text-[10px] text-slate-500 dark:text-gray-400">Ativa o selo ERK no cartão e a validação legal OCMF</span>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!id) return
+                  const nextVal = !charger?.is_eichrecht_compliant
+                  await api.setChargerEichrecht(id, nextVal)
+                  queryClient.invalidateQueries({ queryKey: ['charger', id] })
+                  queryClient.invalidateQueries({ queryKey: ['chargers'] })
+                }}
+                className={`text-xs px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  charger?.is_eichrecht_compliant
+                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/30'
+                    : 'bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-gray-400'
+                }`}
+              >
+                {charger?.is_eichrecht_compliant ? '✅ Ativo (ERK)' : 'Desativado'}
+              </button>
+            </div>
+
+
             {/* List of Configured Keys */}
             {meterKeys.length > 0 && (
               <div className="space-y-2">

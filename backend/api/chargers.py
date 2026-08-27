@@ -106,6 +106,7 @@ async def list_chargers(db: AsyncSession = Depends(get_db)):
             security_profile=ch.security_profile or 0,
             auth_password=ch.auth_password,
             auth_enabled=ch.auth_enabled or False,
+            is_eichrecht_compliant=bool(getattr(ch, 'is_eichrecht_compliant', False)),
             connectors=conns,
         )
         out.append(ch_out)
@@ -138,6 +139,7 @@ async def get_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
         security_profile=charger.security_profile or 0,
         auth_password=charger.auth_password,
         auth_enabled=charger.auth_enabled or False,
+        is_eichrecht_compliant=bool(getattr(charger, 'is_eichrecht_compliant', False)),
         connectors=conns,
     )
 
@@ -335,6 +337,7 @@ async def update_charger_security(cp_id: str, body: ChargerSecurityUpdate, db: A
         security_profile=charger.security_profile or 0,
         auth_password=charger.auth_password,
         auth_enabled=charger.auth_enabled or False,
+        is_eichrecht_compliant=bool(getattr(charger, 'is_eichrecht_compliant', False)),
         connectors=conns,
     )
 
@@ -552,3 +555,17 @@ async def delete_certificate_record(cp_id: str, cert_id: int, db: AsyncSession =
 
 
 
+
+class EichrechtUpdate(BaseModel):
+    is_eichrecht_compliant: bool
+
+
+@router.patch("/{cp_id}/eichrecht")
+async def set_eichrecht_compliance(cp_id: str, body: EichrechtUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = result.scalar_one_or_none()
+    if not charger:
+        raise HTTPException(status_code=404, detail="Charger not found")
+    charger.is_eichrecht_compliant = body.is_eichrecht_compliant
+    await db.commit()
+    return {"charge_point_id": cp_id, "is_eichrecht_compliant": body.is_eichrecht_compliant}

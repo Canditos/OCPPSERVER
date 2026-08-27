@@ -254,6 +254,8 @@ export const api = {
     http.post(`/auth-tokens/sync/${cpId}`).then(r => r.data),
   setAutocharge: (cpId: string, enabled: boolean) =>
     http.patch(`/chargers/${cpId}/autocharge`, { enabled }).then(r => r.data),
+  setChargerEichrecht: (cpId: string, is_eichrecht_compliant: boolean) =>
+    http.patch(`/chargers/${cpId}/eichrecht`, { is_eichrecht_compliant }).then(r => r.data),
 
   // Smart Charging
   getChargingProfiles: (cpId?: string) =>
