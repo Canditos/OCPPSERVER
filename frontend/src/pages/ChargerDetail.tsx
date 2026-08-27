@@ -1,13 +1,13 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { safeFormatDate, safeFormatDistance } from '../utils/date'
 import {
   ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap, CheckCircle2,
   Shield, Key, Lock, Unlock, Copy, Eye, EyeOff, Sparkles, RefreshCw, Send, AlertTriangle, Check,
   FileText, Download, Trash2, ShieldAlert, Award, X, ChevronDown, ChevronUp, BarChart3, Layers,
-  Maximize2, Minimize2, Search, Filter
+  Maximize2, Minimize2, Search, Filter, Code, ChevronRight
 } from 'lucide-react'
 
 import { api } from '../api'
@@ -150,6 +150,27 @@ export function ChargerDetail() {
   const [msgFilterAction, setMsgFilterAction] = useState<string>('all')
   const [msgSearch, setMsgSearch] = useState<string>('')
   const [isLogExpanded, setIsLogExpanded] = useState<boolean>(false)
+  const [inspectMessage, setInspectMessage] = useState<OcppMessage | null>(null)
+  const [copiedPayloadId, setCopiedPayloadId] = useState<number | null>(null)
+  const [expandedMsgId, setExpandedMsgId] = useState<number | null>(null)
+
+  const formatPayloadJson = (payload: unknown) => {
+    if (typeof payload === 'string') {
+      try {
+        return JSON.stringify(JSON.parse(payload), null, 2)
+      } catch {
+        return payload
+      }
+    }
+    return JSON.stringify(payload, null, 2)
+  }
+
+  const copyPayloadText = (msg: OcppMessage) => {
+    const str = formatPayloadJson(msg.payload)
+    navigator.clipboard.writeText(str)
+    setCopiedPayloadId(msg.id)
+    setTimeout(() => setCopiedPayloadId(null), 2000)
+  }
 
   const handleInstallRootCa = async () => {
     if (!charger) return
@@ -1012,20 +1033,77 @@ export function ChargerDetail() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-white/10">
-                          {filteredMessages.slice(0, 100).map((m) => (
-                            <tr key={m.id} className="hover:bg-blue-50/80 dark:hover:bg-blue-500/15 transition-colors group">
-                              <td className="px-4 py-2.5 whitespace-nowrap"><DirectionBadge direction={m.direction} /></td>
-                              <td className="px-4 py-2.5 font-mono text-slate-900 dark:text-white font-bold whitespace-nowrap">{m.action}</td>
-                              <td className="px-4 py-2.5 text-slate-600 dark:text-gray-300 font-mono font-semibold whitespace-nowrap">
-                                {format(new Date(m.timestamp), 'HH:mm:ss')}
-                              </td>
-                              <td className="px-4 py-2.5 font-mono text-slate-800 dark:text-gray-200 text-xs">
-                                <span className="inline-block max-w-xl truncate bg-slate-100 dark:bg-black/60 px-2.5 py-1 rounded border border-slate-200 dark:border-white/10 select-all" title={typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}>
-                                  {typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
+                          {filteredMessages.slice(0, 100).map((m) => {
+                            const isExpanded = expandedMsgId === m.id
+                            return (
+                              <React.Fragment key={m.id}>
+                                <tr
+                                  onClick={() => setExpandedMsgId(isExpanded ? null : m.id)}
+                                  className="hover:bg-blue-50/80 dark:hover:bg-blue-500/15 transition-colors group cursor-pointer"
+                                >
+                                  <td className="px-4 py-2.5 whitespace-nowrap">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-slate-400 dark:text-gray-500 group-hover:text-blue-500">
+                                        {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                      </span>
+                                      <DirectionBadge direction={m.direction} />
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 font-mono text-slate-900 dark:text-white font-bold whitespace-nowrap">{m.action}</td>
+                                  <td className="px-4 py-2.5 text-slate-600 dark:text-gray-300 font-mono font-semibold whitespace-nowrap">
+                                    {format(new Date(m.timestamp), 'HH:mm:ss')}
+                                  </td>
+                                  <td className="px-4 py-2.5 font-mono text-slate-800 dark:text-gray-200 text-xs">
+                                    <div className="flex items-center gap-2 max-w-2xl">
+                                      <span
+                                        className="flex-1 truncate bg-slate-100 hover:bg-slate-200 dark:bg-black/60 dark:hover:bg-black/80 px-2.5 py-1 rounded border border-slate-200 dark:border-white/10 transition-colors"
+                                        title="Clique para expandir ou inspecionar o payload completo"
+                                      >
+                                        {typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setInspectMessage(m)
+                                        }}
+                                        className="shrink-0 p-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[11px] font-bold flex items-center gap-1 px-2 transition-all cursor-pointer"
+                                        title="Abrir Visualizador de Payload Completo"
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                        <span>Ver Total</span>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr className="bg-slate-50/80 dark:bg-slate-950/60">
+                                    <td colSpan={4} className="p-3 px-6">
+                                      <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-cyan-300 space-y-2 shadow-inner">
+                                        <div className="flex items-center justify-between border-b border-white/10 pb-2 text-[11px] text-gray-400">
+                                          <span>Payload Completo ({m.action})</span>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              copyPayloadText(m)
+                                            }}
+                                            className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-gray-200 flex items-center gap-1"
+                                          >
+                                            {copiedPayloadId === m.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                            <span>{copiedPayloadId === m.id ? 'Copiado!' : 'Copiar JSON'}</span>
+                                          </button>
+                                        </div>
+                                        <pre className="overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-60">
+                                          {formatPayloadJson(m.payload)}
+                                        </pre>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            )
+                          })}
                           {filteredMessages.length === 0 && (
                             <tr>
                               <td colSpan={4} className="px-4 py-8 text-center text-slate-500 dark:text-gray-400">
@@ -1368,6 +1446,94 @@ export function ChargerDetail() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Dedicated Full Payload Inspector Modal */}
+      {inspectMessage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm animate-fade-in"
+          onClick={() => setInspectMessage(null)}
+        >
+          <div
+            className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-950">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                  <Code className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Payload OCPP Completo · <span className="font-mono">{inspectMessage.action}</span>
+                    <DirectionBadge direction={inspectMessage.direction} />
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 font-mono mt-0.5">
+                    {format(new Date(inspectMessage.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')} · ID #{inspectMessage.id}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyPayloadText(inspectMessage)}
+                  className="btn-secondary text-xs py-1.5 px-3 rounded-xl flex items-center gap-1.5"
+                >
+                  {copiedPayloadId === inspectMessage.id ? (
+                    <><Check className="w-3.5 h-3.5 text-emerald-500" /> Copiado!</>
+                  ) : (
+                    <><Copy className="w-3.5 h-3.5" /> Copiar JSON</>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const str = formatPayloadJson(inspectMessage.payload)
+                    const blob = new Blob([str], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `ocpp-${inspectMessage.action}-${inspectMessage.id}.json`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="btn bg-blue-600 hover:bg-blue-500 text-white text-xs py-1.5 px-3 rounded-xl flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> Descarregar (.json)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInspectMessage(null)}
+                  className="btn-ghost p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body - Pretty JSON */}
+            <div className="flex-1 overflow-auto p-4 bg-slate-950">
+              <pre className="font-mono text-xs text-cyan-300 leading-relaxed whitespace-pre-wrap select-all">
+                <code>{formatPayloadJson(inspectMessage.payload)}</code>
+              </pre>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-3 px-4 border-t border-slate-800 bg-slate-900 text-xs text-gray-400">
+              <span>Formato: JSON Formatado (Indentação de 2 espaços)</span>
+              <button
+                type="button"
+                onClick={() => setInspectMessage(null)}
+                className="px-4 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
