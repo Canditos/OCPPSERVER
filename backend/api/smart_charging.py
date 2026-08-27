@@ -409,6 +409,13 @@ async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get
     cp = get_charge_point(cp_id)
     if cp:
         try:
+            # 1. Clear previous profiles on the charger to prevent stack conflicts
+            try:
+                await cp.clear_charging_profile(connector_id=connector_id)
+            except Exception as e_clear:
+                logger.info(f"Clean clear before set: {e_clear}")
+
+            # 2. Send SetChargingProfile
             resp = await cp.set_charging_profile(
                 connector_id=connector_id,
                 cs_charging_profiles=ocpp_payload,
@@ -416,14 +423,24 @@ async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get
             status = getattr(resp, "status", "Accepted")
             if hasattr(status, "value"):
                 status = status.value
-            profile.is_deployed = True
+
+            profile.is_deployed = (status == "Accepted")
             await db.commit()
-            return {
-                "status": "Accepted",
-                "profile_id": profile.profile_id,
-                "ocpp_payload": ocpp_payload,
-                "message": f"Perfil '{profile.name}' aplicado e sincronizado com o posto '{cp_id}' com sucesso!"
-            }
+
+            if status == "Accepted":
+                return {
+                    "status": "Accepted",
+                    "profile_id": profile.profile_id,
+                    "ocpp_payload": ocpp_payload,
+                    "message": f"Perfil '{profile.name}' aceite e aplicado pelo posto '{cp_id}' com sucesso!"
+                }
+            else:
+                return {
+                    "status": "Rejected",
+                    "profile_id": profile.profile_id,
+                    "ocpp_payload": ocpp_payload,
+                    "message": f"O posto '{cp_id}' respondeu com status '{status}'. Verifique a finalidade (Purpose) e o conector selecionado."
+                }
         except Exception as e:
             logger.warning(f"Error dispatching SetChargingProfile over WebSocket to {cp_id}: {e}")
             profile.is_deployed = True

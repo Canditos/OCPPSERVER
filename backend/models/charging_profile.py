@@ -68,18 +68,10 @@ class ChargingProfile(Base):
         if self.start_schedule:
             charging_schedule["startSchedule"] = self.start_schedule.strftime("%Y-%m-%dT%H:%M:%SZ") if hasattr(self.start_schedule, "strftime") else (str(self.start_schedule).rstrip("Z") + "Z")
         elif self.kind in ("Recurring", "Absolute"):
-            # OCPP 1.6: Recurring schedules need an anchor startSchedule.
-            # Anchor to local midnight in charger's timezone, converted to UTC.
-            tz_name = charger_timezone or "Europe/Lisbon"
-            try:
-                tz = zoneinfo.ZoneInfo(tz_name)
-            except Exception:
-                tz = zoneinfo.ZoneInfo("Europe/Lisbon")
-            
-            now_local = datetime.now(tz)
-            local_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-            utc_anchor = local_midnight.astimezone(timezone.utc)
-            charging_schedule["startSchedule"] = utc_anchor.strftime("%Y-%m-%dT%H:%M:%SZ")
+            # OCPP 1.6: Anchor to UTC midnight of today for standard daily recurrence compatibility
+            now_utc = datetime.now(timezone.utc)
+            utc_midnight = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+            charging_schedule["startSchedule"] = utc_midnight.strftime("%Y-%m-%dT%H:%M:%SZ")
         if self.min_charging_rate is not None:
             charging_schedule["minChargingRate"] = float(self.min_charging_rate)
 
