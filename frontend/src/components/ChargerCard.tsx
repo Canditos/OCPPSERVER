@@ -283,9 +283,29 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     ? 'Offline'
     : (optimisticStatus || live?.status || (charger.status && charger.status !== 'Offline' ? charger.status : null) || (rawConnectors[0]?.status && rawConnectors[0]?.status !== 'Offline' ? rawConnectors[0]?.status : null) || 'Available')
 
-  // Check if SELECTED connector is in active session (Preparing, Charging, etc.)
+  // Active charging connectors list
+  const activeChargingConnectors = rawConnectors.filter((c: any) => ACTIVE_STATUSES.includes(c.status))
+
+  // Auto-focus the active charging connector if the current selected one is idle/finishing
+  useEffect(() => {
+    if (activeChargingConnectors.length > 0) {
+      const currentSelectedStatus = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
+      if (!ACTIVE_STATUSES.includes(currentSelectedStatus || '')) {
+        setSelectedConnectorId(activeChargingConnectors[0].connector_id)
+      }
+    }
+  }, [rawConnectors, selectedConnectorId, activeChargingConnectors.length])
+
+  // Check if ANY or SELECTED connector is in active session
   const selectedConnectorStatus = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
-  const isSessionActive = isOnline && selectedConnectorStatus && ACTIVE_STATUSES.includes(selectedConnectorStatus)
+  const isSelectedConnectorActive = isOnline && selectedConnectorStatus && ACTIVE_STATUSES.includes(selectedConnectorStatus)
+  const isAnySessionActive = isOnline && (
+    activeChargingConnectors.length > 0 ||
+    isSelectedConnectorActive ||
+    (live?.meters && Object.keys(live.meters).length > 0) ||
+    Boolean(activeTransaction)
+  )
+  const isSessionActive = isAnySessionActive
   const isPreparing = isOnline && (computedStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing'))
   const isFaulted = isOnline && (computedStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted'))
 
@@ -299,9 +319,6 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     charger.model?.toUpperCase().endsWith('-D') ||
     charger.vendor?.toUpperCase().includes('DC')
   )
-
-  // Active charging connectors list
-  const activeChargingConnectors = rawConnectors.filter((c) => ACTIVE_STATUSES.includes(c.status))
 
   // Helper to extract isolated Power and SoC for any connector (with immediate REST hydration)
   const getConnectorTelemetry = (connId: number) => {
@@ -770,11 +787,20 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               </div>
             </div>
           ) : (
-            (liveSoC !== null || isSessionActive) && (
-              <div className="pt-2 border-t border-blue-200/60 dark:border-blue-500/15">
-                <BatteryIndicator soc={liveSoC} isCharging={isSessionActive} powerKw={livePowerKw} />
-              </div>
-            )
+            (() => {
+              const activeConn = activeChargingConnectors[0] || rawConnectors.find((c) => c.connector_id === selectedConnectorId) || rawConnectors[0]
+              const tData = activeConn ? getConnectorTelemetry(activeConn.connector_id) : selectedConnTelemetry
+              const finalSoc = liveSoC !== null ? liveSoC : tData.soc
+              const finalPowerKw = livePowerKw !== null ? livePowerKw : tData.powerKw
+              return (
+                <div className="pt-2 border-t border-blue-200/60 dark:border-blue-500/15">
+                  <div className="flex items-center justify-between text-[11px] text-blue-900 dark:text-blue-300 font-bold px-0.5 mb-1.5">
+                    <span>⚡ Tomada #{activeConn ? activeConn.connector_id : selectedConnectorId} (Em Carga):</span>
+                  </div>
+                  <BatteryIndicator soc={finalSoc} isCharging={true} powerKw={finalPowerKw} />
+                </div>
+              )
+            })()
           )}
         </div>
       )}
