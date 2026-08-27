@@ -28,11 +28,19 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
 
   const availableChargers = useMemo(
     () => chargers
-      .map((charger) => ({
-        ...charger,
-        freeConnectors: (charger.connectors || []).filter((connector) => connector.status === 'Available'),
-      }))
-      .filter((charger) => charger.is_online && charger.freeConnectors.length > 0),
+      .filter((charger) => charger.is_online)
+      .map((charger) => {
+        let conns = (charger.connectors || []).filter(
+          (c) => c.status !== 'Faulted' && c.status !== 'Unavailable'
+        )
+        if (conns.length === 0) {
+          conns = [{ connector_id: 1, status: charger.status || 'Available', error_code: null, updated_at: null }]
+        }
+        return {
+          ...charger,
+          freeConnectors: conns,
+        }
+      }),
     [chargers]
   )
 
@@ -62,12 +70,18 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
     }
   }, [isOpen, availableChargers, selectedCharger, selectedChargerData, availableConnectors, selectedConnector])
 
+  const effectiveTag = rfidTag && !rfidTag.toLowerCase().includes('nenhum') && !rfidTag.toLowerCase().includes('no assigned')
+    ? rfidTag
+    : (username ? `TAG_${username.toUpperCase()}` : 'USER_APP_TAG')
+
   const { mutate: performRemoteStart, isPending } = useMutation({
-    mutationFn: () => api.remoteStart(selectedCharger, rfidTag, Number(selectedConnector)),
-    onSuccess: () => {
-      setFeedback({ type: 'success', message: t('remoteStart.startSuccess') })
+    mutationFn: () => api.remoteStart(selectedCharger, effectiveTag, Number(selectedConnector || 1)),
+    onSuccess: (res: any) => {
+      setFeedback({ type: 'success', message: res?.message || t('remoteStart.startSuccess') })
       queryClient.invalidateQueries({ queryKey: ['chargers'] })
       queryClient.invalidateQueries({ queryKey: ['my-active-charge'] })
+      queryClient.invalidateQueries({ queryKey: ['my-transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['my-profile'] })
       setTimeout(() => {
         setFeedback(null)
         onClose()
@@ -76,7 +90,7 @@ export function RemoteStartModal({ isOpen, onClose, rfidTag, username }: RemoteS
     onError: (error: any) => {
       setFeedback({
         type: 'error',
-        message: error?.response?.data?.detail || t('remoteStart.startError'),
+        message: error?.response?.data?.detail || error?.message || t('remoteStart.startError'),
       })
     },
   })

@@ -12,12 +12,13 @@ interface ConnectorLive {
   errorCode?: string
 }
 
-interface ChargerLiveState {
+export interface ChargerLiveState {
   status: string
   isOnline: boolean
   connectors: Record<number, ConnectorLive>
   lastSeen: string | null
   meters: Record<string, LiveMeter>
+  connectorMeters?: Record<number, Record<string, LiveMeter>>
 }
 
 interface ChargerStore {
@@ -55,6 +56,7 @@ export const useChargerStore = create<ChargerStore>((set) => ({
         connectors: {},
         lastSeen: new Date().toISOString(),
         meters: {},
+        connectorMeters: {},
       }
 
       if (event.type === 'charger_connected') {
@@ -103,12 +105,18 @@ export const useChargerStore = create<ChargerStore>((set) => ({
           lastSeen: new Date().toISOString(),
         }
       } else if (event.type === 'meter_values') {
-        const d = event.data as { values: Array<{ measurand: string; value: number; unit: string; timestamp: string }> }
+        const d = event.data as { connector_id?: number; values: Array<{ measurand: string; value: number; unit: string; timestamp: string }> }
+        const connId = Number(d.connector_id ?? 1)
         const meters = { ...cur.meters }
+        const connectorMeters = { ...(cur.connectorMeters || {}) }
+        const currentConnMeters = { ...(connectorMeters[connId] || {}) }
+
         for (const v of d.values ?? []) {
           meters[v.measurand] = { value: v.value, unit: v.unit, timestamp: v.timestamp }
+          currentConnMeters[v.measurand] = { value: v.value, unit: v.unit, timestamp: v.timestamp }
         }
-        live[cpId] = { ...cur, meters }
+        connectorMeters[connId] = currentConnMeters
+        live[cpId] = { ...cur, meters, connectorMeters }
       } else if (event.type === 'transaction_started') {
         const d = event.data as Record<string, string | number>
         const connId = d.connector_id as number

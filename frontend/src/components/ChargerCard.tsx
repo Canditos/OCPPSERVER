@@ -292,13 +292,6 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const effectiveTag = selectedTag || (authorizedTags.length > 0 ? authorizedTags[0].id_tag : 'VERSICHARGE_TAG')
   const hasAuthorizedTag = authorizedTags.length > 0
 
-  const livePower = live?.meters
-    ? Object.entries(live.meters)
-        .filter(([measurand]) => measurand.toLowerCase().includes('power') || measurand.toLowerCase().includes('active.power'))
-        .map(([, m]) => Number(m.value ?? 0))
-        .reduce((a, b) => a + b, 0)
-    : null
-
   // DC detection: SICHARGE D or any model/vendor containing "DC" or ending in "D"
   const isDC = Boolean(
     charger.model?.toUpperCase().includes('SICHARGE D') ||
@@ -307,18 +300,56 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     charger.vendor?.toUpperCase().includes('DC')
   )
 
-  // SoC from live meters (reported by vehicle via OCPP MeterValues when DC charging)
-  const rawSoC = live?.meters
-    ? Object.entries(live.meters).find(([k]) => k.toLowerCase() === 'soc')?.[1]?.value ?? null
-    : null
-  const liveSoC: number | null = rawSoC !== null 
-    ? (() => {
-        const parsed = Number(rawSoC)
-        return !isNaN(parsed) ? Math.min(100, Math.max(0, parsed)) : null
-      })()
-    : null
+  // Active charging connectors list
+  const activeChargingConnectors = rawConnectors.filter((c) => ACTIVE_STATUSES.includes(c.status))
 
-  const livePowerKw = livePower !== null && livePower > 0 ? livePower / 1000 : null
+  // Helper to extract isolated Power and SoC for any connector
+  const getConnectorTelemetry = (connId: number) => {
+    const connMeters = live?.connectorMeters?.[connId]
+    let rawPower: number | null = null
+    let rawSoC: number | null = null
+
+    if (connMeters && Object.keys(connMeters).length > 0) {
+      const pValues = Object.entries(connMeters)
+        .filter(([measurand]) => measurand.toLowerCase().includes('power') || measurand.toLowerCase().includes('active.power'))
+        .map(([, m]) => Number(m.value ?? 0))
+      if (pValues.length > 0) rawPower = pValues.reduce((a, b) => a + b, 0)
+
+      const socEntry = Object.entries(connMeters).find(([k]) => k.toLowerCase() === 'soc')
+      if (socEntry) {
+        const parsed = Number(socEntry[1].value)
+        if (!isNaN(parsed)) rawSoC = Math.min(100, Math.max(0, parsed))
+      }
+    }
+
+    // Fallback to global meters ONLY if this is the only active connector
+    if (activeChargingConnectors.length <= 1) {
+      if (rawPower === null && live?.meters) {
+        const pValues = Object.entries(live.meters)
+          .filter(([measurand]) => measurand.toLowerCase().includes('power') || measurand.toLowerCase().includes('active.power'))
+          .map(([, m]) => Number(m.value ?? 0))
+        if (pValues.length > 0) rawPower = pValues.reduce((a, b) => a + b, 0)
+      }
+      if (rawSoC === null && live?.meters) {
+        const socEntry = Object.entries(live.meters).find(([k]) => k.toLowerCase() === 'soc')
+        if (socEntry) {
+          const parsed = Number(socEntry[1].value)
+          if (!isNaN(parsed)) rawSoC = Math.min(100, Math.max(0, parsed))
+        }
+      }
+    }
+
+    return {
+      powerWatts: rawPower,
+      powerKw: rawPower !== null && rawPower > 0 ? rawPower / 1000 : null,
+      soc: rawSoC,
+    }
+  }
+
+  const selectedConnTelemetry = getConnectorTelemetry(selectedConnectorId)
+  const livePower = selectedConnTelemetry.powerWatts
+  const livePowerKw = selectedConnTelemetry.powerKw
+  const liveSoC = selectedConnTelemetry.soc
 
   const cardGlow = isSessionActive ? 'card-glow-blue' : isFaulted ? 'card-glow-red' : isOnline ? 'card-glow-emerald' : ''
   const lastSeen = safeFormatDistance(live?.lastSeen ?? charger.last_seen)
@@ -633,7 +664,11 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
               </span>
-              <span className="text-xs font-semibold text-blue-300">{t('chargerCard.chargingNow')}</span>
+              <span className="text-xs font-semibold text-blue-300">
+                {activeChargingConnectors.length > 1
+                  ? `${activeChargingConnectors.length} Cargas Ativas em Simultâneo`
+                  : t('chargerCard.chargingNow')}
+              </span>
             </div>
             {livePowerKw !== null && <LiveKw watts={livePower!} />}
           </div>
@@ -685,10 +720,52 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             </button>
           )}
 
-          {(liveSoC !== null || isSessionActive) && (
-            <div className="pt-2 border-t border-blue-500/10">
-              <BatteryIndicator soc={liveSoC} isCharging={isSessionActive} powerKw={livePowerKw} />
+          {/* DUAL / MULTI-BATTERY RENDERING OR SINGLE BATTERY */}
+          {activeChargingConnectors.length > 1 ? (
+            <div className="space-y-2 pt-2 border-t border-blue-500/10">
+              <div className="flex items-center justify-between text-[11px] text-blue-300 font-semibold px-0.5">
+                <span>Baterias em Carga (Clique para selecionar o conector):</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {activeChargingConnectors.map((c) => {
+                  const telemetry = getConnectorTelemetry(c.connector_id)
+                  const isThisSelected = selectedConnectorId === c.connector_id
+                  return (
+                    <div
+                      key={c.connector_id}
+                      onClick={() => setSelectedConnectorId(c.connector_id)}
+                      className={`cursor-pointer transition-all rounded-2xl p-1.5 ${
+                        isThisSelected
+                          ? 'ring-2 ring-blue-400 bg-blue-500/15 shadow-md shadow-blue-500/20'
+                          : 'opacity-85 hover:opacity-100 bg-black/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between px-2 mb-1">
+                        <span className={`text-[11px] font-bold font-mono ${isThisSelected ? 'text-blue-300' : 'text-slate-400'}`}>
+                          ⚡ Tomada #{c.connector_id}
+                        </span>
+                        {isThisSelected && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 font-bold uppercase">
+                            Selecionada
+                          </span>
+                        )}
+                      </div>
+                      <BatteryIndicator
+                        soc={telemetry.soc}
+                        isCharging={true}
+                        powerKw={telemetry.powerKw}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+          ) : (
+            (liveSoC !== null || isSessionActive) && (
+              <div className="pt-2 border-t border-blue-500/10">
+                <BatteryIndicator soc={liveSoC} isCharging={isSessionActive} powerKw={livePowerKw} />
+              </div>
+            )
           )}
         </div>
       )}

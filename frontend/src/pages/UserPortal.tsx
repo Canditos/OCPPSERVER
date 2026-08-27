@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Zap, CreditCard, BatteryCharging, Clock, History,
-  Activity, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Play
+  Activity, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Play, Square, Loader2
 } from 'lucide-react'
 import { api, MyActiveCharge } from '../api'
 import { useAuthStore } from '../store/authStore'
@@ -43,7 +43,30 @@ export function UserPortal() {
     refetchTxs()
   }
 
-  const rfidTag = profile?.rfid_tag || user?.rfid_tag || t('userPortal.noAssignedTag')
+  const [isStopping, setIsStopping] = useState(false)
+  const [stopFeedback, setStopFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  const handleStopMyCharge = async () => {
+    if (!activeCharge) return
+    setIsStopping(true)
+    setStopFeedback(null)
+    try {
+      const resp = await api.remoteStop(activeCharge.charge_point_id, activeCharge.transaction_id)
+      setStopFeedback({ type: 'success', message: resp?.message || 'Carga terminada com sucesso!' })
+      setTimeout(() => {
+        handleRefresh()
+        setIsStopping(false)
+        setStopFeedback(null)
+      }, 1200)
+    } catch (err: any) {
+      setStopFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao parar sessão.' })
+      setIsStopping(false)
+      setTimeout(() => setStopFeedback(null), 4000)
+    }
+  }
+
+  const rawTag = profile?.rfid_tag || user?.rfid_tag || ''
+  const rfidTag = rawTag || (user?.username ? `TAG_${user.username.toUpperCase()}` : t('userPortal.noAssignedTag'))
 
   return (
     <div className="space-y-8 animate-fade-up">
@@ -184,10 +207,30 @@ export function UserPortal() {
               </div>
             </div>
 
-            <div className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
-              {t('userPortal.transaction', { id: activeCharge.transaction_id })}
+            <div className="flex items-center gap-2.5">
+              <div className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                {t('userPortal.transaction', { id: activeCharge.transaction_id })}
+              </div>
+              <button
+                type="button"
+                onClick={handleStopMyCharge}
+                disabled={isStopping}
+                className="btn text-xs px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-red-600/20 cursor-pointer disabled:opacity-50"
+              >
+                {isStopping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+                <span>{isStopping ? 'A Parar...' : 'Terminar Carga'}</span>
+              </button>
             </div>
           </div>
+
+          {stopFeedback && (
+            <div className={`mb-3 p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+              stopFeedback.type === 'success' ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300' : 'bg-red-500/20 border border-red-500/30 text-red-300'
+            }`}>
+              {stopFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+              <span>{stopFeedback.message}</span>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
             <div className="p-3 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5">
