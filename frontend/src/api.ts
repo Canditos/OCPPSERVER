@@ -256,6 +256,8 @@ export const api = {
     http.patch(`/chargers/${cpId}/autocharge`, { enabled }).then(r => r.data),
   setChargerEichrecht: (cpId: string, is_eichrecht_compliant: boolean) =>
     http.patch(`/chargers/${cpId}/eichrecht`, { is_eichrecht_compliant }).then(r => r.data),
+  selfHealCharger: (cpId: string) =>
+    http.post<{ success: boolean; charge_point_id: string; actions_taken: string[]; message: string }>(`/chargers/${cpId}/self-heal`).then(r => r.data),
 
   // Smart Charging
   getChargingProfiles: (cpId?: string) =>

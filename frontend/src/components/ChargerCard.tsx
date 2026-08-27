@@ -47,6 +47,26 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   // Display name editing state
   const cpId = charger.charge_point_id
   const displayName = displayNames[cpId] || ''
+  const [isSelfHealing, setIsSelfHealing] = useState(false)
+
+  const handleSelfHeal = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsSelfHealing(true)
+    try {
+      const resp = await api.selfHealCharger(charger.charge_point_id)
+      setFeedback({ type: 'success', message: resp.message || 'Auto-Diagnóstico & Sincronização concluídos!' })
+      refetchActiveTx()
+      queryClient.invalidateQueries({ queryKey: ['chargers'] })
+      queryClient.invalidateQueries({ queryKey: ['activeTransactions', charger.charge_point_id] })
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao sincronizar posto.' })
+    } finally {
+      setIsSelfHealing(false)
+      setTimeout(() => setFeedback(null), 5000)
+    }
+  }
+
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -693,6 +713,15 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             {(charger.security_profile ?? 0) === 3 ? '🛡️ P3' : (charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
           </button>
 
+          <button
+            type="button"
+            onClick={handleSelfHeal}
+            disabled={isSelfHealing}
+            className="p-1 rounded-lg text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer"
+            title="Auto-Diagnóstico & Sincronização Instantânea (Zero Failures)"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${isSelfHealing ? 'animate-spin text-blue-500' : ''}`} />
+          </button>
           <Link
             to={`/chargers/${charger.charge_point_id}`}
             className="btn-ghost text-xs text-gray-400 hover:text-gray-200 py-1 px-2 rounded-lg"

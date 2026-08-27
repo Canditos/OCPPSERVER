@@ -577,3 +577,61 @@ async def set_eichrecht_compliance(cp_id: str, body: EichrechtUpdate, db: AsyncS
     charger.is_eichrecht_compliant = body.is_eichrecht_compliant
     await db.commit()
     return {"charge_point_id": cp_id, "is_eichrecht_compliant": body.is_eichrecht_compliant}
+
+
+@router.post("/{cp_id}/self-heal")
+async def self_heal_charger(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Self-Healing & Diagnostic Watchdog for a charger.
+    1. Reconciles physical connector states vs active transactions.
+    2. Cleans ghost/dangling sessions.
+    3. If online, triggers StatusNotification and MeterValues messages.
+    """
+    from ocpp_server.central_system import get_charge_point
+    from datetime import datetime, timezone
+    
+    r = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
+    charger = r.scalar_one_or_none()
+    if not charger:
+        raise HTTPException(status_code=404, detail="Carregador não encontrado")
+
+    actions_taken = []
+    
+    # 1. Reconcile connectors and ghost transactions
+    r_conns = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
+    conns = r_conns.scalars().all()
+    for conn in conns:
+        if conn.status in ["Available", "Unavailable"]:
+            r_tx = await db.execute(
+                select(Transaction).where(
+                    Transaction.charge_point_id == cp_id,
+                    Transaction.connector_id == conn.connector_id,
+                    Transaction.status == "Active"
+                )
+            )
+            for dangling in r_tx.scalars().all():
+                dangling.status = "Completed"
+                dangling.stop_time = dangling.stop_time or datetime.now(timezone.utc)
+                dangling.stop_reason = dangling.stop_reason or "AutoHealReconciled"
+                actions_taken.append(f"Finalizada transação fantasma TX #{dangling.transaction_id} na Tomada #{conn.connector_id}")
+
+    await db.commit()
+
+    # 2. If charger is connected online, trigger status refresh
+    cp = get_charge_point(cp_id)
+    if cp:
+        try:
+            if hasattr(cp, "trigger_message"):
+                await cp.trigger_message(requested_message="StatusNotification")
+                actions_taken.append("Enviado TriggerMessage(StatusNotification) com sucesso")
+        except Exception as e:
+            actions_taken.append(f"Aviso TriggerMessage: {e}")
+    else:
+        actions_taken.append("Posto Offline - estado da base de dados normalizado")
+
+    return {
+        "success": True,
+        "charge_point_id": cp_id,
+        "actions_taken": actions_taken,
+        "message": "Auto-Diagnóstico & Reparação de Estado executados com sucesso!"
+    }

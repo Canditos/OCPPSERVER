@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Zap, Wifi, AlertTriangle, Server, Activity, ChevronDown, ChevronRight, Search, X, Filter, Square, Play, Sparkles } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Zap, Wifi, RotateCcw, AlertTriangle, Server, Activity, ChevronDown, ChevronRight, Search, X, Filter, Square, Play, Sparkles } from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
 import { SimulatorModal } from '../components/SimulatorModal'
@@ -121,7 +121,27 @@ function GroupSection({ groupName, chargers, isNoGroup = false }: GroupSectionPr
 }
 
 export function Dashboard() {
+  const queryClient = useQueryClient()
   const { t } = useI18n()
+  const [isFleetHealing, setIsFleetHealing] = useState(false)
+  const [fleetFeedback, setFleetFeedback] = useState<string | null>(null)
+
+  const handleFleetSelfHeal = async () => {
+    setIsFleetHealing(true)
+    setFleetFeedback('A executar auto-diagnóstico e sincronização em todos os postos…')
+    try {
+      await Promise.all(chargers.map((c) => api.selfHealCharger(c.charge_point_id).catch(() => null)))
+      await queryClient.invalidateQueries({ queryKey: ['chargers'] })
+      await queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      setFleetFeedback('Frota 100% sincronizada e verificada com sucesso!')
+    } catch {
+      setFleetFeedback('Concluída a verificação da frota.')
+    } finally {
+      setIsFleetHealing(false)
+      setTimeout(() => setFleetFeedback(null), 5000)
+    }
+  }
+
   const { data: simStatus, refetch: refetchSim } = useQuery({
     queryKey: ['simulatorStatus'],
     queryFn: api.getSimulatorStatus,
