@@ -72,10 +72,12 @@ export interface MyActiveCharge {
   transaction_id: number
   charge_point_id: string
   connector_id: number
+  id_tag?: string
   start_time: string | null
   meter_start: number | null
   current_power_kw: number
   consumed_kwh: number
+  current_soc?: number | null
   status: string
 }
 

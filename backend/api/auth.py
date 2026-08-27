@@ -694,35 +694,73 @@ async def get_my_active_charge(
     db: AsyncSession = Depends(get_db)
 ):
     """Check if the user currently has an active charging session on any charger."""
-    if not current_user.rfid_tag:
+    from models.charger import Charger
+    from models.connector import Connector
+
+    q = select(Transaction).where(Transaction.status == "Active")
+    if current_user.rfid_tag:
+        q = q.where(
+            (Transaction.id_tag == current_user.rfid_tag) |
+            (Transaction.id_tag == f"TAG_{current_user.username.upper()}") |
+            (Transaction.id_tag.ilike(f"%{current_user.username}%"))
+        )
+    elif current_user.role == "admin":
+        # For admin user without specific tag, allow tracking latest active charge
+        pass
+    else:
         return None
         
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.id_tag == current_user.rfid_tag, Transaction.status == "Active")
-        .order_by(Transaction.start_time.desc())
-        .limit(1)
-    )
+    result = await db.execute(q.order_by(Transaction.start_time.desc()).limit(1))
     tx = result.scalar_one_or_none()
     if not tx:
         return None
         
-    # Get latest meter values for this transaction
+    # Get latest meter values for this transaction (checking both internal tx.id and OCPP tx.transaction_id)
     mv_result = await db.execute(
         select(MeterValue)
-        .where(MeterValue.transaction_id == tx.transaction_id)
+        .where(
+            (MeterValue.transaction_id == tx.id) | 
+            (MeterValue.transaction_id == tx.transaction_id)
+        )
         .order_by(MeterValue.timestamp.desc())
-        .limit(10)
+        .limit(20)
     )
     mvs = mv_result.scalars().all()
     
     latest_power_w = 0.0
     latest_energy_wh = tx.meter_start or 0
+    latest_soc = None
+
     for mv in mvs:
-        if mv.measurand and 'power' in mv.measurand.lower():
-            latest_power_w = float(mv.value)
-        elif mv.measurand and 'energy' in mv.measurand.lower():
-            latest_energy_wh = float(mv.value)
+        if mv.measurand:
+            meas_lower = mv.measurand.lower()
+            if 'power' in meas_lower and latest_power_w == 0.0:
+                try:
+                    latest_power_w = float(mv.value)
+                except Exception:
+                    pass
+            elif 'energy' in meas_lower and latest_energy_wh == (tx.meter_start or 0):
+                try:
+                    latest_energy_wh = float(mv.value)
+                except Exception:
+                    pass
+            elif 'soc' in meas_lower and latest_soc is None:
+                try:
+                    latest_soc = float(mv.value)
+                except Exception:
+                    pass
+
+    # Fallback to Connector live telemetry if meter_values had no recent power
+    r_conn = await db.execute(
+        select(Connector).join(Charger, Connector.charger_id == Charger.id)
+        .where(Charger.charge_point_id == tx.charge_point_id, Connector.connector_id == tx.connector_id)
+    )
+    conn = r_conn.scalar_one_or_none()
+    if conn:
+        if latest_power_w == 0.0 and conn.active_power_kw:
+            latest_power_w = conn.active_power_kw * 1000.0
+        if latest_soc is None and conn.active_soc is not None:
+            latest_soc = float(conn.active_soc)
             
     consumed_wh = max(0, latest_energy_wh - (tx.meter_start or 0))
     
@@ -730,10 +768,12 @@ async def get_my_active_charge(
         "transaction_id": tx.transaction_id,
         "charge_point_id": tx.charge_point_id,
         "connector_id": tx.connector_id,
+        "id_tag": tx.id_tag,
         "start_time": tx.start_time.isoformat() if tx.start_time else None,
         "meter_start": tx.meter_start,
         "current_power_kw": round(latest_power_w / 1000.0, 2),
         "consumed_kwh": round(consumed_wh / 1000.0, 2),
+        "current_soc": round(latest_soc, 1) if latest_soc is not None else None,
         "status": "Charging"
     }
 

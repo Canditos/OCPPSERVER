@@ -8,6 +8,7 @@ import { api, MyActiveCharge } from '../api'
 import { useAuthStore } from '../store/authStore'
 import { safeFormatDateTime, safeFormatDuration } from '../utils/date'
 import { RemoteStartModal } from '../components/RemoteStartModal'
+import { BatteryIndicator } from '../components/BatteryIndicator'
 import type { Transaction } from '../types'
 import { useI18n } from '../i18n'
 
@@ -190,8 +191,8 @@ export function UserPortal() {
 
       {/* Active Charging Session Banner (If currently charging) */}
       {activeCharge ? (
-        <div className="card p-6 border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-950/20 via-slate-900/40 to-blue-950/20 shadow-lg shadow-emerald-500/10 animate-fade-up">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-emerald-500/20">
+        <div className="card p-6 border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-950/20 via-slate-900/40 to-blue-950/20 shadow-lg shadow-emerald-500/10 animate-fade-up space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-emerald-500/20">
             <div className="flex items-center gap-3">
               <div className="relative flex p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400">
                 <Zap className="w-6 h-6 animate-pulse" />
@@ -224,13 +225,22 @@ export function UserPortal() {
           </div>
 
           {stopFeedback && (
-            <div className={`mb-3 p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+            <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
               stopFeedback.type === 'success' ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300' : 'bg-red-500/20 border border-red-500/30 text-red-300'
             }`}>
               {stopFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
               <span>{stopFeedback.message}</span>
             </div>
           )}
+
+          {/* Battery Indicator with live SoC% and Power */}
+          <div className="p-3.5 rounded-2xl bg-white/70 dark:bg-black/30 border border-emerald-500/20 shadow-sm">
+            <BatteryIndicator
+              soc={activeCharge.current_soc ?? null}
+              isCharging={true}
+              powerKw={activeCharge.current_power_kw || null}
+            />
+          </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
             <div className="p-3 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5">
