@@ -72,21 +72,41 @@ async def on_connect_fastapi(websocket, charge_point_id: str, ocpp_version: str 
 
     CONNECTED[charge_point_id] = cp
 
-    # Immediately mark as online in database
+    # Immediately auto-provision and mark as online in database
     try:
         from datetime import datetime
+        from models.charger import Connector
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == charge_point_id))
             charger_row = result.scalar_one_or_none()
-            if charger_row:
+            if not charger_row:
+                charger_row = Charger(
+                    charge_point_id=charge_point_id,
+                    vendor="EVSE Auto-Detected",
+                    model="Auto-Provisioned",
+                    status="Available",
+                    is_online=True,
+                    ocpp_version=ocpp_version,
+                    client_ip=client_ip,
+                    last_seen=datetime.utcnow(),
+                    registered_at=datetime.utcnow(),
+                )
+                db.add(charger_row)
+                await db.flush()
+                conn1 = Connector(charger_id=charger_row.id, connector_id=1, status="Available")
+                db.add(conn1)
+                await db.commit()
+                logger.info(f"Auto-provisioned brand new charger {charge_point_id} in database on first connection")
+            else:
                 charger_row.is_online = True
                 charger_row.ocpp_version = ocpp_version
+                charger_row.client_ip = client_ip
                 charger_row.last_seen = datetime.utcnow()
                 if charger_row.status == "Offline":
                     charger_row.status = "Available"
                 await db.commit()
     except Exception as e:
-        logger.warning(f"Error marking charger {charge_point_id} online in DB: {e}")
+        logger.warning(f"Error marking/provisioning charger {charge_point_id} online in DB: {e}")
 
     await event_bus.publish("charger_connected", {
         "charge_point_id": charge_point_id,

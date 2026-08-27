@@ -75,8 +75,19 @@ async def health():
 
 
 @app.websocket("/ocpp/{charge_point_id}")
+@app.websocket("/ocpp/{charge_point_id}/")
+@app.websocket("/ocpp16/{charge_point_id}")
+@app.websocket("/ocpp16/{charge_point_id}/")
+@app.websocket("/ocpp201/{charge_point_id}")
+@app.websocket("/ocpp201/{charge_point_id}/")
+@app.websocket("/ocppj/{charge_point_id}")
+@app.websocket("/ocppj/{charge_point_id}/")
 @app.websocket("/ws/{charge_point_id}")
+@app.websocket("/ws/{charge_point_id}/")
 @app.websocket("/ws/v201/{charge_point_id}")
+@app.websocket("/ws/v201/{charge_point_id}/")
+@app.websocket("/steve/websocket/CentralSystemService/{charge_point_id}")
+@app.websocket("/steve/websocket/CentralSystemService/{charge_point_id}/")
 async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
     """
     Dual-Stack OCPP 1.6-J & OCPP 2.0.1 WebSocket endpoint.
@@ -129,10 +140,10 @@ async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
     # Dual-Stack Subprotocol Negotiation
     subprotocols = websocket.headers.get("sec-websocket-protocol", "")
     ocpp_version = "1.6"
-    if "ocpp2.0.1" in subprotocols or "v201" in websocket.url.path:
+    if "ocpp2.0.1" in subprotocols or "ocpp2.0" in subprotocols or "v201" in websocket.url.path:
         ocpp_version = "2.0.1"
         await websocket.accept(subprotocol="ocpp2.0.1")
-    elif "ocpp1.6" in subprotocols:
+    elif "ocpp1.6" in subprotocols or "ocpp1.6j" in subprotocols or "ocpp1.5" in subprotocols:
         await websocket.accept(subprotocol="ocpp1.6")
     else:
         await websocket.accept()
