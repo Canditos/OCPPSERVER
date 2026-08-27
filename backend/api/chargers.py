@@ -217,7 +217,7 @@ async def get_charger_availability(cp_id: str, db: AsyncSession = Depends(get_db
 
     # Recent availability events (up to 50 recent events)
     recent_events = []
-    for l in logs_24h[:50]:
+    for l in logs_24h[:150]:
         recent_events.append({
             "id": l.id,
             "timestamp": l.timestamp.isoformat() if l.timestamp else None,
@@ -253,7 +253,7 @@ async def get_charger_availability(cp_id: str, db: AsyncSession = Depends(get_db
 
 
 @router.get("/{cp_id}/messages", response_model=list[OcppMessageOut])
-async def get_messages(cp_id: str, limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def get_messages(cp_id: str, limit: int = 250, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
     charger = result.scalar_one_or_none()
     if not charger:

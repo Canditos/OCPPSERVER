@@ -60,6 +60,7 @@ export function AvailabilityMonitor({ chargePointId, compact = false }: Availabi
   const faultEvents = (avail.recent_events || []).filter(
     (e) => (e.error_code && e.error_code !== 'NoError') || ['Faulted', 'Unavailable', 'Inoperative'].includes(e.status)
   )
+  // When showing all, show all events. When showing faults, show all fault and unavailable events.
   const displayedEvents = filterErrorsOnly ? faultEvents : (avail.recent_events || [])
 
   return (

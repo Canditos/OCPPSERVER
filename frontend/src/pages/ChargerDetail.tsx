@@ -148,6 +148,7 @@ export function ChargerDetail() {
   const [newClientCert, setNewClientCert] = useState<IssueClientCertResponse | null>(null)
 
   const [msgFilterAction, setMsgFilterAction] = useState<string>('all')
+  const [msgFilterTx, setMsgFilterTx] = useState<string>('all')
   const [msgSearch, setMsgSearch] = useState<string>('')
   const [isLogExpanded, setIsLogExpanded] = useState<boolean>(false)
   const [inspectMessage, setInspectMessage] = useState<OcppMessage | null>(null)
@@ -245,6 +246,22 @@ export function ChargerDetail() {
     refetchInterval: 5000,
   })
 
+  const availableTransactions = React.useMemo(() => {
+    const txSet = new Set<string>()
+    for (const m of messages) {
+      if (!m.payload) continue
+      const p = m.payload
+      if (typeof p === 'object' && p !== null) {
+        if ('transaction_id' in p && (p as any).transaction_id) txSet.add(String((p as any).transaction_id))
+        if ('transactionId' in p && (p as any).transactionId) txSet.add(String((p as any).transactionId))
+      } else if (typeof p === 'string') {
+        const match = p.match(/"transaction_?id"\s*:\s*(\d+)/i)
+        if (match) txSet.add(match[1])
+      }
+    }
+    return Array.from(txSet).sort((a, b) => Number(b) - Number(a))
+  }, [messages])
+
   const filteredMessages = messages.filter((m) => {
     if (msgFilterAction !== 'all') {
       if (msgFilterAction === 'security') {
@@ -253,6 +270,20 @@ export function ChargerDetail() {
       } else if (m.action !== msgFilterAction) {
         return false
       }
+    }
+    if (msgFilterTx !== 'all') {
+      const p = m.payload
+      let txMatch = false
+      if (typeof p === 'object' && p !== null) {
+        if (String((p as any).transaction_id) === msgFilterTx || String((p as any).transactionId) === msgFilterTx) {
+          txMatch = true
+        }
+      } else if (typeof p === 'string') {
+        if (p.includes(`"transaction_id": ${msgFilterTx}`) || p.includes(`"transaction_id":${msgFilterTx}`) || p.includes(`"transactionId": ${msgFilterTx}`) || p.includes(`"transactionId":${msgFilterTx}`)) {
+          txMatch = true
+        }
+      }
+      if (!txMatch) return false
     }
     if (msgSearch.trim()) {
       const q = msgSearch.toLowerCase()
@@ -960,7 +991,23 @@ export function ChargerDetail() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Transaction Filter Dropdown */}
+                      {availableTransactions.length > 0 && (
+                        <div className="relative">
+                          <select
+                            value={msgFilterTx}
+                            onChange={(e) => setMsgFilterTx(e.target.value)}
+                            className="text-xs py-1.5 px-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-blue-600 dark:text-blue-400 font-mono font-bold cursor-pointer focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="all">⚡ Todas as TX</option>
+                            {availableTransactions.map((tx) => (
+                              <option key={tx} value={tx}>TX #{tx}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       {/* Search box */}
                       <div className="relative">
                         <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" />
@@ -1351,7 +1398,23 @@ export function ChargerDetail() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Transaction Filter Dropdown */}
+                {availableTransactions.length > 0 && (
+                  <div className="relative">
+                    <select
+                      value={msgFilterTx}
+                      onChange={(e) => setMsgFilterTx(e.target.value)}
+                      className="text-xs py-1.5 px-2.5 rounded-xl bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-blue-600 dark:text-blue-400 font-mono font-bold cursor-pointer focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="all">⚡ Todas as TX</option>
+                      {availableTransactions.map((tx) => (
+                        <option key={tx} value={tx}>TX #{tx}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Search in modal */}
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" />

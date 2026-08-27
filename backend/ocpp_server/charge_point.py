@@ -143,6 +143,7 @@ class ChargePoint(OcppChargePoint):
 
     @on(Action.Heartbeat)
     async def on_heartbeat(self, **kwargs):
+        await self._log_message("IN", "Heartbeat", kwargs)
         async with AsyncSessionLocal() as db:
             await db.execute(
                 update(Charger).where(Charger.charge_point_id == self.id)
