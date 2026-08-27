@@ -7,7 +7,7 @@ import {
   Download, ArrowRight, Sparkles, Database
 } from 'lucide-react'
 import { api, OcmfVerificationResponse } from '../api'
-import type { Transaction } from '../types'
+import type { Transaction, Charger } from '../types'
 import { safeFormatDate } from '../utils/date'
 
 const SAMPLE_LEM_PUBKEY = '04039b53aa82192578b6072ada612554a768cd0a48c0bb37b792c8938033b06e350527995ee44e71be19135402b363ae9aa347734331ae1d18abd57e5487a5368b'
@@ -24,11 +24,34 @@ export function OcmfTool() {
   const [result, setResult] = useState<OcmfVerificationResponse | null>(null)
   const [copied, setCopied] = useState<boolean>(false)
 
-  // Fetch recent transactions
+  // Fetch chargers and transactions
+  const { data: chargers = [] } = useQuery<Charger[]>({
+    queryKey: ['chargers'],
+    queryFn: () => api.getChargers(),
+  })
+
   const { data: transactions = [], isLoading: isTxsLoading } = useQuery<Transaction[]>({
     queryKey: ['transactions'],
     queryFn: () => api.getTransactions(),
   })
+
+  // Set of ERK-certified charge point IDs
+  const erkChargePointIds = React.useMemo(() => {
+    return new Set(
+      chargers
+        .filter((c) => Boolean(c.is_eichrecht_compliant) || (c.model && /\b(erk|eichrecht|dcbm)\b/i.test(c.model)))
+        .map((c) => c.charge_point_id)
+    )
+  }, [chargers])
+
+  // Filter to strictly show ONLY transactions from ERK-certified chargers or with OCMF signed data
+  const erkTransactions = React.useMemo(() => {
+    return transactions.filter((t) => {
+      const isErkCp = erkChargePointIds.has(t.charge_point_id)
+      const hasOcmfData = Boolean((t as any).ocmf_verified || (t as any).ocmf_stop_raw || (t as any).ocmf_start_raw)
+      return isErkCp || hasOcmfData
+    })
+  }, [transactions, erkChargePointIds])
 
   const handleVerify = async (customPayload?: string, customKey?: string) => {
     const payloadToUse = customPayload || ocmfData.trim()
@@ -177,26 +200,28 @@ export function OcmfTool() {
           <select
             value={selectedTxId}
             onChange={(e) => handleImportTransaction(e.target.value)}
-            disabled={isTxsLoading || transactions.length === 0}
+            disabled={isTxsLoading || erkTransactions.length === 0}
             className="select text-xs py-2 px-3 bg-white dark:bg-gray-900 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono font-bold cursor-pointer max-w-xs shadow-sm"
           >
-            <option value="">⚡ Selecionar Transação Recente...</option>
-            {transactions.map((t) => (
+            <option value="">
+              {erkTransactions.length > 0 ? '⚡ Selecionar Transação ERK Recente...' : 'Nenhuma Transação ERK Encontrada'}
+            </option>
+            {erkTransactions.map((t) => (
               <option key={t.id} value={t.transaction_id}>
                 TX #{t.transaction_id} · {t.charge_point_id} (T#{t.connector_id}) · {safeFormatDate(t.start_time)}
               </option>
             ))}
           </select>
 
-          {transactions.length > 0 && (
+          {erkTransactions.length > 0 && (
             <button
               type="button"
-              onClick={() => handleImportTransaction(String(transactions[0].transaction_id))}
+              onClick={() => handleImportTransaction(String(erkTransactions[0].transaction_id))}
               className="btn bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 px-3 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap shadow-sm"
-              title="Importar a última transação registada no sistema"
+              title="Importar a última transação ERK registada no sistema"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Última Sessão</span>
+              <span>Última Sessão ERK</span>
             </button>
           )}
         </div>
