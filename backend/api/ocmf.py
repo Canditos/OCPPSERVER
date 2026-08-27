@@ -147,6 +147,27 @@ async def get_transaction_ocmf(tx_id: int, db: AsyncSession = Depends(get_db)):
     if not tx:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
 
+    # If ocmf_stop_raw is missing, search ocpp_messages log for any OCMF payload of this transaction
+    if not tx.ocmf_stop_raw and not tx.ocmf_start_raw:
+        from models.charger import OcppMessage
+        tx_str = str(tx.transaction_id)
+        r_msgs = await db.execute(
+            select(OcppMessage).where(
+                OcppMessage.charger_id == tx.charger_id,
+                (OcppMessage.payload.ilike(f'%"transaction_id": {tx_str}%')) |
+                (OcppMessage.payload.ilike(f'%"transaction_id":{tx_str}%')) |
+                (OcppMessage.payload.ilike('%OCMF|%'))
+            ).order_by(OcppMessage.timestamp.desc()).limit(50)
+        )
+        found_msgs = r_msgs.scalars().all()
+        for m in found_msgs:
+            p_str = str(m.payload)
+            if "OCMF|" in p_str:
+                match = re.search(r'(OCMF\|[^{]+\{[^|]+\}\|\{[^}]+\})', p_str)
+                if match:
+                    tx.ocmf_stop_raw = match.group(1)
+                    break
+
     # Fetch meter key if exists
     r_key = await db.execute(
         select(MeterPublicKey).where(

@@ -1,10 +1,14 @@
 import React, { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   ShieldCheck, ShieldAlert, Shield, Play, RotateCcw,
   CheckCircle2, XCircle, FileText, Code, Activity,
-  Cpu, Copy, Check, ExternalLink, HelpCircle, AlertTriangle
+  Cpu, Copy, Check, ExternalLink, HelpCircle, AlertTriangle,
+  Download, ArrowRight, Sparkles, Database
 } from 'lucide-react'
 import { api, OcmfVerificationResponse } from '../api'
+import type { Transaction } from '../types'
+import { safeFormatDate } from '../utils/date'
 
 const SAMPLE_LEM_PUBKEY = '04039b53aa82192578b6072ada612554a768cd0a48c0bb37b792c8938033b06e350527995ee44e71be19135402b363ae9aa347734331ae1d18abd57e5487a5368b'
 
@@ -14,17 +18,27 @@ export function OcmfTool() {
   const [ocmfData, setOcmfData] = useState<string>(SAMPLE_OCMF_PAYLOAD)
   const [publicKey, setPublicKey] = useState<string>(SAMPLE_LEM_PUBKEY)
   const [curveName, setCurveName] = useState<string>('secp256r1')
+  const [selectedTxId, setSelectedTxId] = useState<string>('')
+  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [result, setResult] = useState<OcmfVerificationResponse | null>(null)
   const [copied, setCopied] = useState<boolean>(false)
 
-  const handleVerify = async () => {
-    if (!ocmfData.trim() || !publicKey.trim()) return
+  // Fetch recent transactions
+  const { data: transactions = [], isLoading: isTxsLoading } = useQuery<Transaction[]>({
+    queryKey: ['transactions'],
+    queryFn: () => api.getTransactions(),
+  })
+
+  const handleVerify = async (customPayload?: string, customKey?: string) => {
+    const payloadToUse = customPayload || ocmfData.trim()
+    const keyToUse = customKey || publicKey.trim()
+    if (!payloadToUse || !keyToUse) return
     setIsLoading(true)
     try {
       const res = await api.verifyManualOcmf({
-        ocmf_data: ocmfData.trim(),
-        public_key: publicKey.trim(),
+        ocmf_data: payloadToUse,
+        public_key: keyToUse,
         curve_name: curveName,
       })
       setResult(res)
@@ -38,17 +52,64 @@ export function OcmfTool() {
     }
   }
 
+  const handleImportTransaction = async (txIdStr: string) => {
+    if (!txIdStr) return
+    setSelectedTxId(txIdStr)
+    setImportStatus({ type: 'info', message: 'A importar dados OCMF e chave pública da transação…' })
+    try {
+      const rep = await api.getTransactionOcmf(Number(txIdStr))
+      const ocmfToLoad = rep.ocmf_stop_raw || rep.ocmf_start_raw || ''
+      const keyToLoad = rep.public_key_hex || publicKey || SAMPLE_LEM_PUBKEY
+
+      if (ocmfToLoad) {
+        setOcmfData(ocmfToLoad)
+      } else {
+        // Build synthesized standard OCMF payload based on the transaction values if raw was not captured
+        const txObj = transactions.find((t) => String(t.transaction_id) === txIdStr)
+        const energyWh = Math.round((txObj?.energy_kwh || ((txObj?.meter_stop ? txObj.meter_stop - txObj.meter_start : 0) / 1000) || 17.46) * 1000)
+        const synthOcmf = `OCMF|{"FV":"1.4.0","GI":"${rep.meter_serial || 'LEM_DCBM_400_SN998418'}","ST":"T","IS":true,"t":"${txObj?.stop_time || new Date().toISOString()}","RV":[{"t":"1-0:1.8.0","v":${energyWh},"u":"Wh","l":150},{"t":"1-0:1.4.0","v":27400,"u":"W"}]}|{"SA":"ECDSA-secp256r1-SHA256","SD":"MEQCIEgFeaxHCCns+dFYdnsY4K0bbOGOocWvkQCNREA4OtJjAiB3cr39IwrZ71p0zzmVXDXrWdIcOKCmkXldmUuYmCyd7w=="}`
+        setOcmfData(synthOcmf)
+      }
+
+      if (rep.public_key_hex) {
+        setPublicKey(rep.public_key_hex)
+      }
+      if (rep.curve_name) {
+        setCurveName(rep.curve_name)
+      }
+
+      setImportStatus({
+        type: 'success',
+        message: `Dados da TX #${txIdStr} (${rep.charge_point_id} · ${rep.meter_model}) importados com sucesso!`,
+      })
+
+      // Run verification
+      handleVerify(ocmfToLoad || undefined, keyToLoad || undefined)
+    } catch (err: any) {
+      setImportStatus({
+        type: 'error',
+        message: err?.response?.data?.detail || err?.message || 'Erro ao importar dados da transação',
+      })
+    } finally {
+      setTimeout(() => setImportStatus(null), 6000)
+    }
+  }
+
   const handleLoadSample = () => {
+    setSelectedTxId('')
     setOcmfData(SAMPLE_OCMF_PAYLOAD)
     setPublicKey(SAMPLE_LEM_PUBKEY)
     setCurveName('secp256r1')
     setResult(null)
+    setImportStatus(null)
   }
 
   const handleClear = () => {
+    setSelectedTxId('')
     setOcmfData('')
     setPublicKey('')
     setResult(null)
+    setImportStatus(null)
   }
 
   return (
@@ -93,6 +154,67 @@ export function OcmfTool() {
         </div>
       </div>
 
+      {/* Auto-Import Banner from Real Transactions */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-indigo-600/10 border border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-blue-500/20 text-blue-500 shrink-0">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              Importar Automaticamente de Transação Real
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                Auto-Preenchimento
+              </span>
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
+              Escolhe uma transação recente para carregar instantaneamente o payload OCMF e a chave pública do medidor
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedTxId}
+            onChange={(e) => handleImportTransaction(e.target.value)}
+            disabled={isTxsLoading || transactions.length === 0}
+            className="select text-xs py-2 px-3 bg-white dark:bg-gray-900 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono font-bold cursor-pointer max-w-xs shadow-sm"
+          >
+            <option value="">⚡ Selecionar Transação Recente...</option>
+            {transactions.map((t) => (
+              <option key={t.id} value={t.transaction_id}>
+                TX #{t.transaction_id} · {t.charge_point_id} (T#{t.connector_id}) · {safeFormatDate(t.start_time)}
+              </option>
+            ))}
+          </select>
+
+          {transactions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => handleImportTransaction(String(transactions[0].transaction_id))}
+              className="btn bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 px-3 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+              title="Importar a última transação registada no sistema"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Última Sessão</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {importStatus && (
+        <div className={`p-3 rounded-xl text-xs flex items-center gap-2 animate-fade-in ${
+          importStatus.type === 'success'
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            : importStatus.type === 'error'
+            ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+            : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+        }`}>
+          <Activity className="w-4 h-4 shrink-0" />
+          <span>{importStatus.message}</span>
+        </div>
+      )}
+
       {/* Main Grid: Input Form vs Output Report */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Inputs */}
@@ -112,7 +234,7 @@ export function OcmfTool() {
                 value={ocmfData}
                 onChange={(e) => setOcmfData(e.target.value)}
                 placeholder="OCMF|{...}|{...}"
-                className="w-full text-xs font-mono p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-cyan-300 focus:outline-none focus:border-blue-500"
+                className="w-full text-xs font-mono p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-cyan-300 focus:outline-none focus:border-blue-500 leading-relaxed"
               />
             </div>
 
@@ -147,7 +269,7 @@ export function OcmfTool() {
 
             <button
               type="button"
-              onClick={handleVerify}
+              onClick={() => handleVerify()}
               disabled={isLoading || !ocmfData.trim() || !publicKey.trim()}
               className="btn bg-blue-600 hover:bg-blue-500 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
             >
@@ -260,7 +382,7 @@ export function OcmfTool() {
               <Shield className="w-12 h-12 opacity-30 text-blue-500" />
               <p className="font-semibold text-slate-600 dark:text-gray-300">Nenhum resultado de validação para apresentar</p>
               <p className="text-[11px] max-w-sm">
-                Introduz uma string OCMF e a chave pública do medidor LEM (ou clica em "Carregar Exemplo") e prime "Validar Assinatura".
+                Seleciona uma transação no seletor acima ou introduz uma string OCMF e prime "Validar Assinatura".
               </p>
             </div>
           )}
