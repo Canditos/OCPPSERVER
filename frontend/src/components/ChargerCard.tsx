@@ -657,14 +657,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
       {/* Live charging telemetry card with Driver info */}
       {isSessionActive && (
-        <div className="mb-4 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-3">
+        <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-br from-blue-50/90 via-indigo-50/40 to-white dark:from-blue-950/30 dark:via-slate-900/50 dark:to-indigo-950/20 border border-blue-200 dark:border-blue-500/25 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600 dark:bg-blue-400" />
               </span>
-              <span className="text-xs font-semibold text-blue-300">
+              <span className="text-xs font-bold text-blue-900 dark:text-blue-200">
                 {activeChargingConnectors.length > 1
                   ? `${activeChargingConnectors.length} Cargas Ativas em Simultâneo`
                   : t('chargerCard.chargingNow')}
@@ -675,16 +675,16 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
           {/* Active User / Driver banner */}
           {activeTransactionForSelectedConnector && (
-            <div className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-white/5 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-md bg-blue-500/20 text-blue-400">
-                  <Tag className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-sm text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                  <Tag className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="font-bold text-slate-100 text-xs block">
+                  <span className="font-bold text-slate-900 dark:text-slate-100 text-xs block">
                     {activeTransactionForSelectedConnector.user_username ? `${t('chargerCard.driver')}: ${activeTransactionForSelectedConnector.user_username}` : `${t('chargerCard.tag')} ${activeTransactionForSelectedConnector.id_tag}`}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                     TX #{activeTransactionForSelectedConnector.transaction_id} {activeTransactionForSelectedConnector.user_username ? `· ${activeTransactionForSelectedConnector.id_tag}` : ''}
                   </span>
                 </div>
@@ -692,7 +692,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
               {activeTransactionForSelectedConnector.energy_kwh !== null && activeTransactionForSelectedConnector.energy_kwh !== undefined && (
                 <div className="text-right font-mono">
-                  <span className="text-emerald-400 font-bold text-xs">
+                  <span className="text-emerald-700 dark:text-emerald-400 font-black text-xs">
                     {activeTransactionForSelectedConnector.energy_kwh} kWh
                   </span>
                 </div>
@@ -713,17 +713,17 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                   setFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao enviar aviso.' })
                 }
               }}
-              className="w-full py-1.5 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="w-full py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 border border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm"
             >
-              <Mail className="w-3.5 h-3.5" />
+              <Mail className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
               <span>{t('chargerCard.askDriverToMove')}</span>
             </button>
           )}
 
           {/* DUAL / MULTI-BATTERY RENDERING OR SINGLE BATTERY */}
           {activeChargingConnectors.length > 1 ? (
-            <div className="space-y-2 pt-2 border-t border-blue-500/10">
-              <div className="flex items-center justify-between text-[11px] text-blue-300 font-semibold px-0.5">
+            <div className="space-y-2 pt-2 border-t border-blue-200/60 dark:border-blue-500/15">
+              <div className="flex items-center justify-between text-[11px] text-blue-900 dark:text-blue-300 font-bold px-0.5">
                 <span>Baterias em Carga (Clique para selecionar o conector):</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -736,16 +736,16 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                       onClick={() => setSelectedConnectorId(c.connector_id)}
                       className={`cursor-pointer transition-all rounded-2xl p-1.5 ${
                         isThisSelected
-                          ? 'ring-2 ring-blue-400 bg-blue-500/15 shadow-md shadow-blue-500/20'
-                          : 'opacity-85 hover:opacity-100 bg-black/10'
+                          ? 'ring-2 ring-blue-500 bg-blue-50/90 dark:bg-blue-500/20 shadow-md'
+                          : 'opacity-85 hover:opacity-100 bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10'
                       }`}
                     >
                       <div className="flex items-center justify-between px-2 mb-1">
-                        <span className={`text-[11px] font-bold font-mono ${isThisSelected ? 'text-blue-300' : 'text-slate-400'}`}>
+                        <span className={`text-[11px] font-bold font-mono ${isThisSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>
                           ⚡ Tomada #{c.connector_id}
                         </span>
                         {isThisSelected && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 font-bold uppercase">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold uppercase tracking-wider shadow-sm">
                             Selecionada
                           </span>
                         )}
@@ -762,7 +762,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             </div>
           ) : (
             (liveSoC !== null || isSessionActive) && (
-              <div className="pt-2 border-t border-blue-500/10">
+              <div className="pt-2 border-t border-blue-200/60 dark:border-blue-500/15">
                 <BatteryIndicator soc={liveSoC} isCharging={isSessionActive} powerKw={livePowerKw} />
               </div>
             )
@@ -815,18 +815,18 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       {/* Charging Success Rate Cards */}
       {Object.keys(successRates).length > 0 && (
         <div className="mb-3">
-          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1.5">{t('chargerCard.successRateByPlug')}</span>
+          <span className="text-[11px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider block mb-1.5">{t('chargerCard.successRateByPlug')}</span>
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(successRates).map(([connectorId, data]) => (
-              <div key={connectorId} className="p-2.5 rounded-lg bg-gray-800/40 border border-gray-700/50 hover:border-gray-600/50 transition-colors">
+              <div key={connectorId} className="p-2.5 rounded-xl bg-slate-50 dark:bg-gray-800/40 border border-slate-200 dark:border-gray-700/50 shadow-sm hover:border-slate-300 dark:hover:border-gray-600 transition-colors">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{t('chargerCard.plugNumber', { id: connectorId })}</span>
-                  <span className={`text-sm font-bold ${data.success_rate >= 90 ? 'text-emerald-400' : data.success_rate >= 70 ? 'text-amber-400' : 'text-red-400'}`}>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-gray-300">{t('chargerCard.plugNumber', { id: connectorId })}</span>
+                  <span className={`text-sm font-bold ${data.success_rate >= 90 ? 'text-emerald-600 dark:text-emerald-400' : data.success_rate >= 70 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
                     {data.success_rate.toFixed(1)}%
                   </span>
                 </div>
-                <div className="text-[10px] text-gray-500 mt-1">
-                  {data.completed_transactions}/{data.total_transactions}
+                <div className="text-[10px] text-slate-500 dark:text-gray-400 mt-1 font-mono">
+                  {data.completed_transactions}/{data.total_transactions} concluídas
                 </div>
               </div>
             ))}
