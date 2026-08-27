@@ -8,6 +8,7 @@ import { api, MyActiveCharge } from '../api'
 import { useAuthStore } from '../store/authStore'
 import { safeFormatDateTime, safeFormatDuration } from '../utils/date'
 import { RemoteStartModal } from '../components/RemoteStartModal'
+import { OcmfValidationModal } from '../components/OcmfValidationModal'
 import { BatteryIndicator } from '../components/BatteryIndicator'
 import type { Transaction } from '../types'
 import { useI18n } from '../i18n'
@@ -16,6 +17,7 @@ export function UserPortal() {
   const { user } = useAuthStore()
   const { t } = useI18n()
   const [showRemoteStartModal, setShowRemoteStartModal] = useState(false)
+  const [selectedTxForOcmf, setSelectedTxForOcmf] = useState<number | null>(null)
 
   // Profile data with personal stats
   const { data: profile, refetch: refetchProfile } = useQuery({
@@ -303,19 +305,21 @@ export function UserPortal() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="table w-full text-left whitespace-nowrap">
+            <table className="table w-full text-left whitespace-nowrap text-xs">
               <thead>
-                <tr>
-                  <th>{t('userPortal.table.transaction')}</th>
-                  <th>{t('userPortal.table.station')}</th>
-                  <th>{t('userPortal.table.start')}</th>
-                  <th>{t('userPortal.table.end')}</th>
-                  <th>{t('userPortal.table.duration')}</th>
-                  <th>{t('userPortal.table.consumption')}</th>
-                  <th>{t('userPortal.table.status')}</th>
+                <tr className="border-b border-slate-200 dark:border-white/10 text-slate-500 dark:text-gray-400">
+                  <th className="py-3 px-3">{t('userPortal.table.transaction')}</th>
+                  <th className="py-3 px-3">{t('userPortal.table.station')}</th>
+                  <th className="py-3 px-3">{t('userPortal.table.start')}</th>
+                  <th className="py-3 px-3">{t('userPortal.table.end')}</th>
+                  <th className="py-3 px-3">{t('userPortal.table.duration')}</th>
+                  <th className="py-3 px-3">{t('userPortal.table.consumption')}</th>
+                  <th className="py-3 px-3">Custo Estimado</th>
+                  <th className="py-3 px-3">Medição Legal</th>
+                  <th className="py-3 px-3 text-right">{t('userPortal.table.status')}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {transactions.map((tx: any) => {
                   const duration = tx.start_time && tx.stop_time
                     ? safeFormatDuration(
@@ -323,37 +327,64 @@ export function UserPortal() {
                       )
                     : tx.status === 'Active' ? t('userPortal.inProgress') : '—'
 
-                  const kwh = tx.kwh !== undefined
-                    ? tx.kwh
-                    : (tx.meter_stop && tx.meter_start ? ((tx.meter_stop - tx.meter_start) / 1000).toFixed(2) : '0.0')
+                  const energyNum = tx.energy_kwh !== undefined && tx.energy_kwh !== null
+                    ? Number(tx.energy_kwh)
+                    : tx.signed_energy_kwh !== undefined && tx.signed_energy_kwh !== null
+                    ? Number(tx.signed_energy_kwh)
+                    : tx.meter_stop && tx.meter_start
+                    ? (tx.meter_stop - tx.meter_start) / 1000
+                    : 0
+
+                  const kwhFormatted = energyNum.toFixed(2)
+                  const estimatedCost = (energyNum * 0.28).toFixed(2) // tarifa média 0.28€/kWh
+                  const hasOcmf = Boolean(tx.ocmf_stop_raw || tx.ocmf_start_raw || tx.ocmf_verified || tx.signed_energy_kwh)
 
                   return (
-                    <tr key={tx.id || tx.transaction_id}>
-                      <td className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400">
+                    <tr key={tx.id || tx.transaction_id} className="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors">
+                      <td className="py-3 px-3 font-mono font-bold text-blue-600 dark:text-blue-400">
                         #{tx.transaction_id}
                       </td>
-                      <td className="font-medium text-xs text-slate-800 dark:text-gray-200">
-                        {tx.charge_point_id} ({t('remoteStart.connectorLabel', { id: tx.connector_id })})
+                      <td className="py-3 px-3 font-medium text-slate-800 dark:text-gray-200">
+                        <span className="block font-bold">{tx.charge_point_id}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-gray-400">{t('remoteStart.connectorLabel', { id: tx.connector_id })}</span>
                       </td>
-                      <td className="text-xs text-slate-600 dark:text-gray-400 font-mono">
+                      <td className="py-3 px-3 text-slate-600 dark:text-gray-400 font-mono">
                         {safeFormatDateTime(tx.start_time)}
                       </td>
-                      <td className="text-xs text-slate-600 dark:text-gray-400 font-mono">
-                        {tx.stop_time ? safeFormatDateTime(tx.stop_time) : '—'}
+                      <td className="py-3 px-3 text-slate-600 dark:text-gray-400 font-mono">
+                        {tx.stop_time ? safeFormatDateTime(tx.stop_time) : <span className="text-blue-500 font-bold animate-pulse">A decorrer…</span>}
                       </td>
-                      <td className="text-xs text-slate-700 dark:text-gray-300 font-mono">
+                      <td className="py-3 px-3 text-slate-700 dark:text-gray-300 font-mono">
                         {duration}
                       </td>
-                      <td>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
-                          {kwh} kWh
+                      <td className="py-3 px-3">
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {kwhFormatted} kWh
                         </span>
                       </td>
-                      <td>
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                      <td className="py-3 px-3 font-mono font-semibold text-slate-700 dark:text-gray-300">
+                        {estimatedCost} €
+                      </td>
+                      <td className="py-3 px-3">
+                        {hasOcmf ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTxForOcmf(tx.transaction_id)}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30 hover:bg-purple-500/25 flex items-center gap-1 transition-colors cursor-pointer"
+                            title="Ver Assinatura Digital do Medidor LEM DCBM (Eichrecht)"
+                          >
+                            <ShieldCheck className="w-3 h-3 text-purple-400" />
+                            <span>LEM OCMF</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 dark:text-gray-500 font-mono">MID Standard</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
                           tx.status === 'Active'
-                            ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20 animate-pulse'
-                            : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                            ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30 shadow-sm shadow-blue-500/10 animate-pulse'
+                            : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                         }`}>
                           {tx.status === 'Active' ? t('userPortal.chargingNow') : t('userPortal.completed')}
                         </span>
@@ -374,6 +405,13 @@ export function UserPortal() {
           username={profile?.username || user?.username}
         />
       </div>
+      {/* OCMF Legal Eichrecht Modal */}
+      {selectedTxForOcmf && (
+        <OcmfValidationModal
+          transactionId={selectedTxForOcmf}
+          onClose={() => setSelectedTxForOcmf(null)}
+        />
+      )}
     </div>
   )
 }
