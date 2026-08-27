@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react'
 import { safeFormatDate, safeFormatDistance } from '../utils/date'
 import {
   ArrowLeft, Cpu, Wifi, WifiOff, Activity, MessageSquare, Zap, CheckCircle2,
-  Shield, ShieldCheck, Key, Lock, Unlock, Copy, Eye, EyeOff, Sparkles, RefreshCw, Send, AlertTriangle, Check,
+  Shield, ShieldCheck, Wand2, Sparkles, Key, Lock, Unlock, Copy, Eye, EyeOff, RefreshCw, Send, AlertTriangle, Check,
   FileText, Download, Trash2, ShieldAlert, Award, X, ChevronDown, ChevronUp, BarChart3, Layers,
   Maximize2, Minimize2, Search, Filter, Code, ChevronRight
 } from 'lucide-react'
@@ -64,6 +64,34 @@ export function ChargerDetail() {
   const [lemCurve, setLemCurve] = useState<string>('secp256r1')
   const [lemSaving, setLemSaving] = useState<boolean>(false)
   const [lemFeedback, setLemFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  const [isExtractingKey, setIsExtractingKey] = useState<boolean>(false)
+
+  const handleExtractMeterKey = async () => {
+    if (!id) return
+    setIsExtractingKey(true)
+    setLemFeedback(null)
+    try {
+      const res = await api.extractMeterKey(id, lemConnectorId)
+      setLemPubKeyHex(res.public_key_hex || '')
+      setLemModel(res.meter_model || 'LEM DCBM 400')
+      setLemFeedback({
+        type: 'success',
+        message: res.message || `Chave do medidor extraída com sucesso via ${res.source}!`,
+      })
+      queryClient.invalidateQueries({ queryKey: ['meter-keys', id] })
+      queryClient.invalidateQueries({ queryKey: ['charger', id] })
+      queryClient.invalidateQueries({ queryKey: ['chargers'] })
+    } catch (err: any) {
+      setLemFeedback({
+        type: 'error',
+        message: err?.response?.data?.detail || err?.message || 'Falha ao extrair chave pública do medidor',
+      })
+    } finally {
+      setIsExtractingKey(false)
+      setTimeout(() => setLemFeedback(null), 8000)
+    }
+  }
 
   const handleSaveMeterKey = async () => {
     if (!id || !lemPubKeyHex.trim()) return
@@ -692,7 +720,7 @@ export function ChargerDetail() {
             </div>
 
             {/* Toggle Eichrecht/ERK Compliance */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/6 text-xs">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-300 dark:border-white/10 text-xs shadow-inner">
               <div>
                 <span className="font-bold text-slate-900 dark:text-white block">Certificação ERK / Eichrecht</span>
                 <span className="text-[10px] text-slate-500 dark:text-gray-400">Ativa o selo ERK no cartão e a validação legal OCMF</span>
@@ -750,9 +778,21 @@ export function ChargerDetail() {
 
             {/* Form to Add/Update Meter Key */}
             <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-2.5">
-              <span className="text-[11px] font-bold text-slate-700 dark:text-gray-300 block">
-                Registar / Atualizar Chave Pública do Medidor
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-900 dark:text-gray-200 block">
+                  Registar / Atualizar Chave Pública do Medidor
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExtractMeterKey}
+                  disabled={isExtractingKey}
+                  className="btn bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-[11px] py-1 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-md shadow-purple-500/20 disabled:opacity-50 cursor-pointer"
+                  title="Interrogar o carregador via OCPP para extrair automaticamente a chave pública do medidor LEM"
+                >
+                  <Wand2 className={`w-3.5 h-3.5 ${isExtractingKey ? 'animate-spin' : ''}`} />
+                  <span>{isExtractingKey ? 'A extrair chave…' : '⚡ Sacar Chave do LEM (OCPP)'}</span>
+                </button>
+              </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
