@@ -21,6 +21,7 @@ from api.smart_charging import router as smart_charging_router
 from api.auth import router as auth_router, hash_password
 from api.device_model import router as device_model_router
 from api.simulator import router as simulator_router
+from api.ocmf import router as ocmf_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,6 +65,7 @@ app.include_router(auth_tokens_router)
 app.include_router(smart_charging_router)
 app.include_router(device_model_router)
 app.include_router(simulator_router)
+app.include_router(ocmf_router)
 
 
 @app.get("/health")
@@ -190,5 +192,3 @@ async def _run_standalone(port: int):
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
-
-app.include_router(ocmf.router)
