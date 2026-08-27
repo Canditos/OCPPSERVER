@@ -339,12 +339,17 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       await api.remoteStart(charger.charge_point_id, effectiveTag, selectedConnectorId)
       setOptimisticStatus('Preparing')
       setFeedback({ type: 'success', message: t('chargerCard.accepted', { tag: effectiveTag, connector: selectedConnectorId }) })
-      setTimeout(() => refetchActiveTx(), 2000)
-    } catch (err: unknown) {
-      setFeedback({ type: 'error', message: t('chargerCard.startFailed', { connector: selectedConnectorId }) })
+      setTimeout(() => {
+        refetchActiveTx()
+        queryClient.invalidateQueries({ queryKey: ['chargers'] })
+        queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      }, 1000)
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || t('chargerCard.startFailed', { connector: selectedConnectorId })
+      setFeedback({ type: 'error', message: msg })
     } finally {
       setLoadingAction(null)
-      setTimeout(() => setFeedback(null), 4000)
+      setTimeout(() => setFeedback(null), 5000)
     }
   }
 
@@ -363,14 +368,19 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         await api.remoteStart(charger.charge_point_id, tagToSave.trim(), selectedConnectorId)
         setOptimisticStatus('Preparing')
         setFeedback({ type: 'success', message: t('chargerCard.chargeStarted', { connector: selectedConnectorId, tag: tagToSave.trim() }) })
-        setTimeout(() => refetchActiveTx(), 2000)
+        setTimeout(() => {
+          refetchActiveTx()
+          queryClient.invalidateQueries({ queryKey: ['chargers'] })
+          queryClient.invalidateQueries({ queryKey: ['transactions'] })
+        }, 1000)
       }
-    } catch (err) {
-      setFeedback({ type: 'error', message: t('chargerCard.tagRegisterError') })
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || t('chargerCard.tagRegisterError')
+      setFeedback({ type: 'error', message: msg })
     } finally {
       setIsSavingTag(false)
       setLoadingAction(null)
-      setTimeout(() => setFeedback(null), 4000)
+      setTimeout(() => setFeedback(null), 5000)
     }
   }
 
@@ -383,13 +393,18 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       const txId = activeTransaction?.transaction_id ?? null
       const resp = await api.remoteStop(charger.charge_point_id, txId)
       setOptimisticStatus('Available')
-      setFeedback({ type: 'success', message: t('chargerCard.stopSent', { txId: resp.transaction_id ?? txId }) })
-      setTimeout(() => refetchActiveTx(), 2000)
-    } catch (err: unknown) {
-      setFeedback({ type: 'error', message: t('chargerCard.stopNoTx') })
+      setFeedback({ type: 'success', message: resp?.message || t('chargerCard.stopSent', { txId: resp.transaction_id ?? txId ?? '' }) })
+      setTimeout(() => {
+        refetchActiveTx()
+        queryClient.invalidateQueries({ queryKey: ['chargers'] })
+        queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      }, 1000)
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || t('chargerCard.stopNoTx')
+      setFeedback({ type: 'error', message: msg })
     } finally {
       setLoadingAction(null)
-      setTimeout(() => setFeedback(null), 4000)
+      setTimeout(() => setFeedback(null), 5000)
     }
   }
 

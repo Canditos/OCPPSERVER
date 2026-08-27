@@ -9,12 +9,16 @@ import sys
 from datetime import datetime, timezone
 import websockets
 from ocpp.v16 import ChargePoint as BaseClientV16
-from ocpp.v16 import call
+from ocpp.v16 import call, call_result
+from ocpp.routing import on
 from ocpp.v16.enums import (
     RegistrationStatus,
     ChargePointStatus,
     ChargePointErrorCode,
     Reason,
+    RemoteStartStopStatus,
+    ResetStatus,
+    UnlockStatus,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [SIM-1.6] %(levelname)s: %(message)s")
@@ -22,6 +26,29 @@ logger = logging.getLogger("SimulatorV16")
 
 
 class VirtualVersiChargeV16(BaseClientV16):
+    _stop_requested: bool = False
+    @on(Action.RemoteStartTransaction)
+    async def on_remote_start(self, id_tag: str, connector_id: int = 1, **kwargs):
+        logger.info(f"[SIM-1.6] Received RemoteStartTransaction for tag={id_tag}, connector={connector_id}")
+        asyncio.create_task(self.simulate_charge_session(id_tag=id_tag, duration_seconds=15))
+        return call_result.RemoteStartTransactionPayload(status=RemoteStartStopStatus.accepted)
+
+    @on(Action.RemoteStopTransaction)
+    async def on_remote_stop(self, transaction_id: int, **kwargs):
+        logger.info(f"[SIM-1.6] Received RemoteStopTransaction for tx={transaction_id}")
+        self._stop_requested = True
+        return call_result.RemoteStopTransactionPayload(status=RemoteStartStopStatus.accepted)
+
+    @on(Action.Reset)
+    async def on_reset(self, type: str, **kwargs):
+        logger.info(f"[SIM-1.6] Received Reset ({type})")
+        return call_result.ResetPayload(status=ResetStatus.accepted)
+
+    @on(Action.UnlockConnector)
+    async def on_unlock_connector(self, connector_id: int, **kwargs):
+        logger.info(f"[SIM-1.6] Received UnlockConnector for connector={connector_id}")
+        return call_result.UnlockConnectorPayload(status=UnlockStatus.unlocked)
+
     async def send_boot_notification(self):
         req = call.BootNotificationPayload(
             charge_point_vendor="Siemens",

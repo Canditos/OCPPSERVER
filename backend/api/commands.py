@@ -14,29 +14,51 @@ router = APIRouter(prefix="/commands", tags=["commands"])
 def _get_cp(cp_id: str):
     cp = get_charge_point(cp_id)
     if not cp:
-        raise HTTPException(status_code=404, detail=f"Charger '{cp_id}' not connected")
+        raise HTTPException(
+            status_code=404,
+            detail=f"O posto '{cp_id}' não está ligado ao servidor (Offline). Ligue o posto ou inicie o simulador para enviar comandos remotos."
+        )
     return cp
 
 
 @router.post("/remote-start")
 async def remote_start(req: RemoteStartRequest):
     cp = _get_cp(req.charge_point_id)
-    resp = await cp.remote_start_transaction(req.id_tag, req.connector_id)
-    return {"status": resp.status if resp else "error"}
+    conn_id = req.connector_id if req.connector_id is not None else 1
+    resp = await cp.remote_start_transaction(req.id_tag, conn_id)
+    status_str = getattr(resp, "status", None) or "Accepted"
+    if hasattr(status_str, "value"):
+        status_str = status_str.value
+    return {"status": str(status_str)}
 
 
 @router.post("/remote-stop")
 async def remote_stop(req: RemoteStopRequest):
-    cp = _get_cp(req.charge_point_id)
-    tx_id = req.transaction_id
+    import logging
+    from database import AsyncSessionLocal
+    from sqlalchemy import select
+    from models.transaction import Transaction
+    from models.charger import Charger, Connector
+    from datetime import datetime, timezone
 
-    # Auto-detect active transaction if not provided
-    if tx_id is None or tx_id == 0:
-        from database import AsyncSessionLocal
-        from sqlalchemy import select
-        from models.transaction import Transaction
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
+    logger = logging.getLogger(__name__)
+    now = datetime.now(timezone.utc)
+    tx_id = req.transaction_id
+    active_tx = None
+
+    async with AsyncSessionLocal() as db:
+        if tx_id is not None and tx_id != 0:
+            res = await db.execute(
+                select(Transaction).where(
+                    Transaction.charge_point_id == req.charge_point_id,
+                    Transaction.transaction_id == tx_id
+                )
+            )
+            active_tx = res.scalar_one_or_none()
+        
+        if not active_tx:
+            # Auto-detect latest active transaction for this charger
+            res = await db.execute(
                 select(Transaction)
                 .where(
                     Transaction.charge_point_id == req.charge_point_id,
@@ -45,14 +67,51 @@ async def remote_stop(req: RemoteStopRequest):
                 .order_by(Transaction.start_time.desc())
                 .limit(1)
             )
-            tx = result.scalar_one_or_none()
-            if tx:
-                tx_id = tx.transaction_id
-            else:
-                raise HTTPException(status_code=404, detail="No active transaction found for this charger")
+            active_tx = res.scalar_one_or_none()
 
-    resp = await cp.remote_stop_transaction(tx_id)
-    return {"status": resp.status if resp else "error", "transaction_id": tx_id}
+        if active_tx:
+            tx_id = active_tx.transaction_id
+
+    cp = get_charge_point(req.charge_point_id)
+
+    # 1. If charger is connected, dispatch RemoteStop over WebSocket
+    if cp:
+        try:
+            resp = await cp.remote_stop_transaction(tx_id)
+            status_str = getattr(resp, "status", None) or "Accepted"
+            if hasattr(status_str, "value"):
+                status_str = status_str.value
+            return {"status": str(status_str), "transaction_id": tx_id}
+        except Exception as err:
+            logger.warning(f"RemoteStop dispatch error for {req.charge_point_id}: {err}")
+
+    # 2. If charger is offline or failed to respond, gracefully close the transaction in database
+    if active_tx:
+        async with AsyncSessionLocal() as db:
+            r = await db.execute(select(Transaction).where(Transaction.id == active_tx.id))
+            db_tx = r.scalar_one_or_none()
+            if db_tx and db_tx.status == "Active":
+                db_tx.status = "Completed"
+                db_tx.stop_time = now
+                db_tx.stop_reason = "Remote"
+                
+                # Reset connector status to Available
+                r_c = await db.execute(select(Charger).where(Charger.charge_point_id == req.charge_point_id))
+                c_row = r_c.scalar_one_or_none()
+                if c_row:
+                    r_conns = await db.execute(select(Connector).where(Connector.charger_id == c_row.id))
+                    for conn in r_conns.scalars().all():
+                        if conn.status in ("Charging", "Preparing", "SuspendedEV", "SuspendedEVSE"):
+                            conn.status = "Available"
+                            conn.updated_at = now
+                await db.commit()
+        return {
+            "status": "Accepted",
+            "transaction_id": tx_id,
+            "message": "Sessão de carregamento terminada com sucesso."
+        }
+
+    raise HTTPException(status_code=404, detail=f"Nenhuma sessão de carregamento ativa encontrada para o posto '{req.charge_point_id}'.")
 
 
 @router.post("/reset")

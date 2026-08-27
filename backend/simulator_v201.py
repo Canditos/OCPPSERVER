@@ -8,12 +8,17 @@ import logging
 import sys
 import websockets
 from ocpp.v201 import ChargePoint as BaseClientV201
-from ocpp.v201 import call
+from ocpp.v201 import call, call_result
+from ocpp.routing import on
 from ocpp.v201.enums import (
     RegistrationStatusType,
     TransactionEventType,
     TriggerReasonType,
     IdTokenType,
+    Action,
+    RequestStartStopStatusEnumType,
+    ResetStatusEnumType,
+    UnlockStatusEnumType,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [SIM-2.0.1] %(levelname)s: %(message)s")
@@ -21,6 +26,30 @@ logger = logging.getLogger("SimulatorV201")
 
 
 class VirtualStationV201(BaseClientV201):
+    _stop_requested: bool = False
+    @on(Action.RequestStartTransaction)
+    async def on_request_start(self, id_token: dict, evse_id: int = 1, **kwargs):
+        token_val = id_token.get("id_token", "DEV2G1234567890") if isinstance(id_token, dict) else str(id_token)
+        logger.info(f"[SIM-2.0.1] Received RequestStartTransaction for token={token_val}, evse={evse_id}")
+        asyncio.create_task(self.simulate_pnc_charge_session(emaid_token=token_val, duration_seconds=15))
+        return call_result.RequestStartTransactionPayload(status=RequestStartStopStatusEnumType.accepted)
+
+    @on(Action.RequestStopTransaction)
+    async def on_request_stop(self, transaction_id: str, **kwargs):
+        logger.info(f"[SIM-2.0.1] Received RequestStopTransaction for tx={transaction_id}")
+        self._stop_requested = True
+        return call_result.RequestStopTransactionPayload(status=RequestStartStopStatusEnumType.accepted)
+
+    @on(Action.Reset)
+    async def on_reset(self, type: str, **kwargs):
+        logger.info(f"[SIM-2.0.1] Received Reset ({type})")
+        return call_result.ResetPayload(status=ResetStatusEnumType.accepted)
+
+    @on(Action.UnlockConnector)
+    async def on_unlock(self, evse_id: int, connector_id: int, **kwargs):
+        logger.info(f"[SIM-2.0.1] Received UnlockConnector for evse={evse_id}, conn={connector_id}")
+        return call_result.UnlockConnectorPayload(status=UnlockStatusEnumType.unlocked)
+
     async def send_boot_notification(self):
         req = call.BootNotificationPayload(
             charging_station={

@@ -153,6 +153,26 @@ async def get_active_transaction(cp_id: str, db: AsyncSession = Depends(get_db))
             d.user_email = user.email
             d.user_role = user.role
 
+    # For active transactions, query latest energy reading
+    if d.energy_kwh is None:
+        meter_result = await db.execute(
+            select(MeterValue)
+            .where(
+                MeterValue.transaction_id == tx.id,
+                MeterValue.measurand == 'Energy.Active.Import.Register'
+            )
+            .order_by(MeterValue.timestamp.desc())
+            .limit(1)
+        )
+        latest_meter = meter_result.scalar_one_or_none()
+        if latest_meter:
+            meter_value = float(latest_meter.value)
+            d.energy_kwh = round(max(0.0, meter_value - (tx.meter_start or 0)) / 1000, 3)
+        else:
+            d.energy_kwh = 0.0
+
+    return d
+
 @router.get("/{cp_id}/success-rate", response_model=dict)
 async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_db)):
     """Get charging success rate per connector for a charger."""
