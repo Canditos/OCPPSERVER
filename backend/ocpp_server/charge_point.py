@@ -482,6 +482,21 @@ class ChargePoint(OcppChargePoint):
                     conn.error_code = error_code
                     conn.updated_at = _now()
 
+                    # Auto-reconcile ghost transactions: if connector is Available or Unavailable, close active TX
+                    if status in ["Available", "Unavailable"]:
+                        r_dangling = await db.execute(
+                            select(Transaction).where(
+                                Transaction.charge_point_id == self.id,
+                                Transaction.connector_id == connector_id,
+                                Transaction.status == "Active"
+                            )
+                        )
+                        for d_tx in r_dangling.scalars().all():
+                            d_tx.status = "Completed"
+                            d_tx.stop_time = d_tx.stop_time or _now()
+                            d_tx.stop_reason = d_tx.stop_reason or "EVDisconnected"
+
+
                     # Sync overall charger status
                     r_all_conn = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
                     all_conns = r_all_conn.scalars().all()

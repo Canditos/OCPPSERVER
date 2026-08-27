@@ -264,9 +264,12 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     refetchInterval: 30000,
   })
 
-  // Find active transaction for the selected connector (from real query or enriched REST connectors)
+  // Find active transaction for the selected connector (strictly null if connector is Available)
   const restSelectedConn = (charger.connectors || []).find((c) => c.connector_id === selectedConnectorId)
-  const activeTransactionForSelectedConnector: any = allActiveTransactions[selectedConnectorId] ||
+  const selectedConnectorStatusRaw = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
+  const isSelectedPlugAvailable = selectedConnectorStatusRaw === 'Available' || selectedConnectorStatusRaw === 'Unavailable'
+
+  const rawActiveTx: any = allActiveTransactions[selectedConnectorId] ||
     (restSelectedConn?.active_transaction_id ? {
       transaction_id: restSelectedConn.active_transaction_id,
       id_tag: restSelectedConn.active_id_tag || '',
@@ -276,6 +279,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       start_time: restSelectedConn.active_start_time,
       connector_id: selectedConnectorId,
     } : null)
+
+  const activeTransactionForSelectedConnector = isSelectedPlugAvailable ? null : rawActiveTx
 
   // Reset optimistic status when real live status updates
   useEffect(() => {
@@ -310,11 +315,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const isAnySessionActive = isOnline && (
     activeChargingConnectors.length > 0 ||
     isSelectedConnectorActive ||
-    (live?.meters && Object.keys(live.meters).length > 0) ||
-    Object.keys(allActiveTransactions).length > 0 ||
     Boolean(activeTransactionForSelectedConnector)
   )
-  const isSessionActive = isAnySessionActive
+  const isSessionActive = isSelectedConnectorActive || Boolean(activeTransactionForSelectedConnector)
   const isPreparing = isOnline && (computedStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing'))
   const isFaulted = isOnline && (computedStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted'))
 
