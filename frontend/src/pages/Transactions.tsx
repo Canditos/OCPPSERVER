@@ -4,13 +4,27 @@ import { formatDuration, intervalToDuration, isToday, isWithinInterval, subDays,
 import {
   ChevronDown, ChevronRight, Zap, User as UserIcon,
   Shield, CreditCard, Clock, Activity, ArrowLeftRight,
-  Download, Search, Filter, Calendar, Euro, BatteryCharging
+  Download, Search, Filter, Calendar, Euro, BatteryCharging,
+  FileText, MessageSquare, Code, Check, Copy, Eye, X
 } from 'lucide-react'
+import type { OcppMessage } from '../types'
 import { safeFormatDate } from '../utils/date'
 import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
 import type { Charger, Transaction } from '../types'
 import { useI18n } from '../i18n'
+
+function DirectionBadge({ direction }: { direction: string }) {
+  return direction === 'IN' ? (
+    <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-500/25 text-blue-300 border border-blue-400/50">
+      ↓ IN
+    </span>
+  ) : (
+    <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-purple-500/25 text-purple-300 border border-purple-400/50">
+      ↑ OUT
+    </span>
+  )
+}
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useI18n()
@@ -36,6 +50,61 @@ export function Transactions() {
   const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [expanded, setExpanded] = useState<number | null>(null)
+
+  // Transaction OCPP Log Modal States
+  const [selectedTxForLogs, setSelectedTxForLogs] = useState<Transaction | null>(null)
+  const [txLogActionFilter, setTxLogActionFilter] = useState<string>('all')
+  const [txLogSearch, setTxLogSearch] = useState<string>('')
+  const [inspectMessage, setInspectMessage] = useState<OcppMessage | null>(null)
+  const [copiedPayloadId, setCopiedPayloadId] = useState<number | null>(null)
+
+  const { data: rawTxMessages = [], isLoading: isTxLogsLoading } = useQuery<OcppMessage[]>({
+    queryKey: ['txOcppMessages', selectedTxForLogs?.charge_point_id],
+    queryFn: () => api.getMessages(selectedTxForLogs!.charge_point_id, 1000),
+    enabled: Boolean(selectedTxForLogs),
+    refetchInterval: 4000,
+  })
+
+  const txLogsForSelected = useMemo(() => {
+    if (!selectedTxForLogs) return []
+    const txIdStr = String(selectedTxForLogs.transaction_id)
+    return rawTxMessages.filter((m) => {
+      const p = m.payload
+      let matchTx = false
+      if (typeof p === 'object' && p !== null) {
+        if (String((p as any).transaction_id) === txIdStr || String((p as any).transactionId) === txIdStr) matchTx = true
+      } else if (typeof p === 'string') {
+        if (p.includes(`"transaction_id": ${txIdStr}`) || p.includes(`"transaction_id":${txIdStr}`) || p.includes(`"transactionId": ${txIdStr}`) || p.includes(`"transactionId":${txIdStr}`)) matchTx = true
+      }
+      if (!matchTx) return false
+
+      if (txLogActionFilter !== 'all' && m.action !== txLogActionFilter) return false
+      if (txLogSearch.trim()) {
+        const q = txLogSearch.toLowerCase()
+        const payloadStr = typeof m.payload === 'string' ? m.payload.toLowerCase() : JSON.stringify(m.payload).toLowerCase()
+        if (!m.action.toLowerCase().includes(q) && !payloadStr.includes(q)) return false
+      }
+      return true
+    })
+  }, [rawTxMessages, selectedTxForLogs, txLogActionFilter, txLogSearch])
+
+  const formatPayloadJson = (payload: unknown) => {
+    if (typeof payload === 'string') {
+      try {
+        return JSON.stringify(JSON.parse(payload), null, 2)
+      } catch {
+        return payload
+      }
+    }
+    return JSON.stringify(payload, null, 2)
+  }
+
+  const copyPayloadText = (msg: OcppMessage) => {
+    const str = formatPayloadJson(msg.payload)
+    navigator.clipboard.writeText(str)
+    setCopiedPayloadId(msg.id)
+    setTimeout(() => setCopiedPayloadId(null), 2000)
+  }
 
   const { data: txs = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions', filterCp, filterStatus],
@@ -369,11 +438,25 @@ export function Transactions() {
               {/* Collapsible Telemetry & Meter Chart */}
               {isOpen && (
                 <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 p-5 space-y-4 animate-fade-in">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-1 border-b border-slate-200/60 dark:border-white/5">
                     <h4 className="text-xs font-bold text-slate-900 dark:text-gray-200 uppercase tracking-wider flex items-center gap-2">
                       <Activity className="w-4 h-4 text-blue-500" />
-                      Telemetria & Curva de Carga da Transação
+                      Telemetria & Curva de Carga da Transação #{tx.transaction_id}
                     </h4>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setTxLogActionFilter('all')
+                        setTxLogSearch('')
+                        setSelectedTxForLogs(tx)
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/25 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Ver Logs OCPP da TX #{tx.transaction_id}</span>
+                    </button>
                   </div>
                   <MeterChart cpId={tx.charge_point_id} transactionId={tx.id} />
                 </div>
@@ -382,6 +465,239 @@ export function Transactions() {
           )
         })}
       </div>
+      {/* Dedicated Transaction OCPP Logs Modal */}
+      {selectedTxForLogs && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
+          onClick={() => setSelectedTxForLogs(null)}
+        >
+          <div
+            className="w-full max-w-5xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-950">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Histórico de Mensagens OCPP · <span className="font-mono text-blue-600 dark:text-blue-400">TX #{selectedTxForLogs.transaction_id}</span>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      {txLogsForSelected.length} msgs
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 font-mono mt-0.5">
+                    Posto: {selectedTxForLogs.charge_point_id} · Tomada #{selectedTxForLogs.connector_id} · {selectedTxForLogs.user_username ? `Condutor: ${selectedTxForLogs.user_username}` : `Tag: ${selectedTxForLogs.id_tag}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" />
+                  <input
+                    type="text"
+                    value={txLogSearch}
+                    onChange={(e) => setTxLogSearch(e.target.value)}
+                    placeholder="Pesquisar ação ou payload..."
+                    className="text-xs pl-8 pr-6 py-1.5 rounded-xl bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 w-44 sm:w-56"
+                  />
+                  {txLogSearch && (
+                    <button
+                      onClick={() => setTxLogSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Download CSV/JSON button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const jsonStr = JSON.stringify(txLogsForSelected, null, 2)
+                    const blob = new Blob([jsonStr], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `logs-tx-${selectedTxForLogs.transaction_id}.json`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  disabled={txLogsForSelected.length === 0}
+                  className="btn bg-blue-600 hover:bg-blue-500 text-white text-xs py-1.5 px-3 rounded-xl flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5" /> Descarregar Logs (.json)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedTxForLogs(null)}
+                  className="btn-ghost p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Action Pills */}
+            <div className="flex items-center gap-1.5 p-3 border-b border-slate-200 dark:border-white/10 bg-slate-100/60 dark:bg-gray-950/40 flex-wrap">
+              {['all', 'StartTransaction', 'MeterValues', 'StopTransaction'].map((act) => (
+                <button
+                  key={act}
+                  type="button"
+                  onClick={() => setTxLogActionFilter(act)}
+                  className={`text-xs font-semibold px-3 py-1 rounded-lg border transition-all cursor-pointer ${
+                    txLogActionFilter === act
+                      ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-400 dark:border-white/5'
+                  }`}
+                >
+                  {act === 'all' ? 'Todas as Mensagens' : act}
+                </button>
+              ))}
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 overflow-auto max-h-[55vh]">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-gray-950">
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-24">Dir</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-48">Ação OCPP</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px] w-36">Hora</th>
+                    <th className="text-left px-4 py-3 text-slate-900 dark:text-gray-200 font-bold uppercase tracking-wider text-[11px]">Conteúdo do Payload</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/10">
+                  {txLogsForSelected.map((m) => (
+                    <tr key={m.id} className="hover:bg-blue-50/80 dark:hover:bg-blue-500/15 transition-colors group">
+                      <td className="px-4 py-2.5 whitespace-nowrap"><DirectionBadge direction={m.direction} /></td>
+                      <td className="px-4 py-2.5 font-mono text-slate-900 dark:text-white font-bold whitespace-nowrap">{m.action}</td>
+                      <td className="px-4 py-2.5 text-slate-600 dark:text-gray-300 font-mono font-semibold whitespace-nowrap">
+                        {safeFormatDate(m.timestamp)}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-slate-800 dark:text-gray-200 text-xs">
+                        <div className="flex items-center gap-2 max-w-2xl">
+                          <span
+                            className="flex-1 truncate bg-slate-100 hover:bg-slate-200 dark:bg-black/60 dark:hover:bg-black/80 px-2.5 py-1 rounded border border-slate-200 dark:border-white/10 transition-colors select-all"
+                            title="Clique para ver o payload completo"
+                          >
+                            {typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setInspectMessage(m)}
+                            className="shrink-0 p-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[11px] font-bold flex items-center gap-1 px-2 transition-all cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Ver Total</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {txLogsForSelected.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-12 text-center text-slate-500 dark:text-gray-400">
+                        {isTxLogsLoading ? 'A carregar mensagens OCPP da transação…' : 'Nenhuma mensagem OCPP encontrada para esta transação.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-3 px-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-950 text-xs text-slate-500 dark:text-gray-400">
+              <span>{txLogsForSelected.length} mensagem(ns) OCPP registadas para a TX #{selectedTxForLogs.transaction_id}</span>
+              <button
+                type="button"
+                onClick={() => setSelectedTxForLogs(null)}
+                className="px-4 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white font-medium"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated Payload JSON Inspector Modal */}
+      {inspectMessage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-sm animate-fade-in"
+          onClick={() => setInspectMessage(null)}
+        >
+          <div
+            className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-950">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                  <Code className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Payload OCPP Completo · <span className="font-mono">{inspectMessage.action}</span>
+                    <DirectionBadge direction={inspectMessage.direction} />
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 font-mono mt-0.5">
+                    {safeFormatDate(inspectMessage.timestamp)} · ID #{inspectMessage.id}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyPayloadText(inspectMessage)}
+                  className="btn-secondary text-xs py-1.5 px-3 rounded-xl flex items-center gap-1.5"
+                >
+                  {copiedPayloadId === inspectMessage.id ? (
+                    <><Check className="w-3.5 h-3.5 text-emerald-500" /> Copiado!</>
+                  ) : (
+                    <><Copy className="w-3.5 h-3.5" /> Copiar JSON</>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInspectMessage(null)}
+                  className="btn-ghost p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-auto p-4 bg-slate-950">
+              <pre className="font-mono text-xs text-cyan-300 leading-relaxed whitespace-pre-wrap select-all">
+                <code>{formatPayloadJson(inspectMessage.payload)}</code>
+              </pre>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between p-3 px-4 border-t border-slate-800 bg-slate-900 text-xs text-gray-400">
+              <span>Formato: JSON Formatado</span>
+              <button
+                type="button"
+                onClick={() => setInspectMessage(null)}
+                className="px-4 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
