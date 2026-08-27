@@ -192,6 +192,9 @@ export function SmartCharging() {
       await api.applySmartChargingProfile(profileId, selectedCpId)
       showToast('success', t('smart.applyProfileSuccess', { name: preset.name, cp: selectedCpId }))
       await refetchProfiles()
+      if (isOnline) {
+        setTimeout(() => handleFetchCompositeSchedule(), 600)
+      }
     } catch (err: any) {
       showToast('error', t('smart.applyProfileError', { error: err?.response?.data?.detail || err.message }))
     } finally {
@@ -254,6 +257,9 @@ export function SmartCharging() {
       await api.applySmartChargingProfile(profileId, selectedCpId)
       showToast('success', t('smart.customProfileSuccess', { name: profileName }))
       await refetchProfiles()
+      if (isOnline) {
+        setTimeout(() => handleFetchCompositeSchedule(), 600)
+      }
     } catch (err: any) {
       showToast('error', t('smart.customProfileError', { error: err?.response?.data?.detail || err.message }))
     } finally {
@@ -279,11 +285,12 @@ export function SmartCharging() {
     if (!selectedCpId) return
     setLoadingAction('composite')
     try {
+      const activeUnit = activeProfile?.charging_rate_unit || (isDC ? 'W' : 'A')
       const data = await api.getCompositeSchedule({
         charge_point_id: selectedCpId,
         connector_id: connectorId || 1,
         duration: 86400,
-        rate_unit: rateUnit,
+        rate_unit: activeUnit,
       })
       setCompositeData(data)
       showToast('success', t('smart.compositeSuccess'))
@@ -1060,6 +1067,9 @@ export function SmartCharging() {
                         onClick={() => api.applySmartChargingProfile(prof.id, selectedCpId).then(() => {
                           showToast('success', t('smart.profileRedeployed', { id: prof.profile_id }))
                           refetchProfiles()
+                          if (isOnline) {
+                            setTimeout(() => handleFetchCompositeSchedule(), 600)
+                          }
                         })}
                         disabled={!isOnline}
                         title="Reenviar e Ativar este perfil no posto"
