@@ -93,10 +93,18 @@ async def create_or_update_meter_key(cp_id: str, req: MeterKeyCreate, db: AsyncS
     )
     existing = r_existing.scalar_one_or_none()
 
+    # Normalize public key to canonical SEC1 format if it contains an embedded EC point
+    normalized_hex = req.public_key_hex.strip()
+    match_ec = re.search(r"04[0-9a-fA-F]{128}", normalized_hex, re.IGNORECASE)
+    if match_ec:
+        normalized_hex = match_ec.group(0)
+    elif len(normalized_hex) == 128 and re.match(r"^[0-9a-fA-F]{128}$", normalized_hex):
+        normalized_hex = "04" + normalized_hex
+
     if existing:
         existing.meter_model = req.meter_model
         existing.serial_number = req.serial_number
-        existing.public_key_hex = req.public_key_hex.strip()
+        existing.public_key_hex = normalized_hex
         existing.curve_name = req.curve_name
         existing.is_active = True
         await db.commit()
@@ -109,7 +117,7 @@ async def create_or_update_meter_key(cp_id: str, req: MeterKeyCreate, db: AsyncS
             connector_id=req.connector_id,
             meter_model=req.meter_model,
             serial_number=req.serial_number,
-            public_key_hex=req.public_key_hex.strip(),
+            public_key_hex=normalized_hex,
             curve_name=req.curve_name,
             is_active=True,
         )

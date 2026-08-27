@@ -170,40 +170,76 @@ def parse_ocmf(ocmf_str: str) -> OcmfParseResult:
 
 def load_public_key_from_string(key_str: str, curve_hint: str = "secp256r1") -> Any:
     """
-    Load an ECDSA public key from Hex (compressed/uncompressed), PEM, or Base64.
-    Supports secp256r1 (NIST P-256) and brainpoolP256r1.
+    Universal ECDSA Public Key Loader for LEM DCBM meters.
+    Supports:
+    - Raw SEC1 Uncompressed Hex (130 hex chars / 65 bytes starting with 04)
+    - Raw 64-byte Hex (128 hex chars without leading 04)
+    - Raw SEC1 Compressed Hex (66 hex chars / 33 bytes starting with 02/03)
+    - Partial or Full ASN.1 DER Structures (e.g. 020106082A8648CE3D03010703420004...)
+    - X.509 SubjectPublicKeyInfo in DER (Hex or Base64)
+    - Standard PEM formatted keys (-----BEGIN PUBLIC KEY-----)
     """
+    if not key_str:
+        raise ValueError("Chave pública não fornecida")
+
     clean_key = key_str.strip()
 
     # 1. PEM format
-    if "BEGIN PUBLIC KEY" in clean_key or "BEGIN EC PUBLIC KEY" in clean_key:
+    if "BEGIN PUBLIC KEY" in clean_key or "BEGIN CERTIFICATE" in clean_key or "BEGIN EC PUBLIC KEY" in clean_key:
         return load_pem_public_key(clean_key.encode("utf-8"))
 
-    # 2. Hex format (Uncompressed 04... 65 bytes / 130 hex chars or Compressed 02/03... 33 bytes / 66 hex chars)
+    # Curve selection
+    curve = ec.BrainpoolP256R1() if "brainpool" in curve_hint.lower() else ec.SECP256R1()
+
+    # Clean hex string
     hex_clean = re.sub(r"[^0-9a-fA-F]", "", clean_key)
+
+    # 2. Check if embedded uncompressed EC point (04 + 128 hex = 130 chars) exists inside ASN.1 / partial DER or raw
+    ec_uncompressed_match = re.search(r"04[0-9a-fA-F]{128}", hex_clean, re.IGNORECASE)
+    if ec_uncompressed_match:
+        try:
+            pt_bytes = binascii.unhexlify(ec_uncompressed_match.group(0))
+            return ec.EllipticCurvePublicKey.from_encoded_point(curve, pt_bytes)
+        except Exception:
+            pass
+
+    # 3. Check if exact 64 bytes (128 hex chars without leading 04)
+    if len(hex_clean) == 128:
+        try:
+            pt_bytes = b"\x04" + binascii.unhexlify(hex_clean)
+            return ec.EllipticCurvePublicKey.from_encoded_point(curve, pt_bytes)
+        except Exception:
+            pass
+
+    # 4. Check if compressed EC point (02 or 03 + 64 hex = 66 chars)
+    if len(hex_clean) == 66 and (hex_clean.startswith("02") or hex_clean.startswith("03")):
+        try:
+            pt_bytes = binascii.unhexlify(hex_clean)
+            return ec.EllipticCurvePublicKey.from_encoded_point(curve, pt_bytes)
+        except Exception:
+            pass
+
+    # 5. Try standard DER SubjectPublicKeyInfo
     try:
         raw_bytes = binascii.unhexlify(hex_clean)
-        
-        # Select curve
-        if "brainpool" in curve_hint.lower():
-            curve = ec.BrainpoolP256R1()
-        else:
-            curve = ec.SECP256R1()
+        return load_der_public_key(raw_bytes)
+    except Exception:
+        pass
 
-        if len(raw_bytes) in (65, 33):
-            return ec.EllipticCurvePublicKey.from_encoded_point(curve, raw_bytes)
-        elif len(raw_bytes) == 64:
-            uncompressed = b"\x04" + raw_bytes
-            return ec.EllipticCurvePublicKey.from_encoded_point(curve, uncompressed)
-        else:
-            return load_der_public_key(raw_bytes)
-    except Exception as e:
-        logger.debug(f"Hex public key decode fallback: {e}")
-
-    # 3. Base64 DER format
+    # 6. Try Base64 DER
     try:
         der_bytes = base64.b64decode(clean_key)
         return load_der_public_key(der_bytes)
+    except Exception:
+        pass
+
+    # 7. Try Base64 raw EC Point
+    try:
+        b64_bytes = base64.b64decode(clean_key)
+        if len(b64_bytes) in (65, 33):
+            return ec.EllipticCurvePublicKey.from_encoded_point(curve, b64_bytes)
+        elif len(b64_bytes) == 64:
+            return ec.EllipticCurvePublicKey.from_encoded_point(curve, b"\x04" + b64_bytes)
     except Exception:
         pass
 
