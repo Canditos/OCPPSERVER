@@ -65,6 +65,14 @@ async def _add_missing_columns(conn) -> None:
         ("charging_profiles", "active", "BOOLEAN DEFAULT 1" if is_sqlite else "BOOLEAN DEFAULT TRUE"),
         ("charging_profiles", "is_deployed", "BOOLEAN DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT FALSE"),
         ("users", "full_name", "VARCHAR(128)"),
+        ("chargers", "is_eichrecht_compliant", "BOOLEAN NOT NULL DEFAULT 0" if is_sqlite else "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("transactions", "ocmf_start_raw", "TEXT"),
+        ("transactions", "ocmf_stop_raw", "TEXT"),
+        ("transactions", "ocmf_verified", "BOOLEAN DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT FALSE"),
+        ("transactions", "ocmf_verification_error", "VARCHAR(256)"),
+        ("transactions", "ocmf_meter_serial", "VARCHAR(64)"),
+        ("transactions", "signed_energy_kwh", "FLOAT"),
+        ("meter_values", "format", "VARCHAR(32) DEFAULT 'Raw'"),
     ]
 
     for table, column, col_type in cols_to_add:
@@ -129,7 +137,7 @@ async def _seed_root_ca(session: AsyncSession) -> None:
 
 
 async def init_db():
-    from models import charger, transaction, configuration, auth_token, authorized_tag, charging_profile, user  # noqa: F401
+    from models import charger, transaction, configuration, auth_token, authorized_tag, charging_profile, user, meter_key  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _add_missing_columns(conn)
