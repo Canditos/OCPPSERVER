@@ -253,7 +253,8 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
     import json
     import re
     from ocpp_server.central_system import get_charge_point
-    from models.charger import OcppMessage, ChargerConfiguration
+    from models.charger import OcppMessage
+    from models.configuration import ChargerConfiguration
 
     r_c = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
     charger = r_c.scalar_one_or_none()
@@ -348,6 +349,7 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
         key_obj = existing
     else:
         key_obj = MeterPublicKey(
+            charger_id=charger.id,
             charge_point_id=cp_id,
             connector_id=connector_id,
             meter_model=discovered_model,
