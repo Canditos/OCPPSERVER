@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { OcmfValidationModal } from '../components/OcmfValidationModal'
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -483,13 +484,13 @@ export function Transactions() {
         })}
       </div>
       {/* Dedicated Transaction OCPP Logs Modal */}
-      {selectedTxForLogs && (
+      {selectedTxForLogs && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto"
           onClick={() => setSelectedTxForLogs(null)}
         >
           <div
-            className="w-full max-w-5xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+            className="w-full max-w-5xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -641,7 +642,8 @@ export function Transactions() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Dedicated OCMF Eichrecht Validation Modal */}
@@ -653,13 +655,13 @@ export function Transactions() {
       )}
 
       {/* Dedicated Payload JSON Inspector Modal */}
-      {inspectMessage && (
+      {inspectMessage && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-sm animate-fade-in overflow-y-auto"
           onClick={() => setInspectMessage(null)}
         >
           <div
-            className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+            className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -721,7 +723,8 @@ export function Transactions() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

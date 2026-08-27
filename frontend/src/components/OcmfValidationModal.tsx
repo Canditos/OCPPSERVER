@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   ShieldCheck, ShieldAlert, Shield, Download, Copy, Check,
@@ -31,9 +32,17 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
   const isStartVerified = report?.start_report?.verified ?? false
   const isFullyVerified = isStopVerified && (report?.ocmf_start_raw ? isStartVerified : true)
 
-  return (
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [])
+
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto"
       onClick={onClose}
     >
       <div
@@ -337,6 +346,7 @@ ${report.ocmf_start_raw}`
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
