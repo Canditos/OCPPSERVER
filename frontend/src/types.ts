@@ -185,3 +185,17 @@ export interface OcppEvent {
   type: string
   data: Record<string, any>
 }
+
+export interface MeterKeyData {
+  id: number
+  charger_id: number
+  charge_point_id: string
+  connector_id: number
+  meter_model: string
+  serial_number: string
+  public_key_hex: string
+  curve_name: string
+  is_valid: boolean
+  registered_at: string
+}
+

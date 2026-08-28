@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { API_BASE } from './config'
-import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken, OcmfAuditReport } from './types'
+import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken, OcmfAuditReport, MeterKeyData } from './types'
 
 const http = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' })
 
@@ -222,6 +222,18 @@ export const api = {
   }) => http.delete('/smart-charging/clear', { data }).then(r => r.data),
 
   // OCMF & Eichrecht Legal Metrology
+  getMeterKeys: (cpId?: string) =>
+    http.get<MeterKeyData[]>(cpId ? `/ocmf/meter-keys?charge_point_id=${cpId}` : '/ocmf/meter-keys').then(r => r.data),
+  createOrUpdateMeterKey: (cpId: string, data: {
+    connector_id: number
+    meter_model?: string
+    serial_number?: string
+    public_key_hex: string
+    curve_name?: string
+  }) =>
+    http.post('/ocmf/meter-keys', { charge_point_id: cpId, ...data }).then(r => r.data),
+  deleteMeterKey: (cpId: string, keyId: number) =>
+    http.delete(`/ocmf/meter-keys/${keyId}`).then(r => r.data),
   getTransactionOcmf: (txId: number) =>
     http.get<OcmfAuditReport>(`/ocmf/transactions/${txId}`).then(r => r.data),
   downloadTransactionOcmf: (txId: number) => {

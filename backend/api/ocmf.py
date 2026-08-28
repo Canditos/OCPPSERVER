@@ -38,8 +38,12 @@ class MeterKeyUpdateRequest(BaseModel):
 
 
 @router.get("/meter-keys")
-async def list_meter_keys(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(MeterPublicKey).order_by(MeterPublicKey.id.asc()))
+async def list_meter_keys(charge_point_id: str | None = None, db: AsyncSession = Depends(get_db)):
+    q = select(MeterPublicKey)
+    if charge_point_id:
+        q = q.where(MeterPublicKey.charge_point_id == charge_point_id)
+    q = q.order_by(MeterPublicKey.id.asc())
+    result = await db.execute(q)
     keys = result.scalars().all()
     return [
         {
@@ -51,6 +55,7 @@ async def list_meter_keys(db: AsyncSession = Depends(get_db)):
             "serial_number": k.serial_number,
             "public_key_hex": k.public_key_hex,
             "curve_name": k.curve_name,
+            "is_valid": True,
             "is_active": k.is_active,
             "created_at": k.created_at.isoformat() if k.created_at else None,
             "updated_at": k.updated_at.isoformat() if k.updated_at else None,
