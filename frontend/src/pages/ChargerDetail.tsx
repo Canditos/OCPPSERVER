@@ -67,6 +67,20 @@ export function ChargerDetail() {
 
   const [isExtractingKey, setIsExtractingKey] = useState<boolean>(false)
 
+  // Prefill form with existing meter key data when connector or meterKeys change
+  useEffect(() => {
+    const existing = meterKeys.find((k) => k.connector_id === lemConnectorId)
+    if (existing) {
+      setLemPubKeyHex(existing.public_key_hex || '')
+      setLemSerial(existing.serial_number || '')
+      setLemModel(existing.meter_model || 'LEM DCBM 400')
+      setLemCurve(existing.curve_name || 'secp256r1')
+    } else {
+      setLemPubKeyHex('')
+      setLemSerial('')
+    }
+  }, [lemConnectorId, meterKeys])
+
   const handleExtractMeterKey = async () => {
     if (!id) return
     setIsExtractingKey(true)
@@ -74,14 +88,17 @@ export function ChargerDetail() {
     try {
       const res = await api.extractMeterKey(id, lemConnectorId)
       setLemPubKeyHex(res.public_key_hex || '')
+      setLemSerial(res.serial_number || '')
       setLemModel(res.meter_model || 'LEM DCBM 400')
+      setLemCurve(res.curve_name || 'secp256r1')
       setLemFeedback({
         type: 'success',
         message: res.message || `Chave do medidor extraída com sucesso via ${res.source}!`,
       })
-      queryClient.invalidateQueries({ queryKey: ['meter-keys', id] })
+      queryClient.invalidateQueries({ queryKey: ['meterKeys', id] })
       queryClient.invalidateQueries({ queryKey: ['charger', id] })
       queryClient.invalidateQueries({ queryKey: ['chargers'] })
+      refetchMeterKeys()
     } catch (err: any) {
       setLemFeedback({
         type: 'error',
