@@ -128,6 +128,30 @@ export interface Transaction {
   user_username?: string | null
   user_email?: string | null
   user_role?: string | null
+  ocmf_verified?: boolean | null
+  ocmf_verification_error?: string | null
+  ocmf_meter_serial?: string | null
+  ocmf_start_raw?: string | null
+  ocmf_stop_raw?: string | null
+  signed_energy_kwh?: number | null
+}
+
+export interface OcmfAuditReport {
+  transaction_id: number
+  charge_point_id: string
+  connector_id: number
+  meter_serial: string | null
+  meter_model: string
+  has_meter_key: boolean
+  public_key_hex: string | null
+  curve_name: string
+  ocmf_verified: boolean | null
+  ocmf_verification_error: string | null
+  signed_energy_kwh: number | null
+  start_report?: any
+  stop_report?: any
+  ocmf_start_raw: string | null
+  ocmf_stop_raw: string | null
 }
 
 export interface MeterValue {

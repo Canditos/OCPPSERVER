@@ -1,40 +1,30 @@
-"""
-OCMF (Open Charge Metering Format) Engine
-Supports OCMF V1.0.x through V1.4.1 specification by S.A.F.E. e.V.
-Handles parsing, OBIS code mapping, cable loss compensation, and ECDSA cryptographic verification.
-"""
-
 import base64
 import binascii
 import json
 import logging
 import re
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
-
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes
+from typing import Any, Dict, List, Optional
 from cryptography.hazmat.primitives.asymmetric import ec, utils
-from cryptography.hazmat.primitives.serialization import (
-    load_der_public_key,
-    load_pem_public_key,
-)
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import load_pem_public_key, load_der_public_key
+from cryptography.exceptions import InvalidSignature
 
 logger = logging.getLogger(__name__)
 
-# Standard OBIS code mappings
 OBIS_DESCRIPTIONS = {
-    "1-0:1.8.0": "Energia Ativa Importada Total (Active Energy Import)",
-    "1-0:1.8.0*ff": "Energia Ativa Importada Total (Active Energy Import)",
-    "1-0:2.8.0": "Energia Ativa Exportada Total (Active Energy Export)",
-    "1-0:1.4.0": "Potência Ativa Atual (Active Power)",
-    "1-0:1.2.0": "Compensação de Perdas no Cabo (Cable Loss Compensation)",
-    "1-0:31.7.0": "Corrente Linha 1 / Fase DC (Current L1/DC)",
-    "1-0:51.7.0": "Corrente Linha 2 (Current L2)",
-    "1-0:71.7.0": "Corrente Linha 3 (Current L3)",
-    "1-0:32.7.0": "Tensão Linha 1 / DC (Voltage L1/DC)",
-    "1-0:52.7.0": "Tensão Linha 2 (Voltage L2)",
-    "1-0:72.7.0": "Tensão Linha 3 (Voltage L3)",
+    "1-0:1.8.0": "Total Active Energy Import (Active Total)",
+    "1-0:1.8.1": "Active Energy Import Tariff 1 (T1)",
+    "1-0:1.8.2": "Active Energy Import Tariff 2 (T2)",
+    "1-0:2.8.0": "Total Active Energy Export",
+    "1-0:3.8.0": "Reactive Energy Import (Q+)",
+    "1-0:4.8.0": "Reactive Energy Export (Q-)",
+    "1-0:1.4.0": "Current Active Power Import",
+    "1-0:31.7.0": "Phase L1 Instantaneous Current",
+    "1-0:51.7.0": "Phase L2 Instantaneous Current",
+    "1-0:71.7.0": "Phase L3 Instantaneous Current",
+    "1-0:32.7.0": "Phase L1 Voltage",
+    "1-0:52.7.0": "Phase L2 Voltage",
+    "1-0:72.7.0": "Phase L3 Voltage",
 }
 
 
@@ -43,15 +33,15 @@ class OcmfParseResult:
         self,
         is_valid_format: bool,
         raw_ocmf: str,
-        version: str = "1.0",
-        gateway_id: str = "",
-        status: str = "",  # G (Start), I (Intermediate), T (Stop)
+        version: Optional[str] = None,
+        gateway_id: Optional[str] = None,
+        status: Optional[str] = None,
         timestamp: Optional[str] = None,
         identification_status: Optional[str] = None,
         meter_readings: Optional[List[Dict[str, Any]]] = None,
-        signature_data: str = "",
-        signature_algo: str = "ECDSA-secp256r1-SHA256",
-        raw_data_to_verify: str = "",
+        signature_data: Optional[str] = None,
+        signature_algo: Optional[str] = None,
+        raw_data_to_verify: Optional[str] = None,
         error: Optional[str] = None,
     ):
         self.is_valid_format = is_valid_format
@@ -63,8 +53,8 @@ class OcmfParseResult:
         self.identification_status = identification_status
         self.meter_readings = meter_readings or []
         self.signature_data = signature_data
-        self.signature_algo = signature_algo
-        self.raw_data_to_verify = raw_data_to_verify
+        self.signature_algo = signature_algo or "ECDSA-secp256r1-SHA256"
+        self.raw_data_to_verify = raw_data_to_verify or ""
         self.error = error
 
     def to_dict(self) -> Dict[str, Any]:
@@ -73,71 +63,68 @@ class OcmfParseResult:
             "version": self.version,
             "gateway_id": self.gateway_id,
             "status": self.status,
-            "status_label": {
-                "G": "Início de Transação (Start / ST=G)",
-                "I": "Leitura Periódica (Intermediate / ST=I)",
-                "T": "Fim de Transação (Stop / ST=T)",
-            }.get(self.status, self.status),
             "timestamp": self.timestamp,
             "identification_status": self.identification_status,
             "meter_readings": self.meter_readings,
-            "signature_data": self.signature_data,
             "signature_algo": self.signature_algo,
+            "signature_data_preview": (self.signature_data[:32] + "...") if self.signature_data else None,
             "error": self.error,
         }
 
 
 def parse_ocmf(ocmf_str: str) -> OcmfParseResult:
     """
-    Parse an OCMF formatted string according to S.A.F.E. specification.
-    Format: OCMF|<DATA_JSON>|<SIGNATURE_JSON> or plain JSON containing OCMF properties.
+    Parses an OCMF (Open Charge Metering Format) string.
+    Format: OCMF|<JSON_DATA>|<JSON_SIGNATURE>
     """
     if not ocmf_str or not isinstance(ocmf_str, str):
         return OcmfParseResult(False, str(ocmf_str), error="Payload OCMF vazio ou inválido")
 
     clean_str = ocmf_str.strip()
+    if clean_str.startswith('"') and clean_str.endswith('"'):
+        clean_str = clean_str[1:-1]
 
-    # Pipe-separated standard format: OCMF|{...}|{...}
-    if clean_str.startswith("OCMF|"):
-        parts = clean_str.split("|")
-        if len(parts) < 3:
-            return OcmfParseResult(False, clean_str, error="Estrutura OCMF incompleta (esperado OCMF|<DATA>|<SIG>)")
+    parts = clean_str.split("|")
+    if len(parts) < 3 or parts[0].upper() != "OCMF":
+        return OcmfParseResult(
+            False,
+            clean_str,
+            error="Formato de cabeçalho OCMF inválido (deve iniciar com 'OCMF|...|...')"
+        )
 
-        data_part = parts[1]
-        sig_part = parts[2]
-        raw_data_to_verify = data_part
+    raw_data_to_verify = parts[1]
+    raw_sig = parts[2]
 
-        try:
-            data_json = json.loads(data_part)
-            sig_json = json.loads(sig_part) if sig_part else {}
-        except Exception as e:
-            return OcmfParseResult(False, clean_str, error=f"Erro ao interpretar JSON OCMF: {e}")
-    else:
-        # Check if plain JSON
-        try:
-            data_json = json.loads(clean_str)
-            sig_json = data_json.get("SD", {}) if isinstance(data_json.get("SD"), dict) else {}
-            raw_data_to_verify = clean_str
-        except Exception:
-            return OcmfParseResult(False, clean_str, error="Formato OCMF não reconhecido (deve iniciar com OCMF| ou ser JSON)")
+    try:
+        data_json = json.loads(raw_data_to_verify)
+    except Exception as e:
+        return OcmfParseResult(
+            False,
+            clean_str,
+            error=f"Falha ao interpretar bloco de dados JSON do OCMF: {e}"
+        )
 
-    # Extract standard fields
-    version = data_json.get("FV", data_json.get("ver", "1.0"))
-    gateway_id = data_json.get("GI", data_json.get("gateway_id", ""))
+    try:
+        sig_json = json.loads(raw_sig)
+    except Exception:
+        sig_json = {"SD": raw_sig, "SA": "ECDSA-secp256r1-SHA256"}
+
+    version = data_json.get("FV", data_json.get("version", "1.0"))
+    gateway_id = data_json.get("GS", data_json.get("MS", data_json.get("GI", "")))
     status = data_json.get("ST", data_json.get("status", ""))
     is_status = data_json.get("IS", None)
     t_val = data_json.get("t", data_json.get("timestamp", None))
 
     # Read readings (RV array or direct OBIS entries)
     readings: List[Dict[str, Any]] = []
-    raw_rv = data_json.get("RV", data_json.get("readings", []))
+    raw_rv = data_json.get("RD", data_json.get("RV", data_json.get("readings", [])))
     if isinstance(raw_rv, list):
         for item in raw_rv:
             if isinstance(item, dict):
-                obis = item.get("t", item.get("obis", ""))
-                val = item.get("v", item.get("value", 0))
-                unit = item.get("u", item.get("unit", "Wh"))
-                loss = item.get("l", item.get("loss", None))
+                obis = item.get("RI", item.get("t", item.get("obis", "")))
+                val = item.get("RV", item.get("v", item.get("value", 0)))
+                unit = item.get("RU", item.get("u", item.get("unit", "kWh")))
+                loss = item.get("UC", item.get("l", item.get("loss", None)))
                 readings.append({
                     "obis": obis,
                     "description": OBIS_DESCRIPTIONS.get(obis, f"Código OBIS {obis}"),
@@ -146,7 +133,6 @@ def parse_ocmf(ocmf_str: str) -> OcmfParseResult:
                     "cable_loss": loss,
                 })
 
-    # Extract signature
     sig_data = sig_json.get("SD", "") if isinstance(sig_json, dict) else ""
     if not sig_data and isinstance(data_json.get("SD"), str):
         sig_data = data_json["SD"]
@@ -175,7 +161,7 @@ def load_public_key_from_string(key_str: str, curve_hint: str = "secp256r1") -> 
     - Raw SEC1 Uncompressed Hex (130 hex chars / 65 bytes starting with 04)
     - Raw 64-byte Hex (128 hex chars without leading 04)
     - Raw SEC1 Compressed Hex (66 hex chars / 33 bytes starting with 02/03)
-    - Partial or Full ASN.1 DER Structures (e.g. 020106082A8648CE3D03010703420004...)
+    - Partial or Full ASN.1 DER Structures
     - X.509 SubjectPublicKeyInfo in DER (Hex or Base64)
     - Standard PEM formatted keys (-----BEGIN PUBLIC KEY-----)
     """
@@ -242,12 +228,6 @@ def load_public_key_from_string(key_str: str, curve_hint: str = "secp256r1") -> 
             return ec.EllipticCurvePublicKey.from_encoded_point(curve, b"\x04" + b64_bytes)
     except Exception:
         pass
-
-    # 8. Fallback for truncated/corrupted ASN.1 keys (e.g. starting with 02010608)
-    if "02010608" in hex_clean or len(hex_clean) < 66:
-        factory_lem_key = "04039b53aa82192578b6072ada612554a768cd0a48c0bb37b792c8938033b06e350527995ee44e71be19135402b363ae9aa347734331ae1d18abd57e5487a5368b"
-        pt_bytes = binascii.unhexlify(factory_lem_key)
-        return ec.EllipticCurvePublicKey.from_encoded_point(curve, pt_bytes)
 
     raise ValueError("Formato de Chave Pública não reconhecido (use Hexadecimal 04..., PEM ou DER)")
 

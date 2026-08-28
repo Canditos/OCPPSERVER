@@ -1,152 +1,172 @@
-"""
-OCMF and LEM Meter Keys REST API endpoints.
-Provides manual verification, meter public key management, and official .ocmf export.
-"""
-
-from typing import Optional, List, Dict, Any
+import json
+import logging
+import re
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
-from sqlalchemy import select, delete
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models.charger import Charger
-from models.meter_key import MeterPublicKey
+from models.charger import Charger, OcppMessage
+from models.meter_public_key import MeterPublicKey
 from models.transaction import Transaction
 from services.ocmf_service import parse_ocmf, verify_ocmf_signature, load_public_key_from_string
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ocmf", tags=["OCMF & Eichrecht"])
 
 
-class VerifyManualRequest(BaseModel):
-    ocmf_data: str
-    public_key: str
-    curve_name: str = "secp256r1"
-
-
-class MeterKeyCreate(BaseModel):
+class MeterKeyCreateRequest(BaseModel):
+    charger_id: Optional[int] = None
+    charge_point_id: str
     connector_id: int = 1
     meter_model: str = "LEM DCBM 400"
     serial_number: Optional[str] = None
     public_key_hex: str
     curve_name: str = "secp256r1"
+    is_active: bool = True
 
 
-class MeterKeyOut(BaseModel):
-    id: int
-    charge_point_id: str
-    connector_id: int
-    meter_model: str
-    serial_number: Optional[str]
-    public_key_hex: str
-    curve_name: str
-    is_active: bool
-
-    class Config:
-        from_attributes = True
+class MeterKeyUpdateRequest(BaseModel):
+    meter_model: Optional[str] = None
+    serial_number: Optional[str] = None
+    public_key_hex: Optional[str] = None
+    curve_name: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
-@router.post("/verify-manual")
-async def verify_manual_ocmf(req: VerifyManualRequest):
-    """
-    Manually verify an OCMF payload string using a LEM DCBM public key.
-    """
-    result = verify_ocmf_signature(req.ocmf_data, req.public_key, req.curve_name)
-    return result
+@router.get("/meter-keys")
+async def list_meter_keys(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(MeterPublicKey).order_by(MeterPublicKey.id.asc()))
+    keys = result.scalars().all()
+    return [
+        {
+            "id": k.id,
+            "charger_id": k.charger_id,
+            "charge_point_id": k.charge_point_id,
+            "connector_id": k.connector_id,
+            "meter_model": k.meter_model,
+            "serial_number": k.serial_number,
+            "public_key_hex": k.public_key_hex,
+            "curve_name": k.curve_name,
+            "is_active": k.is_active,
+            "created_at": k.created_at.isoformat() if k.created_at else None,
+            "updated_at": k.updated_at.isoformat() if k.updated_at else None,
+        }
+        for k in keys
+    ]
 
 
-@router.get("/chargers/{cp_id}/keys", response_model=List[MeterKeyOut])
-async def get_meter_keys(cp_id: str, db: AsyncSession = Depends(get_db)):
-    """
-    Get configured LEM meter public keys for a specific charge point.
-    """
-    r = await db.execute(
-        select(MeterPublicKey)
-        .where(MeterPublicKey.charge_point_id == cp_id)
-        .order_by(MeterPublicKey.connector_id.asc())
-    )
-    return list(r.scalars().all())
-
-
-@router.post("/chargers/{cp_id}/keys", response_model=MeterKeyOut)
-async def create_or_update_meter_key(cp_id: str, req: MeterKeyCreate, db: AsyncSession = Depends(get_db)):
-    """
-    Register or update a LEM meter public key for a charger connector.
-    """
-    # Verify key format first
+@router.post("/meter-keys")
+async def create_or_update_meter_key(req: MeterKeyCreateRequest, db: AsyncSession = Depends(get_db)):
     try:
         load_public_key_from_string(req.public_key_hex, curve_hint=req.curve_name)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Chave pública inválida: {e}")
+        raise HTTPException(status_code=400, detail=f"Chave Pública inválida: {e}")
 
-    r_c = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
-    charger = r_c.scalar_one_or_none()
-    if not charger:
-        raise HTTPException(status_code=404, detail="Carregador não encontrado")
+    charger_id = req.charger_id
+    if not charger_id:
+        r_c = await db.execute(select(Charger).where(Charger.charge_point_id == req.charge_point_id))
+        c = r_c.scalar_one_or_none()
+        if c:
+            charger_id = c.id
+        else:
+            charger_id = 0
 
-    # Check if exists for this connector
     r_existing = await db.execute(
         select(MeterPublicKey).where(
-            MeterPublicKey.charge_point_id == cp_id,
-            MeterPublicKey.connector_id == req.connector_id
+            MeterPublicKey.charge_point_id == req.charge_point_id,
+            MeterPublicKey.connector_id == req.connector_id,
         )
     )
     existing = r_existing.scalar_one_or_none()
 
-    # Normalize public key to canonical SEC1 format if it contains an embedded EC point
-    normalized_hex = req.public_key_hex.strip()
-    match_ec = re.search(r"04[0-9a-fA-F]{128}", normalized_hex, re.IGNORECASE)
-    if match_ec:
-        normalized_hex = match_ec.group(0)
-    elif len(normalized_hex) == 128 and re.match(r"^[0-9a-fA-F]{128}$", normalized_hex):
-        normalized_hex = "04" + normalized_hex
-
     if existing:
         existing.meter_model = req.meter_model
-        existing.serial_number = req.serial_number
-        existing.public_key_hex = normalized_hex
+        existing.serial_number = req.serial_number or existing.serial_number
+        existing.public_key_hex = req.public_key_hex.strip()
         existing.curve_name = req.curve_name
-        existing.is_active = True
-        await db.commit()
-        await db.refresh(existing)
-        return existing
+        existing.is_active = req.is_active
+        key_obj = existing
     else:
-        new_key = MeterPublicKey(
-            charger_id=charger.id,
-            charge_point_id=cp_id,
+        key_obj = MeterPublicKey(
+            charger_id=charger_id,
+            charge_point_id=req.charge_point_id,
             connector_id=req.connector_id,
             meter_model=req.meter_model,
             serial_number=req.serial_number,
-            public_key_hex=normalized_hex,
+            public_key_hex=req.public_key_hex.strip(),
             curve_name=req.curve_name,
-            is_active=True,
+            is_active=req.is_active,
         )
-        charger.is_eichrecht_compliant = True
-        db.add(new_key)
-        await db.commit()
-        await db.refresh(new_key)
-        return new_key
+        db.add(key_obj)
 
-
-@router.delete("/chargers/{cp_id}/keys/{key_id}")
-async def delete_meter_key(cp_id: str, key_id: int, db: AsyncSession = Depends(get_db)):
-    """
-    Remove a configured LEM meter key.
-    """
-    r = await db.execute(select(MeterPublicKey).where(MeterPublicKey.id == key_id, MeterPublicKey.charge_point_id == cp_id))
-    key_row = r.scalar_one_or_none()
-    if not key_row:
-        raise HTTPException(status_code=404, detail="Chave de medidor não encontrada")
-    await db.delete(key_row)
     await db.commit()
-    return {"message": "Chave de medidor removida com sucesso"}
+    await db.refresh(key_obj)
+
+    # Trigger automatic re-verification for transactions of this charger/connector
+    await reverify_transactions_internal(db, req.charge_point_id, req.connector_id)
+
+    return {"status": "ok", "id": key_obj.id, "message": "Chave pública do medidor gravada com sucesso!"}
+
+
+@router.post("/reverify-transactions")
+async def reverify_all_transactions(db: AsyncSession = Depends(get_db)):
+    count = await reverify_transactions_internal(db)
+    return {"status": "ok", "reverified_count": count, "message": f"{count} transações verificadas com sucesso!"}
+
+
+async def reverify_transactions_internal(
+    db: AsyncSession,
+    charge_point_id: Optional[str] = None,
+    connector_id: Optional[int] = None
+) -> int:
+    query = select(Transaction).where(
+        (Transaction.ocmf_stop_raw.isnot(None)) | (Transaction.ocmf_start_raw.isnot(None))
+    )
+    if charge_point_id:
+        query = query.where(Transaction.charge_point_id == charge_point_id)
+    if connector_id:
+        query = query.where(Transaction.connector_id == connector_id)
+
+    r_txs = await db.execute(query)
+    txs = r_txs.scalars().all()
+    count = 0
+
+    for tx in txs:
+        # Find key
+        r_k = await db.execute(
+            select(MeterPublicKey).where(
+                MeterPublicKey.charge_point_id == tx.charge_point_id,
+                MeterPublicKey.connector_id == tx.connector_id,
+                MeterPublicKey.is_active == True,
+            )
+        )
+        key_obj = r_k.scalar_one_or_none()
+
+        ocmf_payload = tx.ocmf_stop_raw or tx.ocmf_start_raw
+        if ocmf_payload:
+            parsed = parse_ocmf(ocmf_payload)
+            if parsed.is_valid_format:
+                tx.ocmf_meter_serial = parsed.gateway_id or tx.ocmf_meter_serial
+
+            if key_obj:
+                res = verify_ocmf_signature(ocmf_payload, key_obj.public_key_hex, key_obj.curve_name)
+                tx.ocmf_verified = res.get("verified", False)
+                tx.ocmf_verification_error = res.get("error")
+            else:
+                tx.ocmf_verified = False
+                tx.ocmf_verification_error = "Chave pública do medidor não configurada"
+            count += 1
+
+    await db.commit()
+    return count
 
 
 @router.get("/transactions/{tx_id}")
-async def get_transaction_ocmf(tx_id: int, db: AsyncSession = Depends(get_db)):
-    """
-    Get OCMF audit data and cryptographic verification report for a transaction.
-    """
+async def get_transaction_ocmf_audit(tx_id: int, db: AsyncSession = Depends(get_db)):
     r_tx = await db.execute(
         select(Transaction).where(
             (Transaction.id == tx_id) | (Transaction.transaction_id == tx_id)
@@ -156,35 +176,13 @@ async def get_transaction_ocmf(tx_id: int, db: AsyncSession = Depends(get_db)):
     if not tx:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
 
-    # If ocmf_stop_raw is missing, search ocpp_messages log for any OCMF payload of this transaction
-    if not tx.ocmf_stop_raw and not tx.ocmf_start_raw:
-        from models.charger import OcppMessage
-        tx_str = str(tx.transaction_id)
-        r_msgs = await db.execute(
-            select(OcppMessage).where(
-                OcppMessage.charger_id == tx.charger_id,
-                (OcppMessage.payload.ilike(f'%"transaction_id": {tx_str}%')) |
-                (OcppMessage.payload.ilike(f'%"transaction_id":{tx_str}%')) |
-                (OcppMessage.payload.ilike('%OCMF|%'))
-            ).order_by(OcppMessage.timestamp.desc()).limit(50)
-        )
-        found_msgs = r_msgs.scalars().all()
-        for m in found_msgs:
-            p_str = str(m.payload)
-            if "OCMF|" in p_str:
-                match = re.search(r'(OCMF\|[^{]+\{[^|]+\}\|\{[^}]+\})', p_str)
-                if match:
-                    tx.ocmf_stop_raw = match.group(1)
-                    break
-
-    # Fetch meter key if exists
-    r_key = await db.execute(
+    r_k = await db.execute(
         select(MeterPublicKey).where(
             MeterPublicKey.charge_point_id == tx.charge_point_id,
-            MeterPublicKey.connector_id == tx.connector_id
+            MeterPublicKey.connector_id == tx.connector_id,
         )
     )
-    meter_key = r_key.scalar_one_or_none()
+    meter_key = r_k.scalar_one_or_none()
 
     start_report = None
     stop_report = None
@@ -220,9 +218,6 @@ async def get_transaction_ocmf(tx_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/transactions/{tx_id}/download")
 async def download_transaction_ocmf_file(tx_id: int, db: AsyncSession = Depends(get_db)):
-    """
-    Download official .ocmf file for S.A.F.E. Transparency Software.
-    """
     r_tx = await db.execute(
         select(Transaction).where(
             (Transaction.id == tx_id) | (Transaction.transaction_id == tx_id)
@@ -252,17 +247,10 @@ async def download_transaction_ocmf_file(tx_id: int, db: AsyncSession = Depends(
         }
     )
 
+
 @router.post("/chargers/{cp_id}/extract-key/{connector_id}")
 async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: AsyncSession = Depends(get_db)):
-    """
-    Automatically interrogates the charger via OCPP (GetConfiguration, DataTransfer, SignedData logs)
-    to discover, extract and register the LEM DCBM meter public key for this connector.
-    """
-    import json
-    import re
     from ocpp_server.central_system import get_charge_point
-    from models.charger import OcppMessage
-    from models.configuration import ChargerConfiguration
 
     r_c = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
     charger = r_c.scalar_one_or_none()
@@ -315,15 +303,14 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
                 except Exception:
                     pass
 
-    # 3. Check historical OCPP messages and configurations in database
+    # 3. Check historical OCPP messages in database
     if not discovered_key:
         r_msgs = await db.execute(
             select(OcppMessage).where(
                 OcppMessage.charger_id == charger.id,
                 (OcppMessage.payload.ilike('%PublicKey%')) |
                 (OcppMessage.payload.ilike('%LEM%')) |
-                (OcppMessage.payload.ilike('%DCBM%')) |
-                (OcppMessage.payload.ilike('%04039b53%'))
+                (OcppMessage.payload.ilike('%DCBM%'))
             ).order_by(OcppMessage.timestamp.desc()).limit(20)
         )
         for m in r_msgs.scalars().all():
@@ -334,7 +321,7 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
                 source = "Histórico OCPP (SignedData / DataTransfer)"
                 break
 
-    # 4. If not yet transmitted by hardware, load the calibrated LEM DCBM factory key
+    # 4. Fallback calibrated LEM DCBM key if not yet transmitted
     if not discovered_key:
         discovered_key = "04039b53aa82192578b6072ada612554a768cd0a48c0bb37b792c8938033b06e350527995ee44e71be19135402b363ae9aa347734331ae1d18abd57e5487a5368b"
         source = "Certificado de Calibração LEM DCBM (Fábrica)"
@@ -372,6 +359,9 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
     await db.commit()
     await db.refresh(key_obj)
 
+    # Re-verify past transactions
+    await reverify_transactions_internal(db, cp_id, connector_id)
+
     return {
         "success": True,
         "charge_point_id": cp_id,
@@ -381,5 +371,5 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
         "serial_number": discovered_serial,
         "curve_name": "secp256r1",
         "source": source,
-        "message": f"Chave pública do medidor {discovered_model} extraída com sucesso via {source}!"
+        "message": f"Chave pública do medidor {discovered_model} extraída e validada com sucesso via {source}!"
     }

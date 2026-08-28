@@ -1,19 +1,6 @@
 import axios from 'axios'
 import { API_BASE } from './config'
-import type {
-  Charger,
-  Transaction,
-  MeterValue,
-  ConfigurationItem,
-  OcppMessage,
-  AuthToken,
-  GenerateKeyResponse,
-  SyncKeyResponse,
-  Certificate,
-  IssueClientCertResponse,
-  DeviceComponent,
-  DeviceVariable,
-} from './types'
+import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken, OcmfAuditReport } from './types'
 
 const http = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' })
 
@@ -72,12 +59,10 @@ export interface MyActiveCharge {
   transaction_id: number
   charge_point_id: string
   connector_id: number
-  id_tag?: string
   start_time: string | null
   meter_start: number | null
   current_power_kw: number
   consumed_kwh: number
-  current_soc?: number | null
   status: string
 }
 
@@ -115,45 +100,10 @@ export const api = {
 
   getChargers: () => http.get<Charger[]>('/chargers').then(r => r.data),
   getCharger: (id: string) => http.get<Charger>(`/chargers/${id}`).then(r => r.data),
-  updateChargerSecurity: (cpId: string, data: { security_profile: number; auth_password?: string | null; auth_enabled?: boolean }) =>
-    http.put<Charger>(`/chargers/${cpId}/security`, data).then(r => r.data),
-  generateChargerKey: (cpId: string) =>
-    http.post<GenerateKeyResponse>(`/chargers/${cpId}/generate-key`).then(r => r.data),
-  syncChargerKey: (cpId: string) =>
-    http.post<SyncKeyResponse>(`/chargers/${cpId}/sync-key`).then(r => r.data),
-  getChargerCertificates: (cpId: string) =>
-    http.get<Certificate[]>(`/chargers/${cpId}/certificates`).then(r => r.data),
-  getDeviceModel: (cpId: string) =>
-    http.get<DeviceComponent[]>(`/chargers/${cpId}/device-model`).then(r => r.data),
-  requestBaseReport: (cpId: string) =>
-    http.post<{ status: string; request_id?: number; detail?: string }>(`/chargers/${cpId}/device-model/request-base-report`).then(r => r.data),
-  setDeviceVariable: (cpId: string, data: { component_name: string; variable_name: string; value: string; component_instance?: string; variable_instance?: string }) =>
-    http.post<{ status: string; component: string; variable: string; value: string }>(`/chargers/${cpId}/device-model/set-variable`, data).then(r => r.data),
-  issuePncContract: (cpId: string, data: { emaid: string; validity_days: number }) =>
-    http.post<{ status: string; emaid: string; serial_number: string; valid_from: string; valid_to: string; certificate_pem: string; ca_chain_pem: string }>(`/chargers/${cpId}/device-model/pnc/issue-contract`, data).then(r => r.data),
-  installCertificate: (cpId: string, data: { certificate_type?: string; certificate_pem?: string }) =>
-    http.post<{ charge_point_id: string; certificate_type: string; status: string; serial_number: string }>(`/chargers/${cpId}/certificates/install`, data).then(r => r.data),
-  queryInstalledCertificates: (cpId: string, certificate_type = 'CentralSystemRootCertificate') =>
-    http.post<{ charge_point_id: string; certificate_type: string; status: string; certificate_hash_data: any[] }>(`/chargers/${cpId}/certificates/query?certificate_type=${certificate_type}`).then(r => r.data),
-  issueClientCert: (cpId: string, data?: { validity_days?: number; organization?: string }) =>
-    http.post<IssueClientCertResponse>(`/chargers/${cpId}/certificates/issue-client`, data || {}).then(r => r.data),
-  deleteCertificate: (cpId: string, certId: number) =>
-    http.delete<{ charge_point_id: string; deleted_cert_id: number; remote_deletion_status: string }>(`/chargers/${cpId}/certificates/${certId}`).then(r => r.data),
-  getRootCaUrl: () => `${API_BASE ? `${API_BASE}/api` : '/api'}/chargers/ca/root-cert`,
-  setChargerTimezone: (cpId: string, timezone: string) =>
-    http.patch<{ charge_point_id: string; timezone: string }>(`/chargers/${cpId}/timezone`, { timezone }).then(r => r.data),
   getChargerAvailability: (cpId: string) =>
     http.get<AvailabilityData>(`/chargers/${cpId}/availability`).then(r => r.data),
   getMessages: (id: string, limit = 100) =>
     http.get<OcppMessage[]>(`/chargers/${id}/messages?limit=${limit}`).then(r => r.data),
-
-  // Virtual Simulator
-  getSimulatorStatus: () =>
-    http.get<{ is_running: boolean; station_id?: string | null; ocpp_version?: string | null; started_at?: string | null }>('/simulator/status').then(r => r.data),
-  launchSimulator: (data: { station_id: string; ocpp_version: '1.6' | '2.0.1'; duration_seconds: number }) =>
-    http.post<{ status: string; station_id: string; ocpp_version: string; duration_seconds: number; message: string }>('/simulator/launch', data).then(r => r.data),
-  stopSimulator: () =>
-    http.post<{ status: string }>('/simulator/stop').then(r => r.data),
 
   getTransactions: (cp_id?: string, status?: string) => {
     const params = new URLSearchParams()
@@ -161,18 +111,12 @@ export const api = {
     if (status) params.set('status', status)
     return http.get<Transaction[]>(`/transactions?${params}`).then(r => r.data)
   },
-  getActiveTransaction: (cp_id: string, connector_id?: number) => {
-    const query = connector_id !== undefined ? `?connector_id=${connector_id}` : ''
-    return http.get<Transaction | null>(`/transactions/active/${cp_id}${query}`).then(r => r.data)
-  },
-  getAllActiveTransactions: (cp_id: string) =>
-    http.get<Record<number, Transaction>>(`/transactions/active-all/${cp_id}`).then(r => r.data),
+  getActiveTransaction: (cp_id: string) =>
+    http.get<Transaction | null>(`/transactions/active/${cp_id}`).then(r => r.data),
   getMeterValues: (txId: number) =>
     http.get<MeterValue[]>(`/transactions/${txId}/meter-values`).then(r => r.data),
   getLiveMeterValues: (cpId: string, connectorId = 1) =>
     http.get<MeterValue[]>(`/transactions/charger/${cpId}/meter-values/live?connector_id=${connectorId}`).then(r => r.data),
-  getChargingSuccessRate: (cpId: string) =>
-    http.get<Record<string, { total_transactions: number; completed_transactions: number; success_rate: number }>>(`/transactions/${cpId}/success-rate`).then(r => r.data),
 
   getConfiguration: (cpId: string) =>
     http.get<ConfigurationItem[]>(`/configuration/${cpId}`).then(r => r.data),
@@ -254,10 +198,6 @@ export const api = {
     http.post(`/auth-tokens/sync/${cpId}`).then(r => r.data),
   setAutocharge: (cpId: string, enabled: boolean) =>
     http.patch(`/chargers/${cpId}/autocharge`, { enabled }).then(r => r.data),
-  setChargerEichrecht: (cpId: string, is_eichrecht_compliant: boolean) =>
-    http.patch(`/chargers/${cpId}/eichrecht`, { is_eichrecht_compliant }).then(r => r.data),
-  selfHealCharger: (cpId: string) =>
-    http.post<{ success: boolean; charge_point_id: string; actions_taken: string[]; message: string }>(`/chargers/${cpId}/self-heal`).then(r => r.data),
 
   // Smart Charging
   getChargingProfiles: (cpId?: string) =>
@@ -281,21 +221,17 @@ export const api = {
     stack_level?: number | null
   }) => http.delete('/smart-charging/clear', { data }).then(r => r.data),
 
-  // OCMF & Eichrecht / LEM DCBM Meters
-  verifyManualOcmf: (data: { ocmf_data: string; public_key: string; curve_name?: string }) =>
-    http.post<OcmfVerificationResponse>('/ocmf/verify-manual', data).then(r => r.data),
-  getMeterKeys: (cpId: string) =>
-    http.get<MeterKeyData[]>(`/ocmf/chargers/${cpId}/keys`).then(r => r.data),
-  createOrUpdateMeterKey: (cpId: string, data: { connector_id: number; meter_model: string; serial_number?: string; public_key_hex: string; curve_name?: string }) =>
-    http.post<MeterKeyData>(`/ocmf/chargers/${cpId}/keys`, data).then(r => r.data),
-  extractMeterKey: (cpId: string, connectorId: number) =>
-    http.post<{ success: boolean; charge_point_id: string; connector_id: number; public_key_hex: string; meter_model: string; serial_number: string; curve_name: string; source: string; message: string }>(`/ocmf/chargers/${cpId}/extract-key/${connectorId}`).then(r => r.data),
-  deleteMeterKey: (cpId: string, keyId: number) =>
-    http.delete(`/ocmf/chargers/${cpId}/keys/${keyId}`).then(r => r.data),
+  // OCMF & Eichrecht Legal Metrology
   getTransactionOcmf: (txId: number) =>
-    http.get<TransactionOcmfReport>(`/ocmf/transactions/${txId}`).then(r => r.data),
-  getOcmfDownloadUrl: (txId: number) =>
-    `/api/ocmf/transactions/${txId}/download`,
+    http.get<OcmfAuditReport>(`/ocmf/transactions/${txId}`).then(r => r.data),
+  downloadTransactionOcmf: (txId: number) => {
+    const base = http.defaults.baseURL || ''
+    window.open(`${base}/ocmf/transactions/${txId}/download`, '_blank')
+  },
+  extractMeterKey: (cpId: string, connectorId: number) =>
+    http.post(`/ocmf/chargers/${cpId}/extract-key/${connectorId}`).then(r => r.data),
+  reverifyOcmfTransactions: () =>
+    http.post('/ocmf/reverify-transactions').then(r => r.data),
 }
 
 export interface SchedulePeriod {
@@ -376,67 +312,3 @@ export interface AvailabilityData {
 
 
 
-
-export interface MeterKeyData {
-  id: number
-  charge_point_id: string
-  connector_id: number
-  meter_model: string
-  serial_number?: string | null
-  public_key_hex: string
-  curve_name: string
-  is_active: boolean
-}
-
-export interface OcmfReading {
-  obis: string
-  description: string
-  value: number
-  unit: string
-  cable_loss?: number | null
-}
-
-export interface OcmfParsedData {
-  is_valid_format: boolean
-  version: string
-  gateway_id: string
-  status: string
-  status_label: string
-  timestamp?: string | null
-  identification_status?: string | null
-  meter_readings: OcmfReading[]
-  signature_data: string
-  signature_algo: string
-  error?: string | null
-}
-
-export interface OcmfVerificationResponse {
-  verified: boolean
-  error?: string | null
-  algorithm?: string
-  curve?: string
-  meter_serial?: string
-  ocmf_version?: string
-  status?: string
-  timestamp?: string | null
-  readings?: OcmfReading[]
-  parsed?: OcmfParsedData | null
-}
-
-export interface TransactionOcmfReport {
-  transaction_id: number
-  charge_point_id: string
-  connector_id: number
-  meter_serial?: string | null
-  meter_model: string
-  has_meter_key: boolean
-  public_key_hex?: string | null
-  curve_name: string
-  ocmf_verified?: boolean | null
-  ocmf_verification_error?: string | null
-  signed_energy_kwh?: number | null
-  start_report?: OcmfVerificationResponse | null
-  stop_report?: OcmfVerificationResponse | null
-  ocmf_start_raw?: string | null
-  ocmf_stop_raw?: string | null
-}

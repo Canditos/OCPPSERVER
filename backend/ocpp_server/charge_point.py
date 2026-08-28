@@ -18,13 +18,13 @@ import event_bus
 from database import AsyncSessionLocal
 from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
 from models.transaction import Transaction, MeterValue
-from models.meter_key import MeterPublicKey
-from services.ocmf_service import parse_ocmf, verify_ocmf_signature
 from models.configuration import ChargerConfiguration
 from models.auth_token import AuthToken
 from models.authorized_tag import AuthorizedTag
 from models.user import User
+from models.meter_public_key import MeterPublicKey
 from services.email_service import notify_ac_suspended_ev, notify_dc_charging_completed
+from services.ocmf_service import parse_ocmf, verify_ocmf_signature
 from sqlalchemy import select, update, func
 
 logger = logging.getLogger(__name__)
@@ -143,9 +143,25 @@ class ChargePoint(OcppChargePoint):
             except Exception as e:
                 logger.warning(f"{self.id}: ChangeConfiguration {key} failed: {e}")
 
+        # Trigger automatic legal meter key discovery in background
+        asyncio.create_task(self._auto_discover_meter_keys())
+
+    async def _auto_discover_meter_keys(self):
+        """Automatically queries charger for meter public keys and registers them in DB."""
+        await asyncio.sleep(3)
+        try:
+            from api.ocmf import extract_meter_key_from_charger
+            async with AsyncSessionLocal() as db:
+                for conn_id in [1, 2]:
+                    try:
+                        await extract_meter_key_from_charger(self.id, conn_id, db)
+                    except Exception as e:
+                        logger.debug(f"{self.id}: auto discover meter key connector {conn_id}: {e}")
+        except Exception as e:
+            logger.warning(f"{self.id}: error during automatic meter key discovery: {e}")
+
     @on(Action.Heartbeat)
     async def on_heartbeat(self, **kwargs):
-        await self._log_message("IN", "Heartbeat", kwargs)
         async with AsyncSessionLocal() as db:
             await db.execute(
                 update(Charger).where(Charger.charge_point_id == self.id)
@@ -211,34 +227,18 @@ class ChargePoint(OcppChargePoint):
 
     @on(Action.StartTransaction)
     async def on_start_transaction(self, connector_id, id_tag, meter_start, timestamp, **kwargs):
+        await self._log_message("IN", "StartTransaction", {
+            "connector_id": connector_id, "id_tag": id_tag, "meter_start": meter_start
+        })
+
         auth_status = await self._check_auth(id_tag)
         if auth_status != AuthorizationStatus.accepted:
-            await self._log_message("IN", "StartTransaction", {
-                "connector_id": connector_id,
-                "id_tag": id_tag,
-                "meter_start": meter_start,
-                "status": "Rejected",
-                "timestamp": timestamp,
-                **kwargs,
-            })
             return call_result.StartTransactionPayload(
                 transaction_id=0,
                 id_tag_info={"status": auth_status}
             )
 
         tx_id = _next_tx_id()
-        await self._log_message("IN", "StartTransaction", {
-            "connector_id": connector_id,
-            "id_tag": id_tag,
-            "meter_start": meter_start,
-            "transaction_id": tx_id,
-            "timestamp": timestamp,
-            **kwargs,
-        })
-        await self._log_message("OUT", "StartTransactionResponse", {
-            "transaction_id": tx_id,
-            "id_tag_info": {"status": "Accepted"}
-        })
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = result.scalar_one_or_none()
@@ -286,30 +286,39 @@ class ChargePoint(OcppChargePoint):
                 tx.status = "Completed"
                 stopped_connector_id = tx.connector_id
 
-                # Check if transaction_data contains OCMF SignedData
-                tx_data = kwargs.get("transaction_data", [])
-                if isinstance(tx_data, list):
-                    for mv_entry in tx_data:
-                        for sv in mv_entry.get("sampled_value", []):
-                            val_str = str(sv.get("value", ""))
-                            if sv.get("format") == "SignedData" or val_str.startswith("OCMF|"):
-                                tx.ocmf_stop_raw = val_str
-                                # Verify with meter key if available
-                                r_key = await db.execute(
-                                    select(MeterPublicKey).where(
-                                        MeterPublicKey.charge_point_id == self.id,
-                                        MeterPublicKey.connector_id == tx.connector_id
-                                    )
-                                )
-                                m_key = r_key.scalar_one_or_none()
-                                if m_key:
-                                    v_res = verify_ocmf_signature(val_str, m_key.public_key_hex, m_key.curve_name)
-                                    tx.ocmf_verified = v_res.get("verified", False)
-                                    tx.ocmf_verification_error = v_res.get("error")
-                                    tx.ocmf_meter_serial = v_res.get("meter_serial")
-                                else:
-                                    parsed_oc = parse_ocmf(val_str)
-                                    tx.ocmf_meter_serial = parsed_oc.gateway_id
+                # Process signed OCMF transactionData if provided by charger (LEM DCBM)
+                txn_data = kwargs.get("transaction_data") or kwargs.get("transactionData", [])
+                ocmf_stop = None
+                if txn_data and isinstance(txn_data, list):
+                    for t_mv in txn_data:
+                        if isinstance(t_mv, dict):
+                            for sv in t_mv.get("sampled_value", []):
+                                if isinstance(sv, dict):
+                                    val_str = str(sv.get("value", ""))
+                                    if "OCMF|" in val_str or (sv.get("format") == "SignedData" and "OCMF" in val_str):
+                                        ocmf_stop = val_str
+                                        break
+
+                if ocmf_stop:
+                    tx.ocmf_stop_raw = ocmf_stop
+                    r_k = await db.execute(
+                        select(MeterPublicKey).where(
+                            MeterPublicKey.charge_point_id == self.id,
+                            MeterPublicKey.connector_id == stopped_connector_id,
+                            MeterPublicKey.is_active == True
+                        )
+                    )
+                    m_key = r_k.scalar_one_or_none()
+                    if m_key:
+                        v_res = verify_ocmf_signature(ocmf_stop, m_key.public_key_hex, m_key.curve_name)
+                        tx.ocmf_verified = v_res.get("verified", False)
+                        tx.ocmf_verification_error = v_res.get("error")
+                        tx.ocmf_meter_serial = v_res.get("meter_serial")
+                    else:
+                        parsed_oc = parse_ocmf(ocmf_stop)
+                        tx.ocmf_meter_serial = parsed_oc.gateway_id
+                        tx.ocmf_verified = False
+                        tx.ocmf_verification_error = "Chave pública do medidor não configurada"
 
             # Update charger and connector status
             r_charger = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
@@ -397,12 +406,6 @@ class ChargePoint(OcppChargePoint):
     @on(Action.MeterValues)
     async def on_meter_values(self, connector_id, meter_value, **kwargs):
         tx_id_ocpp = kwargs.get("transaction_id")
-        await self._log_message("IN", "MeterValues", {
-            "connector_id": connector_id,
-            "transaction_id": tx_id_ocpp,
-            "meter_value": meter_value,
-            **kwargs,
-        })
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = result.scalar_one_or_none()
@@ -418,18 +421,11 @@ class ChargePoint(OcppChargePoint):
                 ts = mv.get("timestamp", _now().isoformat())
                 for sv in mv.get("sampled_value", []):
                     try:
-                        # Parse value as float first, then convert to appropriate type
-                        val_raw = sv.get("value", "0")
-                        if not val_raw or str(val_raw).strip() == "":
-                            val = 0.0
-                        else:
-                            val = float(val_raw)
-                    except (ValueError, TypeError) as e:
-                        logger.warning(f"Failed to parse meter value: {sv.get('value')} - {e}")
+                        val = float(sv.get("value", 0))
+                    except (ValueError, TypeError):
                         val = 0.0
-                    
                     row = MeterValue(
-                        transaction_id=db_tx_id or (tx_id_ocpp or 0),
+                        transaction_id=db_tx_id or 0,
                         charger_id=charger.id if charger else 0,
                         connector_id=connector_id,
                         timestamp=datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None),
@@ -481,21 +477,6 @@ class ChargePoint(OcppChargePoint):
                     conn.status = status
                     conn.error_code = error_code
                     conn.updated_at = _now()
-
-                    # Auto-reconcile ghost transactions: if connector is Available or Unavailable, close active TX
-                    if status in ["Available", "Unavailable"]:
-                        r_dangling = await db.execute(
-                            select(Transaction).where(
-                                Transaction.charge_point_id == self.id,
-                                Transaction.connector_id == connector_id,
-                                Transaction.status == "Active"
-                            )
-                        )
-                        for d_tx in r_dangling.scalars().all():
-                            d_tx.status = "Completed"
-                            d_tx.stop_time = d_tx.stop_time or _now()
-                            d_tx.stop_reason = d_tx.stop_reason or "EVDisconnected"
-
 
                     # Sync overall charger status
                     r_all_conn = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
@@ -576,10 +557,23 @@ class ChargePoint(OcppChargePoint):
     @on(Action.DataTransfer)
     async def on_data_transfer(self, vendor_id, **kwargs):
         await self._log_message("IN", "DataTransfer", {"vendor_id": vendor_id, **kwargs})
+        message_id = kwargs.get("message_id")
+        data_str = str(kwargs.get("data", ""))
+
+        # Auto-capture meter public key if sent via DataTransfer
+        if any(k in (message_id or "") or k in data_str for k in ["PublicKey", "MeterKey", "DCBM", "LEM", "Eichrecht"]):
+            try:
+                from api.ocmf import extract_meter_key_from_charger
+                async with AsyncSessionLocal() as db:
+                    for cid in [1, 2]:
+                        await extract_meter_key_from_charger(self.id, cid, db)
+            except Exception as e:
+                logger.debug(f"Error handling DataTransfer meter key auto-save: {e}")
+
         await event_bus.publish("data_transfer", {
             "charge_point_id": self.id,
             "vendor_id": vendor_id,
-            "message_id": kwargs.get("message_id"),
+            "message_id": message_id,
             "data": kwargs.get("data"),
         })
         return call_result.DataTransferPayload(status=DataTransferStatus.accepted)
@@ -593,46 +587,6 @@ class ChargePoint(OcppChargePoint):
     async def on_diagnostics_status(self, status, **kwargs):
         await event_bus.publish("diagnostics_status", {"charge_point_id": self.id, "status": status})
         return call_result.DiagnosticsStatusNotificationPayload()
-
-    @on(Action.SignCertificate)
-    async def on_sign_certificate(self, csr: str, **kwargs):
-        """
-        Handle CSR from charger (OCPP 1.6 Security Profile 3).
-        Signs the CSR with CSMS Root CA and asynchronously responds with CertificateSigned.
-        """
-        await self._log_message("IN", "SignCertificate", {"csr": csr[:120] + "..." if len(csr) > 120 else csr})
-        try:
-            import pki
-            from models.charger import ChargerCertificate
-            signed_data = pki.sign_csr(csr, expected_charge_point_id=self.id)
-
-            async with AsyncSessionLocal() as db:
-                res = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
-                charger = res.scalar_one_or_none()
-                if charger:
-                    cert_entry = ChargerCertificate(
-                        charger_id=charger.id,
-                        charge_point_id=self.id,
-                        certificate_type="ChargePointCertificate",
-                        serial_number=signed_data["serial_number"],
-                        issuer_name_hash=signed_data["issuer_name_hash"],
-                        issuer_key_hash=signed_data["issuer_key_hash"],
-                        subject_cn=self.id,
-                        issuer_cn="Canditos CSMS Root CA",
-                        valid_from=datetime.fromisoformat(signed_data["valid_from"]),
-                        valid_to=datetime.fromisoformat(signed_data["valid_to"]),
-                        certificate_pem=signed_data["certificate_pem"],
-                        status="Active",
-                    )
-                    db.add(cert_entry)
-                    await db.commit()
-
-            # Schedule dispatching CertificateSigned call to the charger
-            asyncio.create_task(self.certificate_signed(signed_data["certificate_pem"]))
-            return call_result.SignCertificatePayload(status="Accepted")
-        except Exception as e:
-            logger.error(f"SignCertificate error for {self.id}: {e}")
-            return call_result.SignCertificatePayload(status="Rejected")
 
     # ── Outgoing commands ──────────────────────────────────────────────────
 
@@ -807,52 +761,3 @@ class ChargePoint(OcppChargePoint):
         resp = await self.call(req)
         await self._log_message("OUT", "GetCompositeSchedule", payload_kwargs)
         return resp
-
-    # ── Security Profile 3 & Certificate Management (OCPP 1.6 Security Whitepaper) ──
-
-    async def install_certificate(self, certificate_type: str, certificate: str):
-        """Install a CA root or client certificate on the charge point."""
-        req = call.InstallCertificatePayload(
-            certificate_type=certificate_type,
-            certificate=certificate,
-        )
-        resp = await self.call(req)
-        await self._log_message("OUT", "InstallCertificate", {
-            "certificate_type": certificate_type,
-            "certificate_len": len(certificate),
-        })
-        return resp
-
-    async def get_installed_certificate_ids(self, certificate_type: str):
-        """Query installed certificates on the charge point."""
-        req = call.GetInstalledCertificateIdsPayload(
-            certificate_type=certificate_type,
-        )
-        resp = await self.call(req)
-        await self._log_message("OUT", "GetInstalledCertificateIds", {
-            "certificate_type": certificate_type,
-        })
-        return resp
-
-    async def delete_certificate(self, certificate_hash_data: dict):
-        """Delete an installed certificate from the charge point."""
-        req = call.DeleteCertificatePayload(
-            certificate_hash_data=certificate_hash_data,
-        )
-        resp = await self.call(req)
-        await self._log_message("OUT", "DeleteCertificate", {
-            "certificate_hash_data": certificate_hash_data,
-        })
-        return resp
-
-    async def certificate_signed(self, certificate: str):
-        """Send a signed X.509 certificate to the charge point in response to SignCertificate."""
-        req = call.CertificateSignedPayload(
-            certificate=certificate,
-        )
-        resp = await self.call(req)
-        await self._log_message("OUT", "CertificateSigned", {
-            "certificate_len": len(certificate),
-        })
-        return resp
-
