@@ -811,23 +811,57 @@ export function ChargerDetail() {
                   <select
                     value={lemModel}
                     onChange={(e) => setLemModel(e.target.value)}
+                    className="select text-xs py-1.5 w-full font-medium"
+                  >
+                    <optgroup label="Medidores AC">
+                      <option value="Bauer BSM-WS (AC)">Bauer BSM-WS (AC Eichrecht)</option>
+                      <option value="Bauer BM (AC)">Bauer BM Series (AC)</option>
+                      <option value="Bauer E350 (AC)">Bauer E350 (AC)</option>
+                      <option value="EMU Professional (AC)">EMU Professional (AC)</option>
+                      <option value="Eastron SDM (AC)">Eastron SDM630/72D (AC)</option>
+                      <option value="Hager / Bender (AC)">Hager / Bender (AC)</option>
+                    </optgroup>
+                    <optgroup label="Medidores DC">
+                      <option value="LEM DCBM 400">LEM DCBM 400 (DC)</option>
+                      <option value="LEM DCBM 600">LEM DCBM 600 (DC)</option>
+                      <option value="LEM DCBM 100">LEM DCBM 100 (DC)</option>
+                      <option value="Isabellenhuette">Isabellenhütte (DC)</option>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">Nº de Série do Medidor (Opcional):</label>
+                  <input
+                    type="text"
+                    value={lemSerial}
+                    onChange={(e) => setLemSerial(e.target.value)}
+                    placeholder="Ex: 1202671229 ou BSM-2026..."
+                    className="input text-xs font-mono py-1.5 w-full"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">Curva Criptográfica ECDSA:</label>
+                  <select
+                    value={lemCurve}
+                    onChange={(e) => setLemCurve(e.target.value)}
                     className="select text-xs py-1.5 w-full"
                   >
-                    <option value="LEM DCBM 400">LEM DCBM 400 (DC)</option>
-                    <option value="LEM DCBM 600">LEM DCBM 600 (DC)</option>
-                    <option value="LEM DCBM 100">LEM DCBM 100 (DC)</option>
-                    <option value="Isabellenhuette">Isabellenhütte (DC)</option>
+                    <option value="secp256r1">secp256r1 (NIST P-256 / LEM / Bauer)</option>
+                    <option value="brainpoolP256r1">brainpoolP256r1 (PTB / BSI Eichrecht)</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-500 block mb-0.5">Chave Pública ECDSA (Hex 04... ou PEM):</label>
+                <label className="text-[10px] text-slate-500 block mb-0.5">Chave Pública ECDSA (Hex 04... / DER 3059... / PEM):</label>
                 <input
                   type="text"
                   value={lemPubKeyHex}
                   onChange={(e) => setLemPubKeyHex(e.target.value)}
-                  placeholder="04039b53..."
+                  placeholder="04039b53... ou 305930130607..."
                   className="input text-xs font-mono py-1.5 w-full"
                 />
               </div>

@@ -278,6 +278,8 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
             "PublicKey",
             "EichrechtPublicKey",
             f"EichrechtPublicKey{connector_id}",
+            "Bauer_PublicKey",
+            f"Bauer_PublicKey{connector_id}",
             "LEM_PublicKey",
             "DCBM_PublicKey",
             f"MeterCertificate{connector_id}",
@@ -288,16 +290,16 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
                 config_list = getattr(resp, "configuration_key", []) or []
                 for item in config_list:
                     val = getattr(item, "value", "") or ""
-                    if len(val) >= 64 and ("04" in val or "BEGIN PUBLIC KEY" in val or len(val) == 130):
+                    if len(val) >= 64 and ("04" in val or "BEGIN PUBLIC KEY" in val or "3059" in val or len(val) == 130):
                         discovered_key = val.strip()
                         source = f"OCPP GetConfiguration ({getattr(item, 'key', 'Key')})"
                         break
         except Exception:
             pass
 
-        # 2. Try DataTransfer with LEM / Siemens vendor ID
+        # 2. Try DataTransfer with LEM / Bauer / Siemens / Eichrecht vendor IDs
         if not discovered_key and hasattr(cp, "data_transfer"):
-            for v_id in ["LEM", "Siemens", "Eichrecht"]:
+            for v_id in ["Bauer", "LEM", "Siemens", "Eichrecht", "Compleo", "Mennekes", "Alfen", "Keba", "Bender"]:
                 try:
                     dt_resp = await cp.data_transfer(vendor_id=v_id, message_id="GetMeterPublicKey", data=json.dumps({"connectorId": connector_id}))
                     dt_data = getattr(dt_resp, "data", "") or ""
