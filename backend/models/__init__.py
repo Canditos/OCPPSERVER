@@ -1,4 +1,4 @@
-from models.charger import Charger, Connector, OcppMessage, AvailabilityLog
+from models.charger import Charger, Connector, OcppMessage, AvailabilityLog, ChargerCertificate, DeviceComponent, DeviceVariable
 from models.transaction import Transaction, MeterValue
 from models.configuration import ChargerConfiguration
 from models.auth_token import AuthToken
@@ -8,7 +8,7 @@ from models.user import User
 from models.meter_public_key import MeterPublicKey
 
 __all__ = [
-    "Charger", "Connector", "OcppMessage", "AvailabilityLog",
+    "Charger", "Connector", "OcppMessage", "AvailabilityLog", "ChargerCertificate", "DeviceComponent", "DeviceVariable",
     "Transaction", "MeterValue",
     "ChargerConfiguration",
     "AuthToken",
