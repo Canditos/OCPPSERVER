@@ -303,28 +303,51 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
                 except Exception:
                     pass
 
-    # 3. Check historical OCPP messages in database
+    # 3. Check historical OCPP messages in database for setMeterConfiguration / SignedData
     if not discovered_key:
         r_msgs = await db.execute(
             select(OcppMessage).where(
                 OcppMessage.charger_id == charger.id,
-                (OcppMessage.payload.ilike('%PublicKey%')) |
-                (OcppMessage.payload.ilike('%LEM%')) |
-                (OcppMessage.payload.ilike('%DCBM%'))
+                (OcppMessage.payload.ilike('%setMeterConfiguration%')) |
+                (OcppMessage.payload.ilike('%publicKey%')) |
+                (OcppMessage.payload.ilike('%meterSerial%'))
             ).order_by(OcppMessage.timestamp.desc()).limit(20)
         )
         for m in r_msgs.scalars().all():
-            p_str = str(m.payload)
-            hex_match = re.search(r'(04[0-9a-fA-F]{128}|0[23][0-9a-fA-F]{64})', p_str)
-            if hex_match:
-                discovered_key = hex_match.group(1)
-                source = "Histórico OCPP (SignedData / DataTransfer)"
-                break
+            try:
+                p_obj = json.loads(m.payload)
+                data_raw = p_obj.get("data")
+                if isinstance(data_raw, str) and "meters" in data_raw:
+                    cfg = json.loads(data_raw)
+                    for meter in cfg.get("meters", []):
+                        if meter.get("connectorId") == connector_id:
+                            discovered_key = meter.get("publicKey")
+                            if meter.get("meterSerial"):
+                                discovered_serial = meter.get("meterSerial")
+                            source = "OCPP DataTransfer (setMeterConfiguration)"
+                            break
+                if discovered_key:
+                    break
+            except Exception:
+                pass
+
+            if not discovered_key:
+                p_str = str(m.payload)
+                der_match = re.search(r'305930130607[0-9a-fA-F]{170}', p_str)
+                if der_match:
+                    discovered_key = der_match.group(0)
+                    source = "Histórico OCPP (DER SubjectPublicKeyInfo)"
+                    break
+                hex_match = re.search(r'04[0-9a-fA-F]{128}', p_str)
+                if hex_match:
+                    discovered_key = hex_match.group(0)
+                    source = "Histórico OCPP (Raw EC Point)"
+                    break
 
     # 4. Fallback calibrated LEM DCBM key if not yet transmitted
     if not discovered_key:
-        discovered_key = "04039b53aa82192578b6072ada612554a768cd0a48c0bb37b792c8938033b06e350527995ee44e71be19135402b363ae9aa347734331ae1d18abd57e5487a5368b"
-        source = "Certificado de Calibração LEM DCBM (Fábrica)"
+        discovered_key = "3059301306072A8648CE3D020106082A8648CE3D0301070342000408680D9D16818CBDA91E06FEF6AF6919A8241A4EA293FDDC407B1A708EB1EEB46AD5BDB2698AC47BBFECCEA6E4149A0C34EA7083989C04E8EB563AD4A40859A8"
+        source = "Certificado de Calibração LEM DCBM"
 
     # Save to database
     r_existing = await db.execute(

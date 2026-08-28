@@ -561,7 +561,7 @@ class ChargePoint(OcppChargePoint):
         data_str = str(kwargs.get("data", ""))
 
         # Auto-capture meter public key if sent via DataTransfer
-        if any(k in (message_id or "") or k in data_str for k in ["PublicKey", "MeterKey", "DCBM", "LEM", "Eichrecht"]):
+        if any(k in (message_id or "") or k in data_str for k in ["PublicKey", "MeterKey", "DCBM", "LEM", "Eichrecht", "setMeterConfiguration", "meters", "publicKey"]):
             try:
                 from api.ocmf import extract_meter_key_from_charger
                 async with AsyncSessionLocal() as db:
