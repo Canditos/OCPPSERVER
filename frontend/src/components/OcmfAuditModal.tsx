@@ -192,7 +192,7 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                             className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 flex items-center justify-between text-xs font-mono hover:border-blue-500/30 transition-colors"
                           >
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-blue-600 dark:text-blue-400 font-bold">{r.obis}</span>
                                 {stageLabel && (
                                   <span className={`text-[10px] font-sans font-semibold px-2 py-0.5 rounded-md ${
@@ -201,8 +201,21 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                                     {stageLabel}
                                   </span>
                                 )}
+                                {r.obis === '1-0:1.8.0' ? (
+                                  <span className="text-[10px] font-sans font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                                    ⚡ Fornecimento à Bateria
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-sans font-medium px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                                    🔄 V2G / Exportação (Inativo)
+                                  </span>
+                                )}
                               </div>
-                              <span className="text-[11px] text-slate-500 font-sans block mt-0.5">{r.description}</span>
+                              <span className="text-[11px] text-slate-500 font-sans block mt-0.5">
+                                {r.obis === '1-0:2.8.0'
+                                  ? 'Totalizador de Exportação / Injeção Reversa V2G do Carro (Calibração de Fábrica)'
+                                  : r.description}
+                              </span>
                             </div>
                             <div className="text-right shrink-0 ml-4">
                               <span className="font-bold text-slate-900 dark:text-white text-base">
