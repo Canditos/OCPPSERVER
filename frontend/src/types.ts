@@ -148,6 +148,12 @@ export interface OcmfAuditReport {
   ocmf_verified: boolean | null
   ocmf_verification_error: string | null
   signed_energy_kwh: number | null
+  energy_kwh?: number | null
+  cost_eur?: number | null
+  duration_seconds?: number | null
+  id_tag?: string | null
+  start_time?: string | null
+  stop_time?: string | null
   start_report?: any
   stop_report?: any
   ocmf_start_raw: string | null

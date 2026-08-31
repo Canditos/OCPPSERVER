@@ -202,10 +202,23 @@ async def get_transaction_ocmf_audit(tx_id: int, db: AsyncSession = Depends(get_
     elif tx.ocmf_stop_raw:
         stop_report = {"verified": False, "parsed": parse_ocmf(tx.ocmf_stop_raw).to_dict(), "error": "Chave pública do medidor não configurada"}
 
+    # Calculate duration & total energy
+    energy_kwh = tx.signed_energy_kwh if tx.signed_energy_kwh is not None else (
+        ((tx.meter_stop - tx.meter_start) / 1000.0) if (tx.meter_stop is not None and tx.meter_start is not None) else 0.0
+    )
+    duration_secs = int((tx.stop_time - tx.start_time).total_seconds()) if (tx.start_time and tx.stop_time) else None
+    cost_eur = round(energy_kwh * 0.28, 2)
+
     return {
         "transaction_id": tx.transaction_id,
         "charge_point_id": tx.charge_point_id,
         "connector_id": tx.connector_id,
+        "id_tag": tx.id_tag,
+        "start_time": tx.start_time.isoformat() if tx.start_time else None,
+        "stop_time": tx.stop_time.isoformat() if tx.stop_time else None,
+        "duration_seconds": duration_secs,
+        "energy_kwh": energy_kwh,
+        "cost_eur": cost_eur,
         "meter_serial": tx.ocmf_meter_serial or (meter_key.serial_number if meter_key else None),
         "meter_model": meter_key.meter_model if meter_key else "LEM DCBM",
         "has_meter_key": meter_key is not None,

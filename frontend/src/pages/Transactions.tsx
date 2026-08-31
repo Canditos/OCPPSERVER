@@ -178,16 +178,21 @@ export function Transactions() {
                     </span>
                   </div>
 
-                  {/* Energy Consumed */}
-                  <div className="flex items-center gap-1.5">
-                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
-                      <Zap className="w-3.5 h-3.5" />
+                  {/* Energy Consumed & Total Cost */}
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 shrink-0">
+                      <Zap className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold text-sm block">
-                        {tx.energy_kwh ?? 0} kWh
-                      </span>
-                      <span className="text-[10px] text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold text-sm">
+                          {tx.energy_kwh !== undefined && tx.energy_kwh !== null ? tx.energy_kwh.toFixed(3) : '0.000'} kWh
+                        </span>
+                        <span className="text-xs font-mono font-bold text-slate-900 dark:text-white px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/10">
+                          {(((tx.energy_kwh ?? 0) * 0.28)).toFixed(2)} €
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
                         {duration || '—'}
                       </span>
                     </div>

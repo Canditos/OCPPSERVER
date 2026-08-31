@@ -152,26 +152,53 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
 
               {activeTab === 'summary' && (
                 <div className="space-y-4">
-                  {/* Net Energy Calculation Card */}
-                  {audit.signed_energy_kwh !== null && audit.signed_energy_kwh !== undefined && (
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-indigo-500/10 border border-emerald-500/30">
-                      <div className="flex items-center justify-between">
+                  {/* Total Transaction Value & Energy Summary Card */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/15 via-blue-500/10 to-indigo-500/15 border border-emerald-500/30 shadow-lg shadow-emerald-500/5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-emerald-500/20">
+                      {/* Total Energy */}
+                      <div className="sm:pr-4">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-1">
+                          ⚡ Total de Energia Entregue
+                        </span>
+                        <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                          {(audit.signed_energy_kwh ?? audit.energy_kwh ?? 0).toFixed(3)}{' '}
+                          <span className="text-sm font-normal text-slate-500 dark:text-slate-400">kWh</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 block">
+                          Δ Metrológico (Fim - Início)
+                        </span>
+                      </div>
+
+                      {/* Total Cost */}
+                      <div className="pt-3 sm:pt-0 sm:px-4">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block mb-1">
+                          💶 Valor Total da Transação
+                        </span>
+                        <div className="text-2xl sm:text-3xl font-black font-mono text-blue-600 dark:text-blue-400">
+                          {((audit.signed_energy_kwh ?? audit.energy_kwh ?? 0) * 0.28).toFixed(2)}{' '}
+                          <span className="text-sm font-normal text-slate-500 dark:text-slate-400">€</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 block">
+                          Tarifa estimada (0.28 €/kWh)
+                        </span>
+                      </div>
+
+                      {/* Session Details */}
+                      <div className="pt-3 sm:pt-0 sm:pl-4 flex flex-col justify-between">
                         <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
-                            ⚡ Energia Real Entregue nesta Sessão (Delta Consumo)
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 block mb-1">
+                            ⏱️ Duração & Identificação
                           </span>
-                          <p className="text-xs text-slate-600 dark:text-gray-300 mt-0.5">
-                            Cálculo metrológico verificado por assinatura digital: <span className="font-mono font-bold">Fim - Início</span>
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-                            {audit.signed_energy_kwh.toFixed(3)} <span className="text-sm font-normal">kWh</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-gray-200 text-sm block">
+                            {audit.duration_seconds ? `${Math.floor(audit.duration_seconds / 60)} min ${audit.duration_seconds % 60} seg` : '—'}
                           </span>
                         </div>
+                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                          Tag: {audit.id_tag || 'Standard RFID'}
+                        </span>
                       </div>
                     </div>
-                  )}
+                  </div>
 
                   {/* Labeled Readings */}
                   <div className="space-y-2">
