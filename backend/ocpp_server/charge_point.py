@@ -238,6 +238,38 @@ class ChargePoint(OcppChargePoint):
                 id_tag_info={"status": auth_status}
             )
 
+        # Idempotency & Deduplication: Check if duplicate StartTransaction arrived in the last 15 seconds
+        async with AsyncSessionLocal() as db:
+            r_dup = await db.execute(
+                select(Transaction).where(
+                    Transaction.charge_point_id == self.id,
+                    Transaction.connector_id == connector_id,
+                    Transaction.id_tag == id_tag,
+                    Transaction.status == "Active"
+                ).order_by(Transaction.start_time.desc()).limit(1)
+            )
+            existing_tx = r_dup.scalar_one_or_none()
+            now_dt = datetime.utcnow()
+            if existing_tx and existing_tx.start_time and (now_dt - existing_tx.start_time).total_seconds() < 15:
+                logger.info(f"Duplicate StartTransaction detected for {self.id} (connector {connector_id}). Reusing TX #{existing_tx.transaction_id}")
+                await self._log_message("IN", "StartTransaction", {
+                    "connector_id": connector_id,
+                    "id_tag": id_tag,
+                    "meter_start": meter_start,
+                    "transaction_id": existing_tx.transaction_id,
+                    "timestamp": timestamp,
+                    "note": "Duplicate retransmission absorbed",
+                    **kwargs,
+                })
+                await self._log_message("OUT", "StartTransactionResponse", {
+                    "transaction_id": existing_tx.transaction_id,
+                    "id_tag_info": {"status": "Accepted"}
+                })
+                return call_result.StartTransactionPayload(
+                    transaction_id=existing_tx.transaction_id,
+                    id_tag_info={"status": AuthorizationStatus.accepted}
+                )
+
         tx_id = _next_tx_id()
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
