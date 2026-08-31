@@ -150,26 +150,69 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                 </button>
               </div>
 
-              {activeTab === 'summary' && audit.stop_report?.readings && (
-                <div className="space-y-2">
-                  <h5 className="text-xs font-bold text-slate-700 dark:text-gray-300">
-                    Leituras Registadas no Medidor LEM:
-                  </h5>
-                  <div className="space-y-1.5">
-                    {audit.stop_report.readings.map((r: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 flex items-center justify-between text-xs font-mono"
-                      >
+              {activeTab === 'summary' && (
+                <div className="space-y-4">
+                  {/* Net Energy Calculation Card */}
+                  {audit.signed_energy_kwh !== null && audit.signed_energy_kwh !== undefined && (
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-indigo-500/10 border border-emerald-500/30">
+                      <div className="flex items-center justify-between">
                         <div>
-                          <span className="text-blue-600 dark:text-blue-400 font-bold block">{r.obis}</span>
-                          <span className="text-[10px] text-slate-500 font-sans">{r.description}</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                            ⚡ Energia Real Entregue nesta Sessão (Delta Consumo)
+                          </span>
+                          <p className="text-xs text-slate-600 dark:text-gray-300 mt-0.5">
+                            Cálculo metrológico verificado por assinatura digital: <span className="font-mono font-bold">Fim - Início</span>
+                          </p>
                         </div>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                          {r.value} {r.unit}
-                        </span>
+                        <div className="text-right">
+                          <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            {audit.signed_energy_kwh.toFixed(3)} <span className="text-sm font-normal">kWh</span>
+                          </span>
+                        </div>
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Labeled Readings */}
+                  <div className="space-y-2">
+                    <h5 className="text-xs font-bold text-slate-700 dark:text-gray-300">
+                      Totalizadores Físicos do Contador (Leituras Absolutas do Medidor LEM):
+                    </h5>
+                    <div className="space-y-2">
+                      {audit.stop_report?.readings?.map((r: any, idx: number) => {
+                        // Distinguish start vs stop readings
+                        const isFirstHalf = idx < Math.ceil((audit.stop_report.readings.length || 1) / 2)
+                        const stageLabel = (audit.stop_report.readings.length > 2)
+                          ? (isFirstHalf ? '🟢 Início da Carga (ST=G)' : '🔴 Fim da Carga (ST=T)')
+                          : null
+
+                        return (
+                          <div
+                            key={idx}
+                            className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 flex items-center justify-between text-xs font-mono hover:border-blue-500/30 transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-blue-600 dark:text-blue-400 font-bold">{r.obis}</span>
+                                {stageLabel && (
+                                  <span className={`text-[10px] font-sans font-semibold px-2 py-0.5 rounded-md ${
+                                    isFirstHalf ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                  }`}>
+                                    {stageLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-500 font-sans block mt-0.5">{r.description}</span>
+                            </div>
+                            <div className="text-right shrink-0 ml-4">
+                              <span className="font-bold text-slate-900 dark:text-white text-base">
+                                {r.value} <span className="text-xs text-slate-500 font-normal">{r.unit}</span>
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
