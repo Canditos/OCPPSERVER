@@ -294,7 +294,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const selectedConnectorStatusRaw = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
   const isSelectedPlugAvailable = selectedConnectorStatusRaw === 'Available' || selectedConnectorStatusRaw === 'Unavailable'
 
-  const rawActiveTx: any = allActiveTransactions[selectedConnectorId] ||
+  const rawActiveTx: any = (allActiveTransactions as any)[selectedConnectorId] ||
     (restSelectedConn?.active_transaction_id ? {
       transaction_id: restSelectedConn.active_transaction_id,
       id_tag: restSelectedConn.active_id_tag || '',
@@ -547,126 +547,72 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600 animate-shimmer bg-[length:200%_auto] rounded-t-2xl" />
       )}
 
-      {/* header */}
-      <div className="flex items-start justify-between mb-4 pt-1 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`relative flex items-center justify-center w-11 h-11 rounded-2xl transition-all shrink-0 ${
-            !isOnline
-              ? 'bg-gray-800/60 border border-gray-700/40 text-gray-500'
-              : isSessionActive
-              ? 'bg-blue-500/20 shadow-lg shadow-blue-500/10 border border-blue-500/30 text-blue-400'
-              : isFaulted
-              ? 'bg-red-500/20 border border-red-500/30 text-red-400'
-              : 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400'
-          }`}>
-            {!isOnline ? (
-              <WifiOff className="w-5 h-5 text-gray-500" />
-            ) : isSessionActive ? (
-              <Zap className="w-5 h-5 text-blue-400 animate-pulse" fill="currentColor" />
-            ) : isFaulted ? (
-              <AlertCircle className="w-5 h-5 text-red-400" />
-            ) : (
-              <Plug className="w-5 h-5 text-emerald-400" />
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            {/* Editable display name */}
-            {editingName ? (
-              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                <input
-                  ref={nameInputRef}
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') cancelEditName() }}
-                  onBlur={commitName}
-                  className="text-sm font-bold bg-white/10 border border-blue-500/40 rounded-lg px-2 py-0.5 text-gray-100 w-full focus:outline-none focus:border-blue-400"
-                  maxLength={40}
-                />
-                <button onClick={commitName} className="shrink-0 p-0.5 text-emerald-400 hover:text-emerald-300">
-                  <Check className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={cancelEditName} className="shrink-0 p-0.5 text-gray-500 hover:text-gray-300">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <p className="text-base font-bold text-gray-100 leading-tight truncate">
-                  {displayName || cpId}
-                </p>
-                {isDC && (
-                  <span className="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-purple-700 text-white tracking-widest shadow-sm shadow-violet-500/30">
-                    DC
-                  </span>
-                )}
-                {(Boolean(charger.is_eichrecht_compliant) || (charger.model && /\b(erk|eichrecht|dcbm)\b/i.test(charger.model))) && (
-                  <span
-                    className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-blue-500/20 text-purple-300 dark:text-purple-200 border border-purple-500/30 shadow-sm shadow-purple-500/10 flex items-center gap-1 font-mono tracking-wider"
-                    title="Carregador Certificado ERK / Eichrecht (Medidor LEM DCBM & OCMF S.A.F.E.)"
-                  >
-                    <ShieldCheck className="w-3 h-3 text-purple-400" />
-                    <span>ERK</span>
-                  </span>
-                )}
-                <button
-                  onClick={startEditName}
-                  className="shrink-0 p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
-                  title={t('dashboard.editName')}
-                >
-                  <Pencil className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            {/* Subtitle: OCPP ID when display name is set, else model/vendor */}
-            <div className="flex items-center gap-1.5 mt-0.5">
-              {displayName ? (
-                <p className="text-xs text-gray-600 truncate font-mono">{cpId}</p>
+      {/* Responsive Mobile-Optimized Header */}
+      <div className="mb-3.5 space-y-2">
+        {/* Row 1: Station Icon + Name + Operational Status */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className={`relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-2xl transition-all shrink-0 ${
+              !isOnline
+                ? 'bg-gray-800/60 border border-gray-700/40 text-gray-500'
+                : isSessionActive
+                ? 'bg-blue-500/20 shadow-lg shadow-blue-500/10 border border-blue-500/30 text-blue-400'
+                : isFaulted
+                ? 'bg-red-500/20 border border-red-500/30 text-red-400'
+                : 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400'
+            }`}>
+              {!isOnline ? (
+                <WifiOff className="w-5 h-5 text-gray-500" />
+              ) : isSessionActive ? (
+                <Zap className="w-5 h-5 text-blue-400 animate-pulse" fill="currentColor" />
+              ) : isFaulted ? (
+                <AlertCircle className="w-5 h-5 text-red-400" />
               ) : (
-                <p className="text-xs text-gray-500 truncate">
-                  {[charger.model, charger.vendor].filter(Boolean).join(' · ') || t('chargerCard.defaultStation')}
-                </p>
+                <Plug className="w-5 h-5 text-emerald-400" />
               )}
             </div>
 
-            {/* Group selector */}
-            {showGroupInput ? (
-              <div className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
-                <input
-                  ref={groupInputRef}
-                  value={groupInput}
-                  onChange={(e) => setGroupInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') commitNewGroup(); if (e.key === 'Escape') { setShowGroupInput(false); setGroupInput('') } }}
-                  onBlur={commitNewGroup}
-                  placeholder={t('dashboard.groupName')}
-                  className="text-xs bg-white/10 border border-blue-500/40 rounded-lg px-2 py-0.5 text-gray-100 w-28 focus:outline-none focus:border-blue-400"
-                  maxLength={30}
-                />
-                <button onClick={commitNewGroup} className="shrink-0 p-0.5 text-emerald-400">
-                  <Check className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <div className="mt-1" onClick={(e) => e.stopPropagation()}>
-                <select
-                  value={currentGroup}
-                  onChange={(e) => commitGroup(e.target.value)}
-                  className="text-[10px] bg-white/5 border border-white/10 text-gray-500 rounded-md px-1.5 py-0.5 focus:outline-none focus:border-blue-500/40 cursor-pointer hover:border-white/20 transition-colors max-w-[140px] truncate"
-                >
-                  <option value="">{t('dashboard.noGroup')}</option>
-                  {allGroups.map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                  <option value="__new__">{t('dashboard.newGroup')}</option>
-                </select>
-              </div>
-            )}
+            <div className="min-w-0 flex-1">
+              {editingName ? (
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    ref={nameInputRef}
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') cancelEditName() }}
+                    onBlur={commitName}
+                    className="text-sm font-bold bg-white/10 border border-blue-500/40 rounded-lg px-2 py-0.5 text-gray-100 w-full focus:outline-none focus:border-blue-400"
+                    maxLength={40}
+                  />
+                  <button onClick={commitName} className="shrink-0 p-1 text-emerald-400">
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={cancelEditName} className="shrink-0 p-1 text-gray-500">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 min-w-0">
+                  <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-gray-100 leading-tight truncate">
+                    {displayName || cpId}
+                  </p>
+                  <button
+                    onClick={startEditName}
+                    className="shrink-0 p-1 text-slate-400 hover:text-slate-200 transition-colors"
+                    title={t('dashboard.editName')}
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 truncate font-mono mt-0.5">
+                {displayName ? cpId : [charger.model, charger.vendor].filter(Boolean).join(' · ') || t('chargerCard.defaultStation')}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+          {/* Operational Status Pill */}
+          <span className={`status-pill shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold border transition-all ${
             !isOnline
               ? 'bg-gray-800/80 text-gray-400 border-gray-700/60'
               : isSessionActive
@@ -700,39 +646,66 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 : t('common.available')}
             </span>
           </span>
+        </div>
 
-          <button
-            type="button"
-            onClick={handleOpenSecModal}
-            className={`text-[10px] px-2 py-0.5 rounded-lg font-mono font-semibold border transition-all cursor-pointer hover:scale-105 ${
-              (charger.security_profile ?? 0) === 3
-                ? 'bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30'
-                : (charger.security_profile ?? 0) === 2
-                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/25'
-                : (charger.security_profile ?? 0) === 1
-                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25'
-                : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
-            }`}
-            title={`Configurar Segurança (${(charger.security_profile ?? 0) === 3 ? 'Profile 3 - mTLS' : (charger.security_profile ?? 0) === 2 ? 'Profile 2 - TLS+Basic' : (charger.security_profile ?? 0) === 1 ? 'Profile 1 - Basic Auth' : 'Profile 0 - Aberto'})`}
-          >
-            {(charger.security_profile ?? 0) === 3 ? '🛡️ P3' : (charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
-          </button>
+        {/* Row 2: Badges & Quick Action Chips (DC, ERK, Profile, Group, Auto-Heal, Details) */}
+        <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-100 dark:border-white/5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {isDC && (
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-purple-700 text-white tracking-widest shadow-sm">
+                DC
+              </span>
+            )}
+            {(Boolean(charger.is_eichrecht_compliant) || (charger.model && /\b(erk|eichrecht|dcbm)\b/i.test(charger.model))) && (
+              <span
+                className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-0.5 font-mono"
+                title="Certificado ERK / Eichrecht"
+              >
+                <ShieldCheck className="w-2.5 h-2.5 text-purple-400" />
+                <span>ERK</span>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleOpenSecModal}
+              className="text-[9px] px-1.5 py-0.5 rounded-md font-mono font-semibold border bg-slate-800/80 text-slate-300 border-white/10 hover:border-blue-400 cursor-pointer"
+              title="Perfil de Segurança"
+            >
+              {(charger.security_profile ?? 0) === 3 ? '🛡️ P3' : (charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
+            </button>
 
-          <button
-            type="button"
-            onClick={handleSelfHeal}
-            disabled={isSelfHealing}
-            className="p-1 rounded-lg text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer"
-            title="Auto-Diagnóstico & Sincronização Instantânea (Zero Failures)"
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${isSelfHealing ? 'animate-spin text-blue-500' : ''}`} />
-          </button>
-          <Link
-            to={`/chargers/${charger.charge_point_id}`}
-            className="btn-ghost text-xs text-gray-400 hover:text-gray-200 py-1 px-2 rounded-lg"
-          >
-            {t('common.details')}
-          </Link>
+            {/* Group selector */}
+            <select
+              value={currentGroup}
+              onChange={(e) => commitGroup(e.target.value)}
+              className="text-[9px] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400 rounded-md px-1.5 py-0.5 max-w-[110px] truncate cursor-pointer"
+            >
+              <option value="">{t('dashboard.noGroup')}</option>
+              {allGroups.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+              <option value="__new__">{t('dashboard.newGroup')}</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0 ml-auto">
+            <button
+              type="button"
+              onClick={handleSelfHeal}
+              disabled={isSelfHealing}
+              className="p-1 rounded-lg text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              title="Auto-Diagnóstico & Sincronização"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isSelfHealing ? 'animate-spin text-blue-500' : ''}`} />
+            </button>
+            <Link
+              to={`/chargers/${charger.charge_point_id}`}
+              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline px-1.5 py-0.5 rounded-lg flex items-center gap-0.5"
+            >
+              <span>{t('common.details')}</span>
+              <span>→</span>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -936,14 +909,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
       {/* Active Tag & Transaction Bar */}
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
           {hasAuthorizedTag ? (
-            <div className="flex items-center gap-1">
-              <span className="text-gray-500 text-[10px]">{t('chargerCard.tag')}</span>
+            <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
+              <span className="text-slate-500 dark:text-gray-400 text-[10px] shrink-0">{t('chargerCard.tag')}</span>
               <select
                 value={effectiveTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
-                className="bg-white/5 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-emerald-600 dark:text-emerald-400 rounded-lg px-2 py-0.5 text-xs font-mono font-medium focus:outline-none focus:border-emerald-500/50"
+                className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-emerald-600 dark:text-emerald-400 rounded-xl px-2.5 py-1.5 text-xs font-mono font-medium focus:outline-none focus:border-emerald-500/50 min-h-[36px] w-full sm:w-auto cursor-pointer truncate"
               >
                 {authorizedTags.map((tag) => (
                   <option key={tag.id} value={tag.id_tag}>
@@ -958,9 +931,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 setNewTagId('VERSICHARGE_TAG')
                 setShowTagModal(true)
               }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium hover:bg-amber-500/25 transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-500 dark:text-amber-300 border border-amber-500/30 font-medium hover:bg-amber-500/25 transition-colors min-h-[36px]"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-3.5 h-3.5" />
               <span>{t('chargerCard.registerTag')}</span>
             </button>
           )}
@@ -971,31 +944,31 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 setNewTagId('')
                 setShowTagModal(true)
               }}
-              className="p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/5"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-white/5 min-h-[36px] min-w-[36px] flex items-center justify-center"
               title={t('chargerCard.addNewTag')}
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
             </button>
           )}
         </div>
 
         {activeTransactionForSelectedConnector && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-medium">
-            TX #{activeTransactionForSelectedConnector.transaction_id} (Tomada #{selectedConnectorId})
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-mono font-medium text-[11px] shrink-0">
+            TX #{activeTransactionForSelectedConnector.transaction_id} (T#{selectedConnectorId})
           </span>
         )}
       </div>
 
-      {/* Quick Controls Toolbar - Context-Aware for Selected Plug */}
-      <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between gap-1.5" onClick={(e) => e.stopPropagation()}>
+      {/* Quick Controls Toolbar - Touch Friendly for Mobile (min 44px) */}
+      <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
         {Boolean(activeTransactionForSelectedConnector) || isSelectedConnectorActive ? (
           <button
             type="button"
             onClick={handleRemoteStop}
             disabled={!isOnline || loadingAction !== null}
-            className="flex-1 btn bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+            className="flex-1 btn bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs sm:text-sm py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer min-h-[44px] font-bold"
           >
-            {loadingAction === 'stop' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" fill="currentColor" />}
+            {loadingAction === 'stop' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" fill="currentColor" />}
             <span>{t('chargerCard.stop', { target: activeTransactionForSelectedConnector ? `TX #${activeTransactionForSelectedConnector.transaction_id}` : `Tomada #${selectedConnectorId}` })}</span>
           </button>
         ) : (
@@ -1003,9 +976,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             type="button"
             onClick={handleRemoteStart}
             disabled={!isOnline || loadingAction !== null}
-            className="flex-1 btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+            className="flex-1 btn bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs sm:text-sm py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer min-h-[44px] font-bold"
           >
-            {loadingAction === 'start' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
+            {loadingAction === 'start' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" fill="currentColor" />}
             <span>
               {hasAuthorizedTag ? t('chargerCard.startChargePlug', { id: selectedConnectorId }) : t('chargerCard.addTagAndStart')}
             </span>
@@ -1017,7 +990,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           onClick={handleUnlock}
           disabled={!isOnline || loadingAction !== null}
           title={t('chargerCard.unlockPlug', { id: selectedConnectorId })}
-          className="btn-secondary p-2 text-xs text-gray-300 rounded-xl hover:text-white hover:bg-white/10"
+          className="btn-secondary p-2.5 text-xs text-slate-700 dark:text-gray-300 rounded-xl hover:text-blue-500 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
         >
           {loadingAction === 'unlock' ? <Loader2 className="w-4 h-4 animate-spin text-blue-400" /> : <Unlock className="w-4 h-4" />}
         </button>
@@ -1027,7 +1000,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           onClick={handleReset}
           disabled={!isOnline || loadingAction !== null}
           title={t('chargerCard.softReset')}
-          className="btn-secondary p-2 text-xs text-gray-300 rounded-xl hover:text-amber-400 hover:bg-amber-500/10"
+          className="btn-secondary p-2.5 text-xs text-slate-700 dark:text-gray-300 rounded-xl hover:text-amber-500 hover:bg-amber-500/10 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
         >
           {loadingAction === 'reset' ? <Loader2 className="w-4 h-4 animate-spin text-amber-400" /> : <RotateCcw className="w-4 h-4" />}
         </button>

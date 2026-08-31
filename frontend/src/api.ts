@@ -1,3 +1,36 @@
+export type { MeterKeyData, OcmfAuditReport } from './types'
+export type TransactionOcmfReport = import('./types').OcmfAuditReport
+
+export interface OcmfVerificationResponse {
+  verified: boolean
+  error?: string | null
+  parsed?: Record<string, any> | null
+  curve_name?: string
+  meter_model?: string
+  meter_serial?: string | null
+  ocmf_version?: string | null
+  status?: string | null
+  readings?: Array<{
+    obis: string
+    description: string
+    value: string | number
+    unit: string
+    cable_loss?: number | null
+  }>
+  signature_raw?: string
+}
+
+
+
+export interface OcmfVerificationResponse {
+  verified: boolean
+  error?: string | null
+  parsed?: Record<string, any> | null
+  curve_name?: string
+  meter_model?: string
+  signature_raw?: string
+}
+
 import axios from 'axios'
 import { API_BASE } from './config'
 import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken, OcmfAuditReport, MeterKeyData } from './types'
@@ -32,6 +65,7 @@ export interface ActiveUserCharge {
   connector_id: number
   start_time: string | null
   current_power_kw: number
+  current_soc?: number | null
   consumed_kwh: number
 }
 
@@ -62,6 +96,7 @@ export interface MyActiveCharge {
   start_time: string | null
   meter_start: number | null
   current_power_kw: number
+  current_soc?: number | null
   consumed_kwh: number
   status: string
 }
@@ -242,8 +277,66 @@ export const api = {
   },
   extractMeterKey: (cpId: string, connectorId: number) =>
     http.post(`/ocmf/chargers/${cpId}/extract-key/${connectorId}`).then(r => r.data),
+  getAllActiveTransactions: (cpId: string) =>
+    http.get<Transaction[]>(`/transactions/active-all/${cpId}`).then(r => r.data),
+  getDeviceModel: (cpId: string) =>
+    http.get<any[]>(`/v201/device-model/${cpId}`).then(r => r.data),
+  requestBaseReport: (cpId: string, reportBase: string = 'Full') =>
+    http.post(`/v201/get-base-report/${cpId}`, { report_base: reportBase }).then(r => r.data),
+  setDeviceVariable: (cpId: string, data: any) =>
+    http.post(`/v201/set-variables/${cpId}`, data).then(r => r.data),
+  issuePncContract: (cpId: string, data: any) =>
+    http.post(`/v201/iso15118-pnc/install-certificate/${cpId}`, data).then(r => r.data),
+  getOcmfDownloadUrl: (txId: number) => {
+    const base = http.defaults.baseURL || ''
+    return `${base}/ocmf/transactions/${txId}/download`
+  },
+
   reverifyOcmfTransactions: () =>
     http.post('/ocmf/reverify-transactions').then(r => r.data),
+  // Simulator
+  getSimulatorStatus: () =>
+    http.get<{ is_running?: boolean; station_id?: string; ocpp_version?: string }>('/simulator/status').then(r => r.data),
+  launchSimulator: (data: any) =>
+    http.post('/simulator/start', data).then(r => r.data),
+  stopSimulator: () =>
+    http.post('/simulator/stop').then(r => r.data),
+
+  // Self-heal
+  selfHealCharger: (cpId: string) =>
+    http.post(`/chargers/${cpId}/self-heal`).then(r => r.data),
+
+  // Security & Certificates
+  updateChargerSecurity: (cpId: string, data: any) =>
+    http.patch(`/chargers/${cpId}/security`, data).then(r => r.data),
+  generateChargerKey: (cpId: string) =>
+    http.post(`/chargers/${cpId}/security/generate-key`).then(r => r.data),
+  syncChargerKey: (cpId: string) =>
+    http.post(`/chargers/${cpId}/security/sync-key`).then(r => r.data),
+  getChargerCertificates: (cpId: string) =>
+    http.get(`/chargers/${cpId}/certificates`).then(r => r.data),
+  installCertificate: (cpId: string, data: any) =>
+    http.post(`/chargers/${cpId}/certificates/install`, data).then(r => r.data),
+  queryInstalledCertificates: (cpId: string, data?: any) =>
+    http.post(`/chargers/${cpId}/certificates/query`, data).then(r => r.data),
+  issueClientCert: (cpId: string, data?: any) =>
+    http.post(`/chargers/${cpId}/certificates/issue-client`, data).then(r => r.data),
+  deleteCertificate: (cpId: string, certId: number) =>
+    http.delete(`/chargers/${cpId}/certificates/${certId}`).then(r => r.data),
+  getRootCaUrl: () => {
+    const base = http.defaults.baseURL || ''
+    return `${base}/certificates/ca.crt`
+  },
+
+  // Eichrecht & Success Rate & Timezone
+  getChargingSuccessRate: (cpId: string) =>
+    http.get<Record<string, { total_transactions: number; completed_transactions: number; success_rate: number }>>(`/chargers/${cpId}/success-rate`).then(r => r.data),
+  setChargerEichrecht: (cpId: string, enabled: boolean) =>
+    http.patch(`/chargers/${cpId}/eichrecht`, { is_eichrecht_compliant: enabled }).then(r => r.data),
+  setChargerTimezone: (cpId: string, timezone: string) =>
+    http.patch(`/chargers/${cpId}/timezone`, { timezone }).then(r => r.data),
+  verifyManualOcmf: (data: any) =>
+    http.post<OcmfVerificationResponse>('/ocmf/verify-manual', data).then(r => r.data),
 }
 
 export interface SchedulePeriod {
@@ -320,7 +413,10 @@ export interface AvailabilityData {
   }>
   hourly_timeline: HourlyTimelineItem[]
   recent_events: AvailabilityEvent[]
+
+
 }
+
 
 
 

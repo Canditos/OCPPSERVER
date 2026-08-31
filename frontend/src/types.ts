@@ -188,14 +188,18 @@ export interface OcppEvent {
 
 export interface MeterKeyData {
   id: number
-  charger_id: number
+  charger_id?: number
   charge_point_id: string
   connector_id: number
   meter_model: string
-  serial_number: string
+  serial_number?: string | null
   public_key_hex: string
+  public_key_pem?: string | null
   curve_name: string
-  is_valid: boolean
-  registered_at: string
+  is_active?: boolean
+  is_valid?: boolean
+  registered_at?: string
+  created_at?: string
+  updated_at?: string
 }
 

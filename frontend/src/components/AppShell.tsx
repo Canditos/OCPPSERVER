@@ -57,38 +57,34 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar mode={mode} resolved={resolved} setMode={setMode} />
 
       <div className="flex min-h-screen min-w-0 flex-col">
-        {/* Mobile Top Header */}
-        <header className={`sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-lg lg:hidden ${
+        {/* Mobile Top Header - Compact 1-Row Layout */}
+        <header className={`sticky top-0 z-20 border-b px-3.5 py-2.5 backdrop-blur-lg lg:hidden ${
           resolved === 'dark'
             ? 'border-white/10 bg-slate-950/90'
             : 'border-slate-200 bg-white/90'
         }`}>
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className={`text-sm font-semibold ${resolved === 'dark' ? 'text-white' : 'text-slate-900'}`}>@Canditos OCPP</p>
-                <p className={`text-xs ${resolved === 'dark' ? 'text-gray-500' : 'text-slate-500'}`}>{currentTitle}</p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {user && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 text-xs font-semibold">
-                    <UserIcon className="w-3 h-3" />
-                    <span>{user.username}</span>
-                  </div>
-                )}
-                <button
-                  onClick={logout}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-500"
-                  title={t('shell.logout')}
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className={`text-xs sm:text-sm font-bold truncate ${resolved === 'dark' ? 'text-white' : 'text-slate-900'}`}>@Canditos OCPP</p>
+              <p className={`text-[10px] truncate ${resolved === 'dark' ? 'text-gray-400' : 'text-slate-500'}`}>{currentTitle}</p>
             </div>
-            <div className="flex items-center justify-between gap-3">
+
+            <div className="flex items-center gap-1.5 shrink-0">
               <LanguageToggle compact />
               <ThemeToggle value={mode} onChange={setMode} compact />
+              {user && (
+                <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-semibold">
+                  <UserIcon className="w-2.5 h-2.5" />
+                  <span>{user.username}</span>
+                </div>
+              )}
+              <button
+                onClick={logout}
+                className="p-1 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                title={t('shell.logout')}
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </header>

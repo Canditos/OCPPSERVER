@@ -242,7 +242,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                      {report.start_report.readings?.map((r, idx) => (
+                      {report.start_report.readings?.map((r: any, idx: number) => (
                         <tr key={idx}>
                           <td className="p-2.5 text-blue-500 font-bold">{r.obis}</td>
                           <td className="p-2.5 text-slate-700 dark:text-gray-300 font-sans">{r.description}</td>
@@ -283,7 +283,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                      {report.stop_report.readings?.map((r, idx) => (
+                      {report.stop_report.readings?.map((r: any, idx: number) => (
                         <tr key={idx}>
                           <td className="p-2.5 text-blue-500 font-bold">{r.obis}</td>
                           <td className="p-2.5 text-slate-700 dark:text-gray-300 font-sans">{r.description}</td>

@@ -387,7 +387,7 @@ export function OcmfTool() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                        {result.readings.map((r, idx) => (
+                        {result.readings.map((r: any, idx: number) => (
                           <tr key={idx} className="hover:bg-white/5 transition-colors">
                             <td className="p-2.5 text-blue-500 font-bold">{r.obis}</td>
                             <td className="p-2.5 text-slate-700 dark:text-gray-300 font-sans">{r.description}</td>

@@ -51,7 +51,7 @@ export function ChargerDetail() {
   const [selectedConnectorId, setSelectedConnectorId] = useState<number>(1)
 
   // LEM DCBM Meter Keys (Eichrecht / OCMF)
-  const { data: meterKeys = [], refetch: refetchMeterKeys } = useQuery<MeterKeyData[]>({
+  const { data: meterKeys = [] as MeterKeyData[], refetch: refetchMeterKeys } = useQuery<any>({
     queryKey: ['meterKeys', id],
     queryFn: () => api.getMeterKeys(id!),
     enabled: Boolean(id),
@@ -69,7 +69,7 @@ export function ChargerDetail() {
 
   // Prefill form with existing meter key data when connector or meterKeys change
   useEffect(() => {
-    const existing = meterKeys.find((k) => k.connector_id === lemConnectorId)
+    const existing = meterKeys.find((k: any) => k.connector_id === lemConnectorId)
     if (existing) {
       setLemPubKeyHex(existing.public_key_hex || '')
       setLemSerial(existing.serial_number || '')
@@ -765,7 +765,7 @@ export function ChargerDetail() {
             {/* List of Configured Keys */}
             {meterKeys.length > 0 && (
               <div className="space-y-2">
-                {meterKeys.map((mk) => (
+                {meterKeys.map((mk: any) => (
                   <div key={mk.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/6 flex items-center justify-between text-xs">
                     <div>
                       <div className="flex items-center gap-2">
