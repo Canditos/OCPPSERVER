@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   ShieldCheck, ShieldAlert, Download, Cpu, Key, FileCode, CheckCircle2, XCircle, Clock
@@ -19,9 +20,22 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
 
   const [activeTab, setActiveTab] = useState<'summary' | 'raw'>('summary')
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [])
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02]">
           <div className="flex items-center gap-3">
@@ -190,6 +204,7 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

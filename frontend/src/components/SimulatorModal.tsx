@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Zap, Play, Square, RefreshCw, Sparkles, CheckCircle2,
@@ -61,9 +62,9 @@ export function SimulatorModal({ isOpen, onClose }: SimulatorModalProps) {
 
   const isRunning = status?.is_running ?? false
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 shadow-2xl overflow-hidden animate-scale-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 shadow-2xl overflow-hidden animate-scale-in my-auto" onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-purple-600/10">
           <div className="flex items-center gap-2.5">
@@ -222,6 +223,7 @@ export function SimulatorModal({ isOpen, onClose }: SimulatorModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
