@@ -270,10 +270,11 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     return Array.from(connectorMap.values()).sort((a, b) => a.connector_id - b.connector_id)
   })()
 
-  // Plug selection state - moved before use
-  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(
-    rawConnectors.length > 0 ? rawConnectors[0].connector_id : 1
-  )
+  // Plug selection state - initialize to active charging connector if present, otherwise first plug
+  const [selectedConnectorId, setSelectedConnectorId] = useState<number>(() => {
+    const active = rawConnectors.find((c: any) => ACTIVE_STATUSES.includes(c.status))
+    return active ? active.connector_id : (rawConnectors.length > 0 ? rawConnectors[0].connector_id : 1)
+  })
 
   // Fetch active transactions for ALL connectors of this charger
   const { data: allActiveTransactions = {}, refetch: refetchActiveTx } = useQuery({
@@ -324,15 +325,12 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   // Active charging connectors list
   const activeChargingConnectors = rawConnectors.filter((c: any) => ACTIVE_STATUSES.includes(c.status))
 
-  // Auto-focus the active charging connector if the current selected one is idle/finishing
+  // Ensure selected connector exists in rawConnectors without overriding user selection
   useEffect(() => {
-    if (activeChargingConnectors.length > 0) {
-      const currentSelectedStatus = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
-      if (!ACTIVE_STATUSES.includes(currentSelectedStatus || '')) {
-        setSelectedConnectorId(activeChargingConnectors[0].connector_id)
-      }
+    if (rawConnectors.length > 0 && !rawConnectors.some((c) => c.connector_id === selectedConnectorId)) {
+      setSelectedConnectorId(rawConnectors[0].connector_id)
     }
-  }, [rawConnectors, selectedConnectorId, activeChargingConnectors.length])
+  }, [rawConnectors, selectedConnectorId])
 
   // Check if ANY or SELECTED connector is in active session
   const selectedConnectorStatus = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
