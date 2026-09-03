@@ -397,7 +397,13 @@ class ChargePointV201(BaseChargePointV201):
                     "ocpp_version": "2.0.1",
                 })
 
-        return call_result.TransactionEventPayload()
+        # OCPP 2.0.1 §10.6: when TransactionEvent includes id_token, respond with
+        # idTokenInfo so the charger confirms authorization and proceeds with charging.
+        id_token_info = None
+        if id_token:
+            id_token_info = {"status": "Accepted"}
+
+        return call_result.TransactionEventPayload(id_token_info=id_token_info)
 
     # ── 6. Device Model (NotifyReport) ────────────────────────────────────────
 
