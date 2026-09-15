@@ -250,7 +250,7 @@ class ChargePoint(OcppChargePoint):
             )
             existing_tx = r_dup.scalar_one_or_none()
             now_dt = datetime.utcnow()
-            if existing_tx and existing_tx.start_time and (now_dt - existing_tx.start_time).total_seconds() < 15:
+            if existing_tx and existing_tx.start_time and (now_dt - existing_tx.start_time).total_seconds() < 120:
                 logger.info(f"Duplicate StartTransaction detected for {self.id} (connector {connector_id}). Reusing TX #{existing_tx.transaction_id}")
                 await self._log_message("IN", "StartTransaction", {
                     "connector_id": connector_id,
@@ -312,6 +312,16 @@ class ChargePoint(OcppChargePoint):
             result = await db.execute(select(Transaction).where(Transaction.transaction_id == transaction_id))
             tx = result.scalar_one_or_none()
             if tx:
+                if tx.status == "Completed":
+                    logger.info(f"Duplicate StopTransaction for TX #{transaction_id} ignored (already Completed, stored meter_stop={tx.meter_stop})")
+                    await self._log_message("IN", "StopTransaction", {
+                        "transaction_id": transaction_id,
+                        "meter_stop": meter_stop,
+                        "note": "Duplicate retransmission ignored",
+                    })
+                    return call_result.StopTransactionPayload(
+                        id_tag_info={"status": AuthorizationStatus.accepted}
+                    )
                 tx.meter_stop = meter_stop
                 tx.stop_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).replace(tzinfo=None)
                 tx.stop_reason = reason
