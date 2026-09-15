@@ -175,8 +175,8 @@ class ChargePoint(OcppChargePoint):
             logger.debug(f"{self.id}: auto discover meter keys via GetConfiguration: {e}")
 
     async def _save_meter_key(self, connector_id: int, public_key_hex: str, source: str):
-        """Saves a discovered meter public key to DB, skipping if already set."""
-        from services.ocmf_service import load_public_key_from_string
+        """Saves a discovered meter public key to DB and re-verifies past transactions."""
+        from services.ocmf_service import load_public_key_from_string, verify_ocmf_signature
         try:
             load_public_key_from_string(public_key_hex)
         except Exception:
@@ -211,6 +211,27 @@ class ChargePoint(OcppChargePoint):
             await db.commit()
             logger.info(f"{self.id}: meter public key saved for connector {connector_id} via {source}")
 
+            # Re-verify any past unverified transactions for this charger/connector
+            r_txs = await db.execute(
+                select(Transaction).where(
+                    Transaction.charge_point_id == self.id,
+                    Transaction.connector_id == connector_id,
+                    (Transaction.ocmf_stop_raw.isnot(None)) | (Transaction.ocmf_start_raw.isnot(None)),
+                )
+            )
+            txs = r_txs.scalars().all()
+            reverified = 0
+            for tx in txs:
+                ocmf_payload = tx.ocmf_stop_raw or tx.ocmf_start_raw
+                if ocmf_payload:
+                    res = verify_ocmf_signature(ocmf_payload, public_key_hex.strip(), "secp256r1")
+                    tx.ocmf_verified = res.get("verified", False)
+                    tx.ocmf_verification_error = res.get("error")
+                    reverified += 1
+            if reverified:
+                await db.commit()
+                logger.info(f"{self.id}: re-verified {reverified} past transactions for connector {connector_id}")
+
     async def _extract_keys_from_data_transfer(self, data_str: str):
         """Parses incoming DataTransfer data for LEM DCBM meter public keys."""
         if not data_str or len(data_str) < 64:
@@ -225,6 +246,7 @@ class ChargePoint(OcppChargePoint):
         if isinstance(data_obj, dict):
             meters = data_obj.get("meters", [])
             if isinstance(meters, list):
+                saved_any = False
                 for meter in meters:
                     if not isinstance(meter, dict):
                         continue
@@ -235,7 +257,9 @@ class ChargePoint(OcppChargePoint):
                         await self._save_meter_key(int(cid), str(pk), "DataTransfer (setMeterConfiguration)")
                         if serial:
                             await self._update_meter_serial(int(cid), str(serial))
-                        return
+                        saved_any = True
+                if saved_any:
+                    return
 
             # Format 2: {"connectorId": 1, "publicKey": "04..."}
             pk = data_obj.get("publicKey", data_obj.get("public_key", data_obj.get("PublicKey")))
