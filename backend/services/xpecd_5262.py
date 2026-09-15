@@ -75,8 +75,10 @@ def _build_steps() -> list[TestStep]:
         TestStep(4, "reject_above_range", "ChangeConfiguration(WebSocketPingTimeout, '61') — Rejected"),
         TestStep(6, "accept_max", "ChangeConfiguration(WebSocketPingTimeout, '60') — Accepted"),
         TestStep(5, "connect_test_server", "Ligar charger ao servidor de teste — conexão OCPP estabelecida"),
-        TestStep(7, "pong_delay", "Pong delayed 20s/40s/60s (< timeout) — connection stays open"),
-        TestStep(8, "pong_drop", "Pong suppressed > 60s — charger closes socket at ~60s"),
+        TestStep(7, "pong_delay_20", "Pong delayed 20s (< timeout) — connection stays open"),
+        TestStep(8, "pong_delay_40", "Pong delayed 40s (< timeout) — connection stays open"),
+        TestStep(9, "pong_delay_50", "Pong delayed 50s (< timeout) — connection stays open"),
+        TestStep(10, "pong_drop", "Pong suppressed > 60s — charger closes socket at ~60s"),
     ]
 
 
@@ -196,7 +198,7 @@ class XpecdTest:
     # ── Phase 1: Config Validation ───────────────────────────────────────────
 
     PHASE1_IDS = {1, 2, 3, 4, 6}
-    PHASE2_IDS = {5, 7, 8}
+    PHASE2_IDS = {5, 7, 8, 9, 10}
 
     @property
     def _phase1_steps(self):
@@ -422,7 +424,9 @@ class XpecdTest:
 
             await asyncio.sleep(5)
 
-            await self._step_pong_delay()
+            await self._step_pong_delay(7, 20)
+            await self._step_pong_delay(8, 40)
+            await self._step_pong_delay(9, 50)
             await self._step_pong_drop()
 
             pp_passed = all(s.status == StepStatus.PASSED for s in self._phase2_steps)
@@ -437,98 +441,89 @@ class XpecdTest:
         finally:
             await self.stop_pingpong()
 
-    async def _step_pong_delay(self):
-        """Step 7: Pong delayed 20s/40s/60s — connection must stay open."""
-        delays = [20, 40, 60]
-        await self._mark(7, StepStatus.RUNNING,
-            f"Testing pong delays: {delays}s — connection must stay open")
+    async def _step_pong_delay(self, step_id: int, delay: int):
+        """Pong delayed by `delay` seconds — connection must stay open (timeout=60s)."""
+        observe_s = delay + 45
+        self._log(step_id, f"Setting pong delay to {delay}s, observing for {observe_s}s")
+        await self._mark(step_id, StepStatus.RUNNING,
+            f"Pong delayed {delay}s — connection must stay open (timeout=60s)")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
-            self._log(7, "No charger connection available")
-            await self._mark(7, StepStatus.FAILED, "No charger connection")
-            return
-
-        try:
-            for delay in delays:
-                if not self._charger_ws.open:
-                    self._log(7, f"Charger disconnected before testing {delay}s delay")
-                    await self._mark(7, StepStatus.FAILED,
-                        f"Charger disconnected before {delay}s delay test")
-                    return
-
-                observe_s = delay * 2.25
-                self._log(7, f"Setting pong delay to {delay}s, observing for {observe_s:.0f}s")
-                proto.pong_mode = PongMode.DELAY
-                proto.pong_delay_s = delay
-                proto.ping_count = 0
-
-                await asyncio.sleep(observe_s)
-
-                if self._charger_ws.open:
-                    pings = proto.ping_count
-                    self._log(7, f"PASS: {delay}s delay — connection alive, {pings} pings in {observe_s:.0f}s")
-                else:
-                    self._log(7, f"FAIL: Charger disconnected during {delay}s delay test")
-                    await self._mark(7, StepStatus.FAILED,
-                        f"Charger disconnected during {delay}s delay test")
-                    return
-
-                proto.pong_mode = PongMode.NORMAL
-                if delay != delays[-1]:
-                    self._log(7, "Resetting to normal pong before next delay test")
-                    await asyncio.sleep(3)
-
-            self._log(7, f"All delay tests passed: {delays}s")
-            await self._mark(7, StepStatus.PASSED,
-                f"Connection stayed open for all delays ({', '.join(f'{d}s' for d in delays)})")
-        except Exception as e:
-            self._log(7, f"Error: {e}")
-            await self._mark(7, StepStatus.FAILED, str(e))
-        finally:
-            proto.pong_mode = PongMode.NORMAL
-
-    async def _step_pong_drop(self):
-        """Step 8: Pong suppressed > 60s — charger closes socket at ~60s."""
-        self._log(8, "Starting pong drop test — suppressing all pong responses")
-        await self._mark(8, StepStatus.RUNNING, "Pong suppressed — charger should close socket at ~60s")
-
-        proto = self._protocol
-        if not proto or not self._charger_ws:
-            self._log(8, "No charger connection available")
-            await self._mark(8, StepStatus.FAILED, "No charger connection")
+            self._log(step_id, "No charger connection available")
+            await self._mark(step_id, StepStatus.FAILED, "No charger connection")
             return
 
         if not self._charger_ws.open:
-            self._log(8, "Charger already disconnected from previous step")
-            await self._mark(8, StepStatus.SKIPPED, "Charger already disconnected (from previous step)")
+            self._log(step_id, "Charger already disconnected from previous step")
+            await self._mark(step_id, StepStatus.SKIPPED, "Charger already disconnected (from previous step)")
+            return
+
+        try:
+            proto.pong_mode = PongMode.DELAY
+            proto.pong_delay_s = delay
+            proto.ping_count = 0
+
+            await asyncio.sleep(observe_s)
+
+            if self._charger_ws.open:
+                pings = proto.ping_count
+                self._log(step_id, f"PASS: {delay}s delay — connection alive after {observe_s}s, {pings} pings received")
+                await self._mark(step_id, StepStatus.PASSED,
+                    f"Connection stayed open with {delay}s pong delay ({pings} pings in {observe_s}s)")
+            else:
+                self._log(step_id, f"FAIL: Charger disconnected during {delay}s delay test")
+                await self._mark(step_id, StepStatus.FAILED,
+                    f"Charger disconnected during {delay}s delay test")
+        except Exception as e:
+            self._log(step_id, f"Error: {e}")
+            await self._mark(step_id, StepStatus.FAILED, str(e))
+        finally:
+            proto.pong_mode = PongMode.NORMAL
+            self._log(step_id, "Pong mode reset to NORMAL")
+            await asyncio.sleep(3)
+
+    async def _step_pong_drop(self):
+        """Step 10: Pong suppressed > 60s — charger closes socket at ~60s."""
+        self._log(10, "Starting pong drop test — suppressing all pong responses")
+        await self._mark(10, StepStatus.RUNNING, "Pong suppressed — charger should close socket at ~60s")
+
+        proto = self._protocol
+        if not proto or not self._charger_ws:
+            self._log(10, "No charger connection available")
+            await self._mark(10, StepStatus.FAILED, "No charger connection")
+            return
+
+        if not self._charger_ws.open:
+            self._log(10, "Charger already disconnected from previous step")
+            await self._mark(10, StepStatus.SKIPPED, "Charger already disconnected (from previous step)")
             return
 
         proto.pong_mode = PongMode.DROP
         proto.ping_count = 0
         drop_start = time.time()
-        self._log(8, "Pong mode set to DROP — all pong frames suppressed")
+        self._log(10, "Pong mode set to DROP — all pong frames suppressed")
 
         try:
             for tick in range(90):
                 await asyncio.sleep(1)
                 if not self._charger_ws.open:
                     elapsed = time.time() - drop_start
-                    self._log(8, f"Charger closed socket after {elapsed:.1f}s ({proto.ping_count} pings sent)")
-                    await self._mark(8, StepStatus.PASSED,
+                    self._log(10, f"Charger closed socket after {elapsed:.1f}s ({proto.ping_count} pings sent)")
+                    await self._mark(10, StepStatus.PASSED,
                         f"Charger closed socket after {elapsed:.1f}s without pong "
                         f"({proto.ping_count} pings sent)")
                     return
                 if (tick + 1) % 15 == 0:
-                    self._log(8, f"Still connected after {tick + 1}s, {proto.ping_count} pings so far")
+                    self._log(10, f"Still connected after {tick + 1}s, {proto.ping_count} pings so far")
 
-            self._log(8, f"FAIL: Charger did NOT disconnect after 90s ({proto.ping_count} pings)")
-            await self._mark(8, StepStatus.FAILED,
+            self._log(10, f"FAIL: Charger did NOT disconnect after 90s ({proto.ping_count} pings)")
+            await self._mark(10, StepStatus.FAILED,
                 f"Charger did NOT disconnect after 90s without pong "
                 f"({proto.ping_count} pings received)")
         except Exception as e:
-            self._log(8, f"Error: {e}")
-            await self._mark(8, StepStatus.FAILED, str(e))
+            self._log(10, f"Error: {e}")
+            await self._mark(10, StepStatus.FAILED, str(e))
 
     def generate_report(self) -> str:
         now = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
@@ -561,8 +556,8 @@ class XpecdTest:
                 f"</tr>"
             )
 
-        phase1_rows = "".join(step_row(s) for s in self.steps if s.id in PHASE1_IDS)
-        phase2_rows = "".join(step_row(s) for s in self.steps if s.id in PHASE2_IDS)
+        phase1_rows = "".join(step_row(s) for s in self.steps if s.id in self.PHASE1_IDS)
+        phase2_rows = "".join(step_row(s) for s in self.steps if s.id in self.PHASE2_IDS)
 
         return f"""<!DOCTYPE html>
 <html lang="en">
