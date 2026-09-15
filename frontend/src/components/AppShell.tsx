@@ -33,6 +33,7 @@ const TITLE_KEYS: Record<string, string> = {
   '/configuration': 'shell.configuration',
   '/users': 'shell.users',
   '/my-charging': 'shell.driverPortal',
+  '/firmware-testing': 'nav.firmwareTesting',
 }
 
 export function AppShell({ children }: { children: ReactNode }) {

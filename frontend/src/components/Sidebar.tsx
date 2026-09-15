@@ -2,7 +2,7 @@ import React from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   Zap, LayoutDashboard, ArrowLeftRight, Terminal, Settings,
-  Activity, ShieldCheck, Shield, Gauge, Users, LogOut, User as UserIcon, ScrollText
+  Activity, ShieldCheck, Shield, Gauge, Users, LogOut, User as UserIcon, ScrollText, FlaskConical
 } from 'lucide-react'
 import { useChargerStore } from '../store/chargerStore'
 import { useAuthStore } from '../store/authStore'
@@ -21,6 +21,7 @@ const ADMIN_NAV = [
   { to: '/users',          icon: Users,           labelKey: 'nav.users' },
   { to: '/logs',           icon: ScrollText,      labelKey: 'nav.logs' },
   { to: '/ocmf',           icon: Shield,          labelKey: 'nav.ocmf' },
+  { to: '/firmware-testing', icon: FlaskConical,  labelKey: 'nav.firmwareTesting' },
 ]
 
 const USER_NAV = [

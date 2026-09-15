@@ -9,6 +9,7 @@ import { Commands } from './pages/Commands'
 import { Configuration } from './pages/Configuration'
 import Authentication from './pages/Authentication'
 import { SmartCharging } from './pages/SmartCharging'
+import { FirmwareTesting } from './pages/FirmwareTesting'
 import { UsersManagement } from './pages/UsersManagement'
 import { UserPortal } from './pages/UserPortal'
 import { Logs } from './pages/Logs'
@@ -137,6 +138,17 @@ function AppInner() {
         }
       />
 
+
+      <Route
+        path="/firmware-testing"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AppShell>
+              <FirmwareTesting />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

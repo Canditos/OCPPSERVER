@@ -281,6 +281,16 @@ export const api = {
     return `${base}/ocmf/transactions/${txId}/download`
   },
 
+  // Firmware Tests (XPECD-5262)
+  xpecdRun: (charge_point_id: string) =>
+    http.post('/firmware-tests/xpecd-5262/run', { charge_point_id }).then(r => r.data),
+  xpecdPingpongStart: (charge_point_id: string, pong_delay_s: number = 20) =>
+    http.post('/firmware-tests/xpecd-5262/pingpong/start', { charge_point_id, pong_delay_s }).then(r => r.data),
+  xpecdPingpongStop: () =>
+    http.post('/firmware-tests/xpecd-5262/pingpong/stop').then(r => r.data),
+  xpecdStatus: () =>
+    http.get('/firmware-tests/xpecd-5262/status').then(r => r.data),
+
   reverifyOcmfTransactions: () =>
     http.post('/ocmf/reverify-transactions').then(r => r.data),
   // Simulator

@@ -12,6 +12,11 @@ class RunTestRequest(BaseModel):
     charge_point_id: str
 
 
+class PingpongStartRequest(BaseModel):
+    charge_point_id: str
+    pong_delay_s: float = 20.0
+
+
 @router.post("/xpecd-5262/run")
 async def run_xpecd_5262(
     req: RunTestRequest,
@@ -28,13 +33,13 @@ async def run_xpecd_5262(
 
 @router.post("/xpecd-5262/pingpong/start")
 async def start_pingpong(
-    req: RunTestRequest,
+    req: PingpongStartRequest,
     admin: User = Depends(require_admin),
 ):
     """Phase 2: Start ping/pong test server and wait for charger connection."""
     test = get_test()
     try:
-        await test.start_pingpong(req.charge_point_id)
+        await test.start_pingpong(req.charge_point_id, pong_delay_s=req.pong_delay_s)
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return test.to_dict()

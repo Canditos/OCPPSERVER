@@ -290,11 +290,12 @@ class XpecdTest:
 
     # ── Phase 2: Ping/Pong Test ──────────────────────────────────────────────
 
-    async def start_pingpong(self, charge_point_id: str):
+    async def start_pingpong(self, charge_point_id: str, pong_delay_s: float = 20.0):
         if self._server is not None:
             raise RuntimeError("Servidor de teste já está ativo")
 
         self.charge_point_id = charge_point_id
+        self._pong_delay_s = pong_delay_s
         self._charger_connected = asyncio.Event()
         self._protocol = None
         self._charger_ws = None
@@ -371,8 +372,10 @@ class XpecdTest:
             await self.stop_pingpong()
 
     async def _step_pong_delay(self):
-        """Step 6: Delay pong by 20s (within 60s timeout). Connection must survive."""
-        await self._mark(6, StepStatus.RUNNING, "A atrasar pong em 20s...")
+        """Step 6: Delay pong by configured seconds (within 60s timeout). Connection must survive."""
+        delay = getattr(self, '_pong_delay_s', 20.0)
+        observe_s = delay * 2.25
+        await self._mark(6, StepStatus.RUNNING, f"A atrasar pong em {delay:.0f}s...")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
@@ -380,16 +383,16 @@ class XpecdTest:
             return
 
         proto.pong_mode = PongMode.DELAY
-        proto.pong_delay_s = 20.0
+        proto.pong_delay_s = delay
         proto.ping_count = 0
 
         try:
-            await asyncio.sleep(45)
+            await asyncio.sleep(observe_s)
 
             if self._charger_ws.open:
                 pings = proto.ping_count
                 await self._mark(6, StepStatus.PASSED,
-                    f"Conexão mantida com pong atrasado 20s. {pings} pings recebidos em 45s")
+                    f"Conexão mantida com pong atrasado {delay:.0f}s. {pings} pings recebidos em {observe_s:.0f}s")
             else:
                 await self._mark(6, StepStatus.FAILED,
                     "Charger desconectou durante teste de delay (não esperado)")
