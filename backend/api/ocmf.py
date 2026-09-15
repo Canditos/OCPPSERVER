@@ -364,10 +364,14 @@ async def extract_meter_key_from_charger(cp_id: str, connector_id: int, db: Asyn
                     source = "Histórico OCPP (Raw EC Point)"
                     break
 
-    # 4. Fallback calibrated LEM DCBM key if not yet transmitted
+    # 4. No fallback — require real key from charger
     if not discovered_key:
-        discovered_key = "3059301306072A8648CE3D020106082A8648CE3D0301070342000408680D9D16818CBDA91E06FEF6AF6919A8241A4EA293FDDC407B1A708EB1EEB46AD5BDB2698AC47BBFECCEA6E4149A0C34EA7083989C04E8EB563AD4A40859A8"
-        source = "Certificado de Calibração LEM DCBM"
+        return {
+            "success": False,
+            "charge_point_id": cp_id,
+            "connector_id": connector_id,
+            "error": "Chave pública do medidor LEM DCBM não encontrada. A chave será capturada automaticamente quando o carregador enviar DataTransfer ou na próxima transacção OCMF com campo SE.",
+        }
 
     # Save to database
     r_existing = await db.execute(

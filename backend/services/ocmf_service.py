@@ -43,6 +43,7 @@ class OcmfParseResult:
         signature_algo: Optional[str] = None,
         raw_data_to_verify: Optional[str] = None,
         error: Optional[str] = None,
+        signer_public_key: Optional[str] = None,
     ):
         self.is_valid_format = is_valid_format
         self.raw_ocmf = raw_ocmf
@@ -56,6 +57,7 @@ class OcmfParseResult:
         self.signature_algo = signature_algo or "ECDSA-secp256r1-SHA256"
         self.raw_data_to_verify = raw_data_to_verify or ""
         self.error = error
+        self.signer_public_key = signer_public_key
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -139,6 +141,11 @@ def parse_ocmf(ocmf_str: str) -> OcmfParseResult:
 
     sig_algo = sig_json.get("SA", "ECDSA-secp256r1-SHA256") if isinstance(sig_json, dict) else "ECDSA-secp256r1-SHA256"
 
+    # Extract public key from OCMF signature block (SE = Signer Encoding / public key)
+    signer_key = None
+    if isinstance(sig_json, dict):
+        signer_key = sig_json.get("SE", sig_json.get("PK", sig_json.get("pk")))
+
     return OcmfParseResult(
         is_valid_format=True,
         raw_ocmf=clean_str,
@@ -151,6 +158,7 @@ def parse_ocmf(ocmf_str: str) -> OcmfParseResult:
         signature_data=sig_data,
         signature_algo=sig_algo,
         raw_data_to_verify=raw_data_to_verify,
+        signer_public_key=str(signer_key) if signer_key else None,
     )
 
 

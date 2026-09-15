@@ -147,18 +147,126 @@ class ChargePoint(OcppChargePoint):
         asyncio.create_task(self._auto_discover_meter_keys())
 
     async def _auto_discover_meter_keys(self):
-        """Automatically queries charger for meter public keys and registers them in DB."""
-        await asyncio.sleep(3)
+        """Queries charger for meter public keys via GetConfiguration and registers them in DB."""
+        await asyncio.sleep(5)
         try:
-            from api.ocmf import extract_meter_key_from_charger
-            async with AsyncSessionLocal() as db:
-                for conn_id in [1, 2]:
-                    try:
-                        await extract_meter_key_from_charger(self.id, conn_id, db)
-                    except Exception as e:
-                        logger.debug(f"{self.id}: auto discover meter key connector {conn_id}: {e}")
+            candidate_keys = [
+                "MeterPublicKey1", "MeterPublicKey2",
+                "PublicKey1", "PublicKey2",
+                "MeterPublicKey", "PublicKey",
+                "EichrechtPublicKey",
+                "EichrechtPublicKey1", "EichrechtPublicKey2",
+            ]
+            if hasattr(self, "get_configuration"):
+                resp = await self.get_configuration(candidate_keys)
+                config_list = getattr(resp, "configuration_key", []) or []
+                for item in config_list:
+                    key_name = getattr(item, "key", "")
+                    val = getattr(item, "value", "") or ""
+                    if len(val) < 64:
+                        continue
+                    connector_id = 1
+                    for suffix in ["1", "2"]:
+                        if key_name.endswith(suffix):
+                            connector_id = int(suffix)
+                            break
+                    await self._save_meter_key(connector_id, val, f"OCPP GetConfiguration ({key_name})")
         except Exception as e:
-            logger.warning(f"{self.id}: error during automatic meter key discovery: {e}")
+            logger.debug(f"{self.id}: auto discover meter keys via GetConfiguration: {e}")
+
+    async def _save_meter_key(self, connector_id: int, public_key_hex: str, source: str):
+        """Saves a discovered meter public key to DB, skipping if already set."""
+        from services.ocmf_service import load_public_key_from_string
+        try:
+            load_public_key_from_string(public_key_hex)
+        except Exception:
+            logger.debug(f"{self.id}: invalid key from {source} for connector {connector_id}")
+            return
+        async with AsyncSessionLocal() as db:
+            r_existing = await db.execute(
+                select(MeterPublicKey).where(
+                    MeterPublicKey.charge_point_id == self.id,
+                    MeterPublicKey.connector_id == connector_id,
+                )
+            )
+            existing = r_existing.scalar_one_or_none()
+            if existing and existing.public_key_hex == public_key_hex.strip():
+                return
+            r_c = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
+            charger = r_c.scalar_one_or_none()
+            charger_db_id = charger.id if charger else 0
+            if existing:
+                existing.public_key_hex = public_key_hex.strip()
+                existing.is_active = True
+            else:
+                db.add(MeterPublicKey(
+                    charger_id=charger_db_id,
+                    charge_point_id=self.id,
+                    connector_id=connector_id,
+                    meter_model="LEM DCBM 400",
+                    public_key_hex=public_key_hex.strip(),
+                    curve_name="secp256r1",
+                    is_active=True,
+                ))
+            await db.commit()
+            logger.info(f"{self.id}: meter public key saved for connector {connector_id} via {source}")
+
+    async def _extract_keys_from_data_transfer(self, data_str: str):
+        """Parses incoming DataTransfer data for LEM DCBM meter public keys."""
+        if not data_str or len(data_str) < 64:
+            return
+        import re
+        try:
+            data_obj = json.loads(data_str)
+        except Exception:
+            data_obj = None
+
+        # Format 1: {"meters": [{"connectorId": 1, "publicKey": "04...", "meterSerial": "..."}]}
+        if isinstance(data_obj, dict):
+            meters = data_obj.get("meters", [])
+            if isinstance(meters, list):
+                for meter in meters:
+                    if not isinstance(meter, dict):
+                        continue
+                    cid = meter.get("connectorId", meter.get("connector_id", meter.get("ConnectorId")))
+                    pk = meter.get("publicKey", meter.get("public_key", meter.get("PublicKey", meter.get("pk"))))
+                    if cid and pk and len(str(pk)) >= 64:
+                        serial = meter.get("meterSerial", meter.get("serial", meter.get("Serial")))
+                        await self._save_meter_key(int(cid), str(pk), "DataTransfer (setMeterConfiguration)")
+                        if serial:
+                            await self._update_meter_serial(int(cid), str(serial))
+                        return
+
+            # Format 2: {"connectorId": 1, "publicKey": "04..."}
+            pk = data_obj.get("publicKey", data_obj.get("public_key", data_obj.get("PublicKey")))
+            cid = data_obj.get("connectorId", data_obj.get("connector_id", 1))
+            if pk and len(str(pk)) >= 64:
+                await self._save_meter_key(int(cid), str(pk), "DataTransfer (direct)")
+                return
+
+        # Format 3: raw hex EC point (04 + 128 hex chars) anywhere in the data
+        ec_match = re.search(r'04[0-9a-fA-F]{128}', data_str)
+        if ec_match:
+            await self._save_meter_key(1, ec_match.group(0), "DataTransfer (raw EC point)")
+            return
+
+        # Format 4: DER SubjectPublicKeyInfo
+        der_match = re.search(r'3059301306072A8648CE3D020106082A8648CE3D03010703420004[0-9a-fA-F]{128}', data_str, re.IGNORECASE)
+        if der_match:
+            await self._save_meter_key(1, der_match.group(0), "DataTransfer (DER SubjectPublicKeyInfo)")
+
+    async def _update_meter_serial(self, connector_id: int, serial: str):
+        async with AsyncSessionLocal() as db:
+            r = await db.execute(
+                select(MeterPublicKey).where(
+                    MeterPublicKey.charge_point_id == self.id,
+                    MeterPublicKey.connector_id == connector_id,
+                )
+            )
+            key = r.scalar_one_or_none()
+            if key:
+                key.serial_number = serial
+                await db.commit()
 
     @on(Action.Heartbeat)
     async def on_heartbeat(self, **kwargs):
@@ -351,14 +459,28 @@ class ChargePoint(OcppChargePoint):
                         )
                     )
                     m_key = r_k.scalar_one_or_none()
+
+                    # If no key in DB, try to extract from OCMF SE field and auto-register
+                    if not m_key:
+                        parsed_oc = parse_ocmf(ocmf_stop)
+                        tx.ocmf_meter_serial = parsed_oc.gateway_id
+                        if parsed_oc.signer_public_key and len(parsed_oc.signer_public_key) >= 64:
+                            await self._save_meter_key(stopped_connector_id, parsed_oc.signer_public_key, "OCMF SE field")
+                            r_k2 = await db.execute(
+                                select(MeterPublicKey).where(
+                                    MeterPublicKey.charge_point_id == self.id,
+                                    MeterPublicKey.connector_id == stopped_connector_id,
+                                    MeterPublicKey.is_active == True
+                                )
+                            )
+                            m_key = r_k2.scalar_one_or_none()
+
                     if m_key:
                         v_res = verify_ocmf_signature(ocmf_stop, m_key.public_key_hex, m_key.curve_name)
                         tx.ocmf_verified = v_res.get("verified", False)
                         tx.ocmf_verification_error = v_res.get("error")
-                        tx.ocmf_meter_serial = v_res.get("meter_serial")
+                        tx.ocmf_meter_serial = v_res.get("meter_serial") or tx.ocmf_meter_serial
                     else:
-                        parsed_oc = parse_ocmf(ocmf_stop)
-                        tx.ocmf_meter_serial = parsed_oc.gateway_id
                         tx.ocmf_verified = False
                         tx.ocmf_verification_error = "Chave pública do medidor não configurada"
 
@@ -602,15 +724,8 @@ class ChargePoint(OcppChargePoint):
         message_id = kwargs.get("message_id")
         data_str = str(kwargs.get("data", ""))
 
-        # Auto-capture meter public key if sent via DataTransfer
-        if any(k in (message_id or "") or k in data_str for k in ["PublicKey", "MeterKey", "DCBM", "LEM", "Eichrecht", "setMeterConfiguration", "meters", "publicKey"]):
-            try:
-                from api.ocmf import extract_meter_key_from_charger
-                async with AsyncSessionLocal() as db:
-                    for cid in [1, 2]:
-                        await extract_meter_key_from_charger(self.id, cid, db)
-            except Exception as e:
-                logger.debug(f"Error handling DataTransfer meter key auto-save: {e}")
+        # Parse incoming data directly for meter public keys (LEM DCBM via Siemens SICHARGE)
+        await self._extract_keys_from_data_transfer(data_str)
 
         await event_bus.publish("data_transfer", {
             "charge_point_id": self.id,
