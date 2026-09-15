@@ -9,12 +9,12 @@ import type { Charger } from '../types'
 import { useI18n } from '../i18n'
 
 interface StepData {
-  index: number
+  id: number
   name: string
+  description: string
   status: 'pending' | 'running' | 'passed' | 'failed' | 'skipped'
   detail: string
-  started_at: number | null
-  finished_at: number | null
+  duration_s: number | null
 }
 
 interface XpecdStatus {
@@ -110,11 +110,11 @@ function ChargerSelector({
   )
 }
 
-function StepRow({ step, t }: { step: StepData; t: (k: string, v?: Record<string, string | number>) => string }) {
-  const duration = step.started_at && step.finished_at
-    ? `${(step.finished_at - step.started_at).toFixed(1)}s`
-    : step.started_at && step.status === 'running'
-      ? t('firmware.running')
+function StepRow({ step }: { step: StepData }) {
+  const duration = step.duration_s != null
+    ? `${step.duration_s}s`
+    : step.status === 'running'
+      ? '...'
       : ''
 
   return (
@@ -122,14 +122,15 @@ function StepRow({ step, t }: { step: StepData; t: (k: string, v?: Record<string
       <div className="pt-0.5 shrink-0">{STEP_ICONS[step.status] || STEP_ICONS.pending}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-gray-500">#{step.index}</span>
+          <span className="text-xs font-mono text-gray-500">#{step.id}</span>
           <span className="text-sm font-medium text-gray-200">{step.name}</span>
           {duration && (
             <span className="ml-auto text-xs font-mono text-gray-500">{duration}</span>
           )}
         </div>
+        <p className="text-xs text-gray-500 mt-1 break-words">{step.description}</p>
         {step.detail && (
-          <p className="text-xs text-gray-500 mt-1 break-words">{step.detail}</p>
+          <p className="text-xs text-amber-400/80 mt-0.5 break-words">{step.detail}</p>
         )}
       </div>
     </div>
@@ -211,8 +212,8 @@ export function FirmwareTesting() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const phase1Steps = steps.filter(s => s.index <= 5)
-  const phase2Steps = steps.filter(s => s.index > 5)
+  const phase1Steps = steps.filter(s => s.id <= 5)
+  const phase2Steps = steps.filter(s => s.id > 5)
 
   const allPassed = steps.length > 0 && steps.every(s => s.status === 'passed')
   const anyFailed = steps.some(s => s.status === 'failed')
@@ -305,7 +306,7 @@ export function FirmwareTesting() {
 
             <div className="space-y-2">
               {phase1Steps.map(step => (
-                <StepRow key={step.index} step={step} t={t} />
+                <StepRow key={step.id} step={step} />
               ))}
             </div>
           </div>
@@ -367,7 +368,7 @@ export function FirmwareTesting() {
 
             <div className="space-y-2">
               {phase2Steps.map(step => (
-                <StepRow key={step.index} step={step} t={t} />
+                <StepRow key={step.id} step={step} />
               ))}
             </div>
           </div>
