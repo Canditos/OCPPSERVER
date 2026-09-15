@@ -20,6 +20,7 @@ from api.auth_tokens import router as auth_tokens_router
 from api.smart_charging import router as smart_charging_router
 from api.auth import router as auth_router, hash_password
 from api.ocmf import router as ocmf_router
+from api.firmware_tests import router as firmware_tests_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +51,7 @@ app.include_router(tags_router)
 app.include_router(auth_tokens_router)
 app.include_router(smart_charging_router)
 app.include_router(ocmf_router)
+app.include_router(firmware_tests_router)
 
 
 @app.get("/health")

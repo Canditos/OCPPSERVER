@@ -8,6 +8,9 @@ services:
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./data/ocpp16.db
       - PORT=8000
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://ocpp.gatoescondido.com}
+      - ADMIN_DEFAULT_PASSWORD=${ADMIN_DEFAULT_PASSWORD:-}
     networks:
       - default
       - coolify

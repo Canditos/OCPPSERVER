@@ -5,6 +5,7 @@ from database import get_db
 from models.transaction import Transaction, MeterValue
 from models.user import User
 from schemas import TransactionOut, MeterValueOut
+from energy import delta_kwh, to_watt_hours
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -32,24 +33,25 @@ async def list_transactions(
     for tx in txs:
         d = TransactionOut.model_validate(tx)
         
-        # Calculate energy delivered (both completed and active transactions)
+        # Prefer the final counter, but use the latest meter value when a
+        # charger omitted it or reported the same counter at stop time.
         if tx.meter_stop is not None and tx.meter_start is not None:
-            d.energy_kwh = round(max(0, tx.meter_stop - tx.meter_start) / 1000, 3)
-        elif tx.status == "Active":
-            # For active transactions, calculate from latest Energy.Active.Import.Register meter value
-            meter_result = await db.execute(
-                select(MeterValue)
-                .where(
-                    MeterValue.transaction_id == tx.id,
-                    MeterValue.measurand == 'Energy.Active.Import.Register'
-                )
-                .order_by(MeterValue.timestamp.desc())
-                .limit(1)
+            d.energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
+
+        meter_result = await db.execute(
+            select(MeterValue)
+            .where(
+                MeterValue.transaction_id == tx.id,
+                MeterValue.measurand == 'Energy.Active.Import.Register'
             )
-            latest_meter = meter_result.scalar_one_or_none()
-            if latest_meter:
-                meter_value = float(latest_meter.value)
-                d.energy_kwh = round(max(0, meter_value - (tx.meter_start or 0)) / 1000, 3)
+            .order_by(MeterValue.timestamp.desc())
+            .limit(1)
+        )
+        latest_meter = meter_result.scalar_one_or_none()
+        if latest_meter:
+            meter_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
+            if d.energy_kwh is None or meter_kwh > d.energy_kwh:
+                d.energy_kwh = meter_kwh
 
         # Map user info from RFID tag
         user = user_by_tag.get(tx.id_tag)
@@ -106,9 +108,9 @@ async def get_live_power(tx_id: int, db: AsyncSession = Depends(get_db)):
     return {
         "power_w": float(power_meter.value) if power_meter else 0.0,
         "power_kw": float(power_meter.value) / 1000 if power_meter else 0.0,
-        "energy_wh": float(energy_meter.value) if energy_meter else 0,
-        "energy_kwh": round(float(energy_meter.value) / 1000, 3) if energy_meter else 0,
-        "energy_delivered_kwh": round((float(energy_meter.value) - (tx.meter_start if tx else 0)) / 1000, 3) if energy_meter and tx else 0,
+        "energy_wh": to_watt_hours(float(energy_meter.value), energy_meter.unit) if energy_meter else 0,
+        "energy_kwh": delta_kwh(0, float(energy_meter.value), energy_meter.unit) if energy_meter else 0,
+        "energy_delivered_kwh": delta_kwh(tx.meter_start, float(energy_meter.value), energy_meter.unit) if energy_meter and tx else 0,
         "timestamp": power_meter.timestamp.isoformat() if power_meter else None,
     }
 
@@ -143,7 +145,7 @@ async def get_active_transaction(cp_id: str, connector_id: int | None = None, db
         return None
     d = TransactionOut.model_validate(tx)
     if tx.meter_stop is not None:
-        d.energy_kwh = round((tx.meter_stop - tx.meter_start) / 1000, 3)
+        d.energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
 
     if tx.id_tag:
         u_res = await db.execute(select(User).where(User.rfid_tag == tx.id_tag))
@@ -165,8 +167,7 @@ async def get_active_transaction(cp_id: str, connector_id: int | None = None, db
         )
         latest_meter = meter_result.scalar_one_or_none()
         if latest_meter:
-            meter_value = float(latest_meter.value)
-            d.energy_kwh = round(max(0.0, meter_value - (tx.meter_start or 0)) / 1000, 3)
+            d.energy_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
         else:
             d.energy_kwh = 0.0
 
@@ -207,7 +208,7 @@ async def get_all_active_transactions(cp_id: str, db: AsyncSession = Depends(get
             continue
         d = TransactionOut.model_validate(tx)
         if tx.meter_stop is not None:
-            d.energy_kwh = round((tx.meter_stop - tx.meter_start) / 1000, 3)
+            d.energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
         
         user = users_by_tag.get(tx.id_tag)
         if user:
@@ -227,8 +228,7 @@ async def get_all_active_transactions(cp_id: str, db: AsyncSession = Depends(get
             )
             latest_meter = meter_result.scalar_one_or_none()
             if latest_meter:
-                meter_value = float(latest_meter.value)
-                d.energy_kwh = round(max(0.0, meter_value - (tx.meter_start or 0)) / 1000, 3)
+                d.energy_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
             else:
                 d.energy_kwh = 0.0
         

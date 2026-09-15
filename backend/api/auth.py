@@ -25,7 +25,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ── Dynamic Security Configuration ───────────────────────────────────────────
 JWT_SECRET = os.environ.get("JWT_SECRET")
 if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET environment variable is required. Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\"")
+    JWT_SECRET = secrets.token_urlsafe(64)
+    logging.getLogger(__name__).warning(
+        "JWT_SECRET not set — generated ephemeral secret. "
+        "Sessions will be invalidated on restart. "
+        "Set JWT_SECRET env var for persistent sessions."
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.environ.get("JWT_EXPIRATION_HOURS", "72"))
 

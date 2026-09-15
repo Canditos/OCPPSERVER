@@ -12,6 +12,7 @@ from schemas import (
     ChargerSecurityUpdate, GenerateKeyResponse, SyncKeyResponse,
     CertificateOut, InstallCertificateRequest, IssueClientCertRequest, IssueClientCertResponse
 )
+from energy import delta_kwh
 import pki
 
 
@@ -74,8 +75,7 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
                     c_out.active_power_w = float(mv.value)
                     c_out.active_power_kw = round(float(mv.value) / 1000.0, 2)
                 elif ('energy' in m_name) and c_out.active_energy_kwh is None:
-                    consumed = max(0.0, float(mv.value) - (tx.meter_start or 0))
-                    c_out.active_energy_kwh = round(consumed / 1000.0, 2)
+                    c_out.active_energy_kwh = delta_kwh(tx.meter_start, float(mv.value), mv.unit)
                 elif ('soc' in m_name) and c_out.active_soc is None:
                     try:
                         c_out.active_soc = float(mv.value)

@@ -29,6 +29,7 @@ from models.transaction import Transaction, MeterValue
 from models.authorized_tag import AuthorizedTag
 from models.user import User
 from sqlalchemy import select, update
+from energy import to_watt_hours
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +282,11 @@ class ChargePointV201(BaseChargePointV201):
                     if "Power" in measurand:
                         latest_power_w = val
                     elif "Energy" in measurand:
-                        latest_energy_wh = val
+                        unit_info = sv.get("unit_of_measure") or {}
+                        latest_energy_wh = to_watt_hours(
+                            val,
+                            unit_info.get("unit") if isinstance(unit_info, dict) else sv.get("unit"),
+                        )
                     elif "SoC" in measurand or "StateOfCharge" in measurand:
                         soc_pct = val
 
