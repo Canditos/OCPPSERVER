@@ -87,6 +87,8 @@ async def remote_stop(req: RemoteStopRequest):
 
     # 2. If charger is offline or failed to respond, gracefully close the transaction in database
     if active_tx:
+        from models.transaction import MeterValue
+        from sqlalchemy import func
         async with AsyncSessionLocal() as db:
             r = await db.execute(select(Transaction).where(Transaction.id == active_tx.id))
             db_tx = r.scalar_one_or_none()
@@ -94,7 +96,24 @@ async def remote_stop(req: RemoteStopRequest):
                 db_tx.status = "Completed"
                 db_tx.stop_time = now
                 db_tx.stop_reason = "Remote"
-                
+
+                # Use last known energy meter reading as meter_stop so kWh is not 0
+                if db_tx.meter_stop is None:
+                    r_mv = await db.execute(
+                        select(MeterValue)
+                        .where(
+                            MeterValue.transaction_id == db_tx.id,
+                            MeterValue.measurand.ilike("%energy%"),
+                        )
+                        .order_by(MeterValue.timestamp.desc())
+                        .limit(1)
+                    )
+                    last_mv = r_mv.scalar_one_or_none()
+                    if last_mv:
+                        db_tx.meter_stop = int(last_mv.value)
+                    elif db_tx.meter_start is not None:
+                        db_tx.meter_stop = db_tx.meter_start
+
                 # Reset connector status to Available
                 r_c = await db.execute(select(Charger).where(Charger.charge_point_id == req.charge_point_id))
                 c_row = r_c.scalar_one_or_none()
