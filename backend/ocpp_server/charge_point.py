@@ -190,26 +190,26 @@ class ChargePoint(OcppChargePoint):
                 )
             )
             existing = r_existing.scalar_one_or_none()
-            if existing and existing.public_key_hex == public_key_hex.strip():
-                return
+            key_unchanged = existing and existing.public_key_hex == public_key_hex.strip()
             r_c = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = r_c.scalar_one_or_none()
             charger_db_id = charger.id if charger else 0
-            if existing:
-                existing.public_key_hex = public_key_hex.strip()
-                existing.is_active = True
-            else:
-                db.add(MeterPublicKey(
-                    charger_id=charger_db_id,
-                    charge_point_id=self.id,
-                    connector_id=connector_id,
-                    meter_model="LEM DCBM 400",
-                    public_key_hex=public_key_hex.strip(),
-                    curve_name="secp256r1",
-                    is_active=True,
-                ))
-            await db.commit()
-            logger.info(f"{self.id}: meter public key saved for connector {connector_id} via {source}")
+            if not key_unchanged:
+                if existing:
+                    existing.public_key_hex = public_key_hex.strip()
+                    existing.is_active = True
+                else:
+                    db.add(MeterPublicKey(
+                        charger_id=charger_db_id,
+                        charge_point_id=self.id,
+                        connector_id=connector_id,
+                        meter_model="LEM DCBM 400",
+                        public_key_hex=public_key_hex.strip(),
+                        curve_name="secp256r1",
+                        is_active=True,
+                    ))
+                await db.commit()
+                logger.info(f"{self.id}: meter public key saved for connector {connector_id} via {source}")
 
             # Re-verify any past unverified transactions for this charger/connector
             r_txs = await db.execute(
@@ -217,6 +217,7 @@ class ChargePoint(OcppChargePoint):
                     Transaction.charge_point_id == self.id,
                     Transaction.connector_id == connector_id,
                     (Transaction.ocmf_stop_raw.isnot(None)) | (Transaction.ocmf_start_raw.isnot(None)),
+                    Transaction.ocmf_verified.isnot(True),
                 )
             )
             txs = r_txs.scalars().all()
