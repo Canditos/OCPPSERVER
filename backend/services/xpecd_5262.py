@@ -9,8 +9,8 @@ Phase 1 — Config validation via existing CSMS connection:
   5. Restore default "2"
 
 Phase 2 — Ping/Pong behaviour (requires charger reconnection to test endpoint):
-  6. Delay pong 20s (within 60s timeout) → connection must stay alive
-  7. Drop pong entirely → charger must disconnect within ~65s
+  6. Delay pong (within configured timeout) → connection must stay alive
+  7. Drop pong entirely → charger must disconnect within ~timeout
 """
 
 import asyncio
@@ -69,8 +69,8 @@ def _build_steps() -> list[TestStep]:
         TestStep(3, "reject_above_range", "ChangeConfiguration(WebSocketPingTimeout, '61') — Rejected"),
         TestStep(4, "accept_max", "ChangeConfiguration(WebSocketPingTimeout, '60') — Accepted"),
         TestStep(5, "restore_default", "ChangeConfiguration(WebSocketPingTimeout) — restaurar valor original"),
-        TestStep(6, "pong_delay", "Pong atrasado 20s (timeout=60s) — conexão deve manter"),
-        TestStep(7, "pong_drop", "Pong suprimido — charger deve desconectar em ~65s"),
+        TestStep(6, "pong_delay", "Pong atrasado — conexão deve manter"),
+        TestStep(7, "pong_drop", "Pong suprimido — charger deve desconectar"),
     ]
 
 
@@ -393,10 +393,11 @@ class XpecdTest:
             await self.stop_pingpong()
 
     async def _step_pong_delay(self):
-        """Step 6: Delay pong by configured seconds (within 60s timeout). Connection must survive."""
+        """Step 6: Delay pong by configured seconds (within configured timeout). Connection must survive."""
         delay = getattr(self, '_pong_delay_s', 20.0)
+        timeout_val = self._original_value or "30"
         observe_s = delay * 2.25
-        await self._mark(6, StepStatus.RUNNING, f"A atrasar pong em {delay:.0f}s...")
+        await self._mark(6, StepStatus.RUNNING, f"Pong atrasado {delay:.0f}s (timeout={timeout_val}s) — conexão deve manter")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
@@ -423,8 +424,9 @@ class XpecdTest:
             proto.pong_mode = PongMode.NORMAL
 
     async def _step_pong_drop(self):
-        """Step 7: Drop all pongs. Charger must disconnect within ~65s (timeout=60s + margin)."""
-        await self._mark(7, StepStatus.RUNNING, "A suprimir pongs...")
+        """Step 7: Drop all pongs. Charger must disconnect within timeout + margin."""
+        timeout_val = self._original_value or "30"
+        await self._mark(7, StepStatus.RUNNING, f"Pong suprimido — charger deve desconectar em ~{timeout_val}s")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
