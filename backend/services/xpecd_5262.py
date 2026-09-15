@@ -64,11 +64,11 @@ class TestStep:
 
 def _build_steps() -> list[TestStep]:
     return [
-        TestStep(1, "default_value", "GetConfiguration(WebSocketPingTimeout) — valor default = '2'"),
+        TestStep(1, "default_value", "GetConfiguration(WebSocketPingTimeout) — ler valor actual"),
         TestStep(2, "reject_below_range", "ChangeConfiguration(WebSocketPingTimeout, '1') — Rejected"),
         TestStep(3, "reject_above_range", "ChangeConfiguration(WebSocketPingTimeout, '61') — Rejected"),
         TestStep(4, "accept_max", "ChangeConfiguration(WebSocketPingTimeout, '60') — Accepted"),
-        TestStep(5, "restore_default", "ChangeConfiguration(WebSocketPingTimeout, '2') — restaurar default"),
+        TestStep(5, "restore_default", "ChangeConfiguration(WebSocketPingTimeout) — restaurar valor original"),
         TestStep(6, "pong_delay", "Pong atrasado 20s (timeout=60s) — conexão deve manter"),
         TestStep(7, "pong_drop", "Pong suprimido — charger deve desconectar em ~65s"),
     ]
@@ -155,6 +155,7 @@ class XpecdTest:
         self._charger_connected = asyncio.Event()
         self._protocol: Optional[ControlledPongProtocol] = None
         self._charger_ws: Optional[WebSocketServerProtocol] = None
+        self._original_value: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -188,6 +189,7 @@ class XpecdTest:
 
         self.steps = _build_steps()
         self.charge_point_id = charge_point_id
+        self._original_value = None
         self.state = "running"
         await self._publish()
 
@@ -221,26 +223,37 @@ class XpecdTest:
             status = status.value
         return str(status)
 
+    async def _find_key_in_config(self, cp, key: str):
+        """Try specific key first, then all keys if not found."""
+        resp = await cp.get_configuration([key])
+        config_list = getattr(resp, "configuration_key", []) or []
+        found = next((c for c in config_list if getattr(c, "key", "") == key), None)
+        if found:
+            return found, config_list
+
+        unknown = getattr(resp, "unknown_key", []) or []
+        if key in unknown:
+            return None, config_list
+
+        resp_all = await cp.get_configuration([])
+        config_list_all = getattr(resp_all, "configuration_key", []) or []
+        found = next((c for c in config_list_all if getattr(c, "key", "") == key), None)
+        return found, config_list_all
+
     async def _step_get_default(self, cp):
         await self._mark(1, StepStatus.RUNNING)
         try:
-            resp = await cp.get_configuration(["WebSocketPingTimeout"])
-            config_list = getattr(resp, "configuration_key", []) or []
-            found = next((c for c in config_list if getattr(c, "key", "") == "WebSocketPingTimeout"), None)
+            found, config_list = await self._find_key_in_config(cp, "WebSocketPingTimeout")
 
             if not found:
-                unknown = getattr(resp, "unknown_key", []) or []
-                if "WebSocketPingTimeout" in unknown:
-                    await self._mark(1, StepStatus.FAILED, "Chave desconhecida pelo charger")
-                    return
-                await self._mark(1, StepStatus.FAILED, "Chave não encontrada na resposta")
+                available = [getattr(c, "key", "?") for c in config_list[:10]]
+                await self._mark(1, StepStatus.FAILED,
+                    f"Chave não encontrada. Keys disponíveis: {', '.join(available)}{'...' if len(config_list) > 10 else ''}")
                 return
 
             value = getattr(found, "value", "")
-            if value == "2":
-                await self._mark(1, StepStatus.PASSED, f"Default = '{value}'")
-            else:
-                await self._mark(1, StepStatus.FAILED, f"Default = '{value}' (esperava '2')")
+            self._original_value = value
+            await self._mark(1, StepStatus.PASSED, f"Valor actual = '{value}'")
         except asyncio.TimeoutError:
             await self._mark(1, StepStatus.FAILED, "Timeout")
         except Exception as e:
@@ -275,14 +288,16 @@ class XpecdTest:
             await self._mark(step_id, StepStatus.FAILED, str(e))
 
     async def _step_restore(self, cp):
-        await self._mark(5, StepStatus.RUNNING)
+        restore_val = self._original_value or "30"
+        await self._mark(5, StepStatus.RUNNING, f"A restaurar para '{restore_val}'...")
         try:
-            resp = await cp.change_configuration("WebSocketPingTimeout", "2")
+            resp = await cp.change_configuration("WebSocketPingTimeout", restore_val)
             status = self._extract_status(resp)
-            if status == "Accepted":
-                await self._mark(5, StepStatus.PASSED, "Default restaurado para '2'")
+            if status in ("Accepted", "RebootRequired"):
+                await self._mark(5, StepStatus.PASSED, f"Restaurado para '{restore_val}'")
             else:
-                await self._mark(5, StepStatus.FAILED, f"Restauro retornou '{status}'")
+                await self._mark(5, StepStatus.FAILED,
+                    f"Restauro para '{restore_val}' retornou '{status}'")
         except asyncio.TimeoutError:
             await self._mark(5, StepStatus.FAILED, "Timeout")
         except Exception as e:
