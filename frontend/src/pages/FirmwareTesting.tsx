@@ -164,7 +164,7 @@ export function FirmwareTesting() {
 
   const isRunning = ['running', 'waiting_for_charger', 'running_pingpong'].includes(state)
   const showTestUrl = ['waiting_for_charger', 'running_pingpong'].includes(state)
-  const testUrl = `wss://ocpp.gatoescondido.com/test-ocpp/${cpId || status?.charge_point_id || 'CHARGER_ID'}`
+  const testUrl = 'wss://ocpp.gatoescondido.com/test-ocpp'
 
   const runPhase1 = async () => {
     if (!cpId) return

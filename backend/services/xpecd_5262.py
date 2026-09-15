@@ -98,15 +98,17 @@ class ControlledPongProtocol(WebSocketServerProtocol):
 
     async def pong(self, data: bytes = b"") -> None:
         self.ping_count += 1
-        logger.info(f"[XPECD-5262] Ping #{self.ping_count} received, mode={self.pong_mode.value}")
-        if self.pong_mode == PongMode.NORMAL:
+        mode = self.pong_mode          # snapshot at ping-arrival time
+        delay = self.pong_delay_s      # snapshot — isolate from mid-step changes
+        logger.info(f"[XPECD-5262] Ping #{self.ping_count} received, mode={mode.value}, delay={delay}s")
+        if mode == PongMode.NORMAL:
             await super().pong(data)
-        elif self.pong_mode == PongMode.DELAY:
-            logger.info(f"[XPECD-5262] Delaying pong by {self.pong_delay_s}s")
-            await asyncio.sleep(self.pong_delay_s)
+        elif mode == PongMode.DELAY:
+            logger.info(f"[XPECD-5262] Delaying pong by {delay}s")
+            await asyncio.sleep(delay)
             await super().pong(data)
-            logger.info(f"[XPECD-5262] Delayed pong sent")
-        elif self.pong_mode == PongMode.DROP:
+            logger.info(f"[XPECD-5262] Delayed pong sent after {delay}s")
+        elif mode == PongMode.DROP:
             logger.info(f"[XPECD-5262] Pong DROPPED (suppressed)")
 
 
@@ -171,7 +173,7 @@ class XpecdTest:
             "charge_point_id": self.charge_point_id,
             "steps": [s.to_dict() for s in self.steps],
             "pingpong_server_active": self._server is not None,
-            "pingpong_url": f"wss://ocpp.gatoescondido.com/test-ocpp/{self.charge_point_id or '<CP_ID>'}" if self._server else None,
+            "pingpong_url": "wss://ocpp.gatoescondido.com/test-ocpp" if self._server else None,
         }
 
     async def _publish(self):
@@ -393,7 +395,7 @@ class XpecdTest:
 
     async def _run_pingpong_sequence(self):
         try:
-            url = f"wss://ocpp.gatoescondido.com/test-ocpp/{self.charge_point_id}"
+            url = "wss://ocpp.gatoescondido.com/test-ocpp"
             self._log(5, f"Test server listening on port {TEST_SERVER_PORT}")
             self._log(5, f"Waiting for charger connection at {url}")
             await self._mark(5, StepStatus.RUNNING,
