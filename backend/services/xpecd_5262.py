@@ -223,11 +223,17 @@ class XpecdTest:
             status = status.value
         return str(status)
 
+    @staticmethod
+    def _cfg_get(item, field: str, default=""):
+        if isinstance(item, dict):
+            return item.get(field, default)
+        return getattr(item, field, default)
+
     async def _find_key_in_config(self, cp, key: str):
         """Try specific key first, then all keys if not found."""
         resp = await cp.get_configuration([key])
         config_list = getattr(resp, "configuration_key", []) or []
-        found = next((c for c in config_list if getattr(c, "key", "") == key), None)
+        found = next((c for c in config_list if self._cfg_get(c, "key") == key), None)
         if found:
             return found, config_list
 
@@ -237,7 +243,7 @@ class XpecdTest:
 
         resp_all = await cp.get_configuration([])
         config_list_all = getattr(resp_all, "configuration_key", []) or []
-        found = next((c for c in config_list_all if getattr(c, "key", "") == key), None)
+        found = next((c for c in config_list_all if self._cfg_get(c, "key") == key), None)
         return found, config_list_all
 
     async def _step_get_default(self, cp):
@@ -246,12 +252,12 @@ class XpecdTest:
             found, config_list = await self._find_key_in_config(cp, "WebSocketPingTimeout")
 
             if not found:
-                available = [getattr(c, "key", "?") for c in config_list[:10]]
+                available = [self._cfg_get(c, "key", "?") for c in config_list[:10]]
                 await self._mark(1, StepStatus.FAILED,
                     f"Chave não encontrada. Keys disponíveis: {', '.join(available)}{'...' if len(config_list) > 10 else ''}")
                 return
 
-            value = getattr(found, "value", "")
+            value = self._cfg_get(found, "value")
             self._original_value = value
             await self._mark(1, StepStatus.PASSED, f"Valor actual = '{value}'")
         except asyncio.TimeoutError:
