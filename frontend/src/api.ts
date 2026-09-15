@@ -20,17 +20,6 @@ export interface OcmfVerificationResponse {
   signature_raw?: string
 }
 
-
-
-export interface OcmfVerificationResponse {
-  verified: boolean
-  error?: string | null
-  parsed?: Record<string, any> | null
-  curve_name?: string
-  meter_model?: string
-  signature_raw?: string
-}
-
 import axios from 'axios'
 import { API_BASE } from './config'
 import type { Charger, Transaction, MeterValue, ConfigurationItem, OcppMessage, AuthToken, OcmfAuditReport, MeterKeyData } from './types'

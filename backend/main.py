@@ -29,9 +29,12 @@ logging.basicConfig(
 
 app = FastAPI(title="OCPP 1.6 Central System", version="1.0.0")
 
+_cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
+_cors_origins = [o.strip() for o in _cors_origins if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins or ["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,26 +86,20 @@ async def startup():
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(User).limit(1))
         if not result.scalar_one_or_none():
+            import secrets as _secrets
+            admin_pw = os.environ.get("ADMIN_DEFAULT_PASSWORD") or _secrets.token_urlsafe(16)
             admin = User(
                 username="admin",
-                email="admin@canditos.com",
-                hashed_password=hash_password("admin123"),
+                email=os.environ.get("ADMIN_EMAIL", "admin@canditos.com"),
+                hashed_password=hash_password(admin_pw),
                 role="admin",
                 rfid_tag="ADMIN_MASTER",
                 is_active=True,
             )
-            sample_user = User(
-                username="condutor",
-                email="condutor@canditos.com",
-                hashed_password=hash_password("user123"),
-                role="user",
-                rfid_tag="VERSICHARGE_TAG",
-                is_active=True,
-            )
             session.add(admin)
-            session.add(sample_user)
             await session.commit()
-            logging.info("Default admin ('admin') and user ('condutor') created successfully.")
+            if not os.environ.get("ADMIN_DEFAULT_PASSWORD"):
+                logging.warning(f"Admin user created with generated password: {admin_pw} — change it immediately or set ADMIN_DEFAULT_PASSWORD env var")
 
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):

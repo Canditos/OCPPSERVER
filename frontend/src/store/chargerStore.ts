@@ -90,20 +90,6 @@ export const useChargerStore = create<ChargerStore>((set) => ({
           status: (cur.status === 'Unknown' || cur.status === 'Offline') ? 'Available' : cur.status,
           lastSeen: new Date().toISOString(),
         }
-      } else if (event.type === 'transaction_stopped') {
-        live[cpId] = {
-          ...cur,
-          isOnline: true,
-          status: 'Available',
-          lastSeen: new Date().toISOString(),
-        }
-      } else if (event.type === 'transaction_started') {
-        live[cpId] = {
-          ...cur,
-          isOnline: true,
-          status: 'Charging',
-          lastSeen: new Date().toISOString(),
-        }
       } else if (event.type === 'meter_values') {
         const d = event.data as { connector_id?: number; values: Array<{ measurand: string; value: number; unit: string; timestamp: string }> }
         const connId = Number(d.connector_id ?? 1)
