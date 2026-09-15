@@ -10,7 +10,8 @@ Phase 1 — Config validation (steps 1-4, 6):
   4. ChangeConfiguration("WebSocketPingTimeout", "61") → Rejected
   6. ChangeConfiguration("WebSocketPingTimeout", "60") → Accepted
 
-Phase 2 — Ping/Pong behaviour (steps 7-8):
+Phase 2 — Ping/Pong behaviour (steps 5, 7-8):
+  5. Ligar charger ao servidor de teste → conexão OCPP estabelecida
   7. Pong atrasado 20s (< 60s) → conexão permanece ativa
   8. Pong suprimido > 60s → charger fecha socket aos ~60s
 """
@@ -70,6 +71,7 @@ def _build_steps() -> list[TestStep]:
         TestStep(3, "reject_below_range", "ChangeConfiguration(WebSocketPingTimeout, '1') — Rejected"),
         TestStep(4, "reject_above_range", "ChangeConfiguration(WebSocketPingTimeout, '61') — Rejected"),
         TestStep(6, "accept_max", "ChangeConfiguration(WebSocketPingTimeout, '60') — Accepted"),
+        TestStep(5, "connect_test_server", "Ligar charger ao servidor de teste — conexão OCPP estabelecida"),
         TestStep(7, "pong_delay", "Pong atrasado 20s (< 60s) — conexão permanece ativa"),
         TestStep(8, "pong_drop", "Pong suprimido > 60s — charger fecha socket aos ~60s"),
     ]
@@ -185,13 +187,16 @@ class XpecdTest:
 
     # ── Phase 1: Config Validation ───────────────────────────────────────────
 
+    PHASE1_IDS = {1, 2, 3, 4, 6}
+    PHASE2_IDS = {5, 7, 8}
+
     @property
     def _phase1_steps(self):
-        return [s for s in self.steps if s.id <= 6]
+        return [s for s in self.steps if s.id in self.PHASE1_IDS]
 
     @property
     def _phase2_steps(self):
-        return [s for s in self.steps if s.id >= 7]
+        return [s for s in self.steps if s.id in self.PHASE2_IDS]
 
     async def run(self, charge_point_id: str):
         from ocpp_server.central_system import get_charge_point
@@ -325,6 +330,9 @@ class XpecdTest:
             s.started_at = None
             s.finished_at = None
 
+        step7 = self._step_by_id(7)
+        step7.description = f"Pong atrasado {pong_delay_s:.0f}s (< 60s) — conexão permanece ativa"
+
         self.state = "waiting_for_charger"
         await self._publish()
 
@@ -358,17 +366,27 @@ class XpecdTest:
 
     async def _run_pingpong_sequence(self):
         try:
+            url = f"wss://ocpp.gatoescondido.com/test-ocpp/{self.charge_point_id}"
+            await self._mark(5, StepStatus.RUNNING,
+                f"A aguardar conexão do charger ao servidor de teste: {url}")
+
             try:
                 await asyncio.wait_for(self._charger_connected.wait(), timeout=300)
             except asyncio.TimeoutError:
+                await self._mark(5, StepStatus.FAILED,
+                    f"Charger não se ligou ao servidor de teste em 5 min ({url})")
                 for s in self._phase2_steps:
-                    s.status = StepStatus.FAILED
-                    s.detail = "Charger não se ligou ao servidor de teste em 5 min"
-                    s.finished_at = time.time()
+                    if s.id != 5:
+                        s.status = StepStatus.SKIPPED
+                        s.detail = "Sem conexão ao servidor de teste"
+                        s.finished_at = time.time()
                 self.state = "failed"
                 await self._publish()
                 await self.stop_pingpong()
                 return
+
+            await self._mark(5, StepStatus.PASSED,
+                f"Charger conectado ao servidor de teste ({url})")
 
             self.state = "running_pingpong"
             await self._publish()
