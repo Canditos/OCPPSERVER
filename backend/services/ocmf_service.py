@@ -292,22 +292,30 @@ def verify_ocmf_signature(
         s = int.from_bytes(sig_bytes[32:], byteorder="big")
         der_signature = utils.encode_dss_signature(r, s)
 
-    data_to_verify = parsed.raw_data_to_verify.encode("utf-8")
+    # OCMF spec: signature covers "OCMF|<payload>|" (prefix + trailing pipe)
+    # Try all three variants in case of firmware differences
+    candidates = [
+        f"OCMF|{parsed.raw_data_to_verify}|".encode("utf-8"),
+        f"OCMF|{parsed.raw_data_to_verify}".encode("utf-8"),
+        parsed.raw_data_to_verify.encode("utf-8"),
+    ]
 
-    try:
-        public_key.verify(
-            der_signature,
-            data_to_verify,
-            ec.ECDSA(hashes.SHA256())
-        )
-        is_valid = True
-        error_msg = None
-    except InvalidSignature:
-        is_valid = False
+    is_valid = False
+    error_msg = None
+    for data_to_verify in candidates:
+        try:
+            public_key.verify(der_signature, data_to_verify, ec.ECDSA(hashes.SHA256()))
+            is_valid = True
+            error_msg = None
+            break
+        except InvalidSignature:
+            continue
+        except Exception as e:
+            error_msg = f"Erro na validação criptográfica: {e}"
+            break
+
+    if not is_valid and error_msg is None:
         error_msg = "Assinatura Criptográfica ECDSA Inválida (os dados foram alterados ou a chave pública não corresponde ao medidor)"
-    except Exception as e:
-        is_valid = False
-        error_msg = f"Erro na validação criptográfica: {e}"
 
     return {
         "verified": is_valid,
