@@ -212,8 +212,8 @@ export function FirmwareTesting() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const phase1Steps = steps.filter(s => s.id <= 5)
-  const phase2Steps = steps.filter(s => s.id > 5)
+  const phase1Steps = steps.filter(s => s.id <= 6)
+  const phase2Steps = steps.filter(s => s.id >= 7)
 
   const allPassed = steps.length > 0 && steps.every(s => s.status === 'passed')
   const anyFailed = steps.some(s => s.status === 'failed')

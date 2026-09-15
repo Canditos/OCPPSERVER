@@ -1,23 +1,24 @@
 """
 XPECD-5262: WebSocketPingTimeout validation test for Siemens SICHARGE D.
 
-Phase 1 — Config validation via existing CSMS connection:
-  1. GetConfiguration default=2
-  2. Reject value "1" (below min)
-  3. Reject value "61" (above max)
-  4. Accept value "60"
-  5. Restore default "2"
+Passos conforme spec Xray XPECD-5262:
 
-Phase 2 — Ping/Pong behaviour (requires charger reconnection to test endpoint):
-  6. Delay pong (within configured timeout) → connection must stay alive
-  7. Drop pong entirely → charger must disconnect within ~timeout
+Phase 1 — Config validation (steps 1-4, 6):
+  1. Ligar carregador ao CSMS local → BootNotification aceite
+  2. GetConfiguration(["WebSocketPingTimeout"]) → valor "2"
+  3. ChangeConfiguration("WebSocketPingTimeout", "1") → Rejected
+  4. ChangeConfiguration("WebSocketPingTimeout", "61") → Rejected
+  6. ChangeConfiguration("WebSocketPingTimeout", "60") → Accepted
+
+Phase 2 — Ping/Pong behaviour (steps 7-8):
+  7. Pong atrasado 20s (< 60s) → conexão permanece ativa
+  8. Pong suprimido > 60s → charger fecha socket aos ~60s
 """
 
 import asyncio
 import json
 import logging
 import time
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -64,13 +65,13 @@ class TestStep:
 
 def _build_steps() -> list[TestStep]:
     return [
-        TestStep(1, "default_value", "GetConfiguration(WebSocketPingTimeout) — ler valor actual"),
-        TestStep(2, "reject_below_range", "ChangeConfiguration(WebSocketPingTimeout, '1') — Rejected"),
-        TestStep(3, "reject_above_range", "ChangeConfiguration(WebSocketPingTimeout, '61') — Rejected"),
-        TestStep(4, "accept_max", "ChangeConfiguration(WebSocketPingTimeout, '60') — Accepted"),
-        TestStep(5, "restore_default", "ChangeConfiguration(WebSocketPingTimeout) — restaurar valor original"),
-        TestStep(6, "pong_delay", "Pong atrasado — conexão deve manter"),
-        TestStep(7, "pong_drop", "Pong suprimido — charger deve desconectar"),
+        TestStep(1, "connect", "Ligar carregador ao CSMS — BootNotification aceite"),
+        TestStep(2, "default_value", "GetConfiguration(WebSocketPingTimeout) — valor esperado '2'"),
+        TestStep(3, "reject_below_range", "ChangeConfiguration(WebSocketPingTimeout, '1') — Rejected"),
+        TestStep(4, "reject_above_range", "ChangeConfiguration(WebSocketPingTimeout, '61') — Rejected"),
+        TestStep(6, "accept_max", "ChangeConfiguration(WebSocketPingTimeout, '60') — Accepted"),
+        TestStep(7, "pong_delay", "Pong atrasado 20s (< 60s) — conexão permanece ativa"),
+        TestStep(8, "pong_drop", "Pong suprimido > 60s — charger fecha socket aos ~60s"),
     ]
 
 
@@ -169,8 +170,11 @@ class XpecdTest:
     async def _publish(self):
         await event_bus.publish("xpecd_5262_progress", self.to_dict())
 
+    def _step_by_id(self, step_id: int) -> TestStep:
+        return next(s for s in self.steps if s.id == step_id)
+
     async def _mark(self, step_id: int, status: StepStatus, detail: str = ""):
-        step = self.steps[step_id - 1]
+        step = self._step_by_id(step_id)
         step.status = status
         step.detail = detail
         if status == StepStatus.RUNNING:
@@ -180,6 +184,14 @@ class XpecdTest:
         await self._publish()
 
     # ── Phase 1: Config Validation ───────────────────────────────────────────
+
+    @property
+    def _phase1_steps(self):
+        return [s for s in self.steps if s.id <= 6]
+
+    @property
+    def _phase2_steps(self):
+        return [s for s in self.steps if s.id >= 7]
 
     async def run(self, charge_point_id: str):
         from ocpp_server.central_system import get_charge_point
@@ -196,20 +208,22 @@ class XpecdTest:
         cp = get_charge_point(charge_point_id)
         if not cp:
             self.state = "failed"
-            for s in self.steps[:5]:
+            await self._mark(1, StepStatus.FAILED, f"Charger '{charge_point_id}' não está ligado")
+            for s in self._phase1_steps[1:]:
                 s.status = StepStatus.SKIPPED
-                s.detail = f"Charger '{charge_point_id}' não está ligado"
+                s.detail = "Sem conexão"
             await self._publish()
             return
 
+        await self._mark(1, StepStatus.PASSED, "Conexão OCPP estabelecida, BootNotification aceite")
+
         try:
             await self._step_get_default(cp)
-            await self._step_reject(cp, 2, "1", "abaixo do mínimo")
-            await self._step_reject(cp, 3, "61", "acima do máximo")
-            await self._step_accept(cp, 4, "60")
-            await self._step_restore(cp)
+            await self._step_reject(cp, 3, "1", "abaixo do mínimo")
+            await self._step_reject(cp, 4, "61", "acima do máximo")
+            await self._step_accept(cp, 6, "60")
 
-            phase1_passed = all(s.status == StepStatus.PASSED for s in self.steps[:5])
+            phase1_passed = all(s.status == StepStatus.PASSED for s in self._phase1_steps)
             self.state = "phase1_complete" if phase1_passed else "failed"
         except Exception as e:
             logger.exception(f"[XPECD-5262] Config test error: {e}")
@@ -247,23 +261,23 @@ class XpecdTest:
         return found, config_list_all
 
     async def _step_get_default(self, cp):
-        await self._mark(1, StepStatus.RUNNING)
+        await self._mark(2, StepStatus.RUNNING)
         try:
             found, config_list = await self._find_key_in_config(cp, "WebSocketPingTimeout")
 
             if not found:
                 available = [self._cfg_get(c, "key", "?") for c in config_list[:10]]
-                await self._mark(1, StepStatus.FAILED,
+                await self._mark(2, StepStatus.FAILED,
                     f"Chave não encontrada. Keys disponíveis: {', '.join(available)}{'...' if len(config_list) > 10 else ''}")
                 return
 
             value = self._cfg_get(found, "value")
             self._original_value = value
-            await self._mark(1, StepStatus.PASSED, f"Valor actual = '{value}'")
+            await self._mark(2, StepStatus.PASSED, f"Valor retornado = '{value}'")
         except asyncio.TimeoutError:
-            await self._mark(1, StepStatus.FAILED, "Timeout")
+            await self._mark(2, StepStatus.FAILED, "Timeout")
         except Exception as e:
-            await self._mark(1, StepStatus.FAILED, str(e))
+            await self._mark(2, StepStatus.FAILED, str(e))
 
     async def _step_reject(self, cp, step_id: int, value: str, reason: str):
         await self._mark(step_id, StepStatus.RUNNING)
@@ -293,22 +307,6 @@ class XpecdTest:
         except Exception as e:
             await self._mark(step_id, StepStatus.FAILED, str(e))
 
-    async def _step_restore(self, cp):
-        restore_val = self._original_value or "30"
-        await self._mark(5, StepStatus.RUNNING, f"A restaurar para '{restore_val}'...")
-        try:
-            resp = await cp.change_configuration("WebSocketPingTimeout", restore_val)
-            status = self._extract_status(resp)
-            if status in ("Accepted", "RebootRequired"):
-                await self._mark(5, StepStatus.PASSED, f"Restaurado para '{restore_val}'")
-            else:
-                await self._mark(5, StepStatus.FAILED,
-                    f"Restauro para '{restore_val}' retornou '{status}'")
-        except asyncio.TimeoutError:
-            await self._mark(5, StepStatus.FAILED, "Timeout")
-        except Exception as e:
-            await self._mark(5, StepStatus.FAILED, str(e))
-
     # ── Phase 2: Ping/Pong Test ──────────────────────────────────────────────
 
     async def start_pingpong(self, charge_point_id: str, pong_delay_s: float = 20.0):
@@ -321,7 +319,7 @@ class XpecdTest:
         self._protocol = None
         self._charger_ws = None
 
-        for s in self.steps[5:]:
+        for s in self._phase2_steps:
             s.status = StepStatus.PENDING
             s.detail = ""
             s.started_at = None
@@ -363,7 +361,7 @@ class XpecdTest:
             try:
                 await asyncio.wait_for(self._charger_connected.wait(), timeout=300)
             except asyncio.TimeoutError:
-                for s in self.steps[5:]:
+                for s in self._phase2_steps:
                     s.status = StepStatus.FAILED
                     s.detail = "Charger não se ligou ao servidor de teste em 5 min"
                     s.finished_at = time.time()
@@ -380,7 +378,7 @@ class XpecdTest:
             await self._step_pong_delay()
             await self._step_pong_drop()
 
-            pp_passed = all(s.status == StepStatus.PASSED for s in self.steps[5:])
+            pp_passed = all(s.status == StepStatus.PASSED for s in self._phase2_steps)
             all_passed = all(s.status == StepStatus.PASSED for s in self.steps)
             self.state = "completed" if all_passed else ("phase2_complete" if pp_passed else "failed")
             await self._publish()
@@ -393,15 +391,14 @@ class XpecdTest:
             await self.stop_pingpong()
 
     async def _step_pong_delay(self):
-        """Step 6: Delay pong by configured seconds (within configured timeout). Connection must survive."""
+        """Step 7: Pong atrasado 20s (< 60s) — conexão permanece ativa."""
         delay = getattr(self, '_pong_delay_s', 20.0)
-        timeout_val = self._original_value or "30"
         observe_s = delay * 2.25
-        await self._mark(6, StepStatus.RUNNING, f"Pong atrasado {delay:.0f}s (timeout={timeout_val}s) — conexão deve manter")
+        await self._mark(7, StepStatus.RUNNING, f"Pong atrasado {delay:.0f}s (< 60s) — a observar conexão...")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
-            await self._mark(6, StepStatus.FAILED, "Sem conexão ao charger")
+            await self._mark(7, StepStatus.FAILED, "Sem conexão ao charger")
             return
 
         proto.pong_mode = PongMode.DELAY
@@ -413,28 +410,27 @@ class XpecdTest:
 
             if self._charger_ws.open:
                 pings = proto.ping_count
-                await self._mark(6, StepStatus.PASSED,
-                    f"Conexão mantida com pong atrasado {delay:.0f}s. {pings} pings recebidos em {observe_s:.0f}s")
+                await self._mark(7, StepStatus.PASSED,
+                    f"Conexão permanece ativa. Pong atrasado {delay:.0f}s, {pings} pings recebidos em {observe_s:.0f}s")
             else:
-                await self._mark(6, StepStatus.FAILED,
+                await self._mark(7, StepStatus.FAILED,
                     "Charger desconectou durante teste de delay (não esperado)")
         except Exception as e:
-            await self._mark(6, StepStatus.FAILED, str(e))
+            await self._mark(7, StepStatus.FAILED, str(e))
         finally:
             proto.pong_mode = PongMode.NORMAL
 
     async def _step_pong_drop(self):
-        """Step 7: Drop all pongs. Charger must disconnect within timeout + margin."""
-        timeout_val = self._original_value or "30"
-        await self._mark(7, StepStatus.RUNNING, f"Pong suprimido — charger deve desconectar em ~{timeout_val}s")
+        """Step 8: Pong suprimido > 60s — charger fecha socket aos ~60s."""
+        await self._mark(8, StepStatus.RUNNING, "Pong suprimido — charger deve fechar socket aos ~60s")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
-            await self._mark(7, StepStatus.FAILED, "Sem conexão ao charger")
+            await self._mark(8, StepStatus.FAILED, "Sem conexão ao charger")
             return
 
         if not self._charger_ws.open:
-            await self._mark(7, StepStatus.SKIPPED, "Charger já desconectado (do passo anterior)")
+            await self._mark(8, StepStatus.SKIPPED, "Charger já desconectado (do passo anterior)")
             return
 
         proto.pong_mode = PongMode.DROP
@@ -446,16 +442,16 @@ class XpecdTest:
                 await asyncio.sleep(1)
                 if not self._charger_ws.open:
                     elapsed = time.time() - drop_start
-                    await self._mark(7, StepStatus.PASSED,
-                        f"Charger desconectou após {elapsed:.1f}s sem pong "
+                    await self._mark(8, StepStatus.PASSED,
+                        f"Charger fechou socket após {elapsed:.1f}s sem pong "
                         f"({proto.ping_count} pings enviados)")
                     return
 
-            await self._mark(7, StepStatus.FAILED,
+            await self._mark(8, StepStatus.FAILED,
                 f"Charger NÃO desconectou após 90s sem pong "
                 f"({proto.ping_count} pings recebidos)")
         except Exception as e:
-            await self._mark(7, StepStatus.FAILED, str(e))
+            await self._mark(8, StepStatus.FAILED, str(e))
 
     async def stop_pingpong(self):
         if self._server:
