@@ -33,7 +33,7 @@ function LiveKw({ watts }: { watts: number }) {
   )
 }
 
-const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV']
+const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV', 'Finishing']
 
 export function ChargerCard({ charger }: { charger: Charger }) {
   const queryClient = useQueryClient()
