@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from api.auth import require_admin
@@ -14,7 +15,6 @@ class RunTestRequest(BaseModel):
 
 class PingpongStartRequest(BaseModel):
     charge_point_id: str
-    pong_delay_s: float = 20.0
 
 
 @router.post("/xpecd-5262/run")
@@ -39,7 +39,7 @@ async def start_pingpong(
     """Phase 2: Start ping/pong test server and wait for charger connection."""
     test = get_test()
     try:
-        await test.start_pingpong(req.charge_point_id, pong_delay_s=req.pong_delay_s)
+        await test.start_pingpong(req.charge_point_id)
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return test.to_dict()
@@ -53,6 +53,14 @@ async def stop_pingpong(
     test = get_test()
     await test.stop_pingpong()
     return test.to_dict()
+
+
+@router.get("/xpecd-5262/report")
+async def get_report(admin: User = Depends(require_admin)):
+    test = get_test()
+    if test.state == "idle":
+        raise HTTPException(status_code=404, detail="No test has been run yet")
+    return HTMLResponse(content=test.generate_report())
 
 
 @router.get("/xpecd-5262/status")

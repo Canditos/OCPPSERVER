@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   FlaskConical, Play, Square, CheckCircle2, XCircle, Clock,
-  Loader2, Wifi, ChevronDown, Terminal, AlertTriangle, Copy, Check,
+  Loader2, Wifi, ChevronDown, Terminal, AlertTriangle, Copy, Check, Download,
 } from 'lucide-react'
 import { api } from '../api'
 import type { Charger } from '../types'
@@ -146,7 +146,6 @@ export function FirmwareTesting() {
   })
 
   const [cpId, setCpId] = useState('')
-  const [pongDelay, setPongDelay] = useState('20')
   const [phase1Loading, setPhase1Loading] = useState(false)
   const [phase2Loading, setPhase2Loading] = useState(false)
   const [stopLoading, setStopLoading] = useState(false)
@@ -185,8 +184,7 @@ export function FirmwareTesting() {
     setPhase2Loading(true)
     setError('')
     try {
-      const delay = parseFloat(pongDelay) || 20
-      await api.xpecdPingpongStart(cpId, delay)
+      await api.xpecdPingpongStart(cpId)
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Erro')
     } finally {
@@ -203,6 +201,22 @@ export function FirmwareTesting() {
       setError(e?.response?.data?.detail || e?.message || 'Erro')
     } finally {
       setStopLoading(false)
+    }
+  }
+
+  const downloadReport = async () => {
+    try {
+      const html = await api.xpecdReport()
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const date = new Date().toISOString().slice(0, 10)
+      a.href = url
+      a.download = `XPECD-5262_${cpId}_${date}.html`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Error downloading report')
     }
   }
 
@@ -324,25 +338,6 @@ export function FirmwareTesting() {
               </div>
             </div>
 
-            {/* Pong delay config */}
-            <div className="mb-4">
-              <label className="label">{t('firmware.pongDelayLabel')}</label>
-              <div className="flex items-center gap-2">
-                <input
-                  className="input flex-1"
-                  type="number"
-                  min={1}
-                  max={55}
-                  step={1}
-                  value={pongDelay}
-                  onChange={(e) => setPongDelay(e.target.value)}
-                  disabled={isRunning}
-                />
-                <span className="text-xs text-gray-500 shrink-0">segundos</span>
-              </div>
-              <p className="text-[11px] text-gray-600 mt-1">{t('firmware.pongDelayHint')}</p>
-            </div>
-
             <div className="flex gap-2 mb-4">
               <button
                 className="btn-primary flex-1 justify-center"
@@ -379,19 +374,28 @@ export function FirmwareTesting() {
       {/* Summary */}
       {steps.length > 0 && !isRunning && (allPassed || anyFailed) && (
         <div className={`card border ${allPassed ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-red-500/20 bg-red-500/5'} animate-fade-up`}>
-          <div className="flex items-center gap-3">
-            {allPassed
-              ? <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-              : <XCircle className="w-6 h-6 text-red-400" />
-            }
-            <div>
-              <p className={`text-sm font-semibold ${allPassed ? 'text-emerald-400' : 'text-red-400'}`}>
-                {allPassed ? t('firmware.allPassed') : t('firmware.someFailed')}
-              </p>
-              <p className="text-xs text-gray-500">
-                {steps.filter(s => s.status === 'passed').length}/{steps.length} {t('firmware.stepsPassed')}
-              </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {allPassed
+                ? <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                : <XCircle className="w-6 h-6 text-red-400" />
+              }
+              <div>
+                <p className={`text-sm font-semibold ${allPassed ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {allPassed ? t('firmware.allPassed') : t('firmware.someFailed')}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {steps.filter(s => s.status === 'passed').length}/{steps.length} {t('firmware.stepsPassed')}
+                </p>
+              </div>
             </div>
+            <button
+              className="btn-secondary flex items-center gap-2"
+              onClick={downloadReport}
+            >
+              <Download className="w-4 h-4" />
+              {t('firmware.downloadReport')}
+            </button>
           </div>
         </div>
       )}

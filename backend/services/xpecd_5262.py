@@ -17,6 +17,7 @@ Phase 2 — Ping/Pong behaviour (steps 5, 7-8):
 """
 
 import asyncio
+import html
 import json
 import logging
 import time
@@ -52,6 +53,7 @@ class TestStep:
     detail: str = ""
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
+    logs: list[str] = field(default_factory=list)
 
     def to_dict(self):
         return {
@@ -61,6 +63,7 @@ class TestStep:
             "status": self.status.value,
             "detail": self.detail,
             "duration_s": round(self.finished_at - self.started_at, 2) if self.started_at and self.finished_at else None,
+            "logs": self.logs,
         }
 
 
@@ -72,8 +75,8 @@ def _build_steps() -> list[TestStep]:
         TestStep(4, "reject_above_range", "ChangeConfiguration(WebSocketPingTimeout, '61') — Rejected"),
         TestStep(6, "accept_max", "ChangeConfiguration(WebSocketPingTimeout, '60') — Accepted"),
         TestStep(5, "connect_test_server", "Ligar charger ao servidor de teste — conexão OCPP estabelecida"),
-        TestStep(7, "pong_delay", "Pong atrasado 20s (< 60s) — conexão permanece ativa"),
-        TestStep(8, "pong_drop", "Pong suprimido > 60s — charger fecha socket aos ~60s"),
+        TestStep(7, "pong_delay", "Pong delayed 20s/40s/60s (< timeout) — connection stays open"),
+        TestStep(8, "pong_drop", "Pong suppressed > 60s — charger closes socket at ~60s"),
     ]
 
 
@@ -175,6 +178,11 @@ class XpecdTest:
     def _step_by_id(self, step_id: int) -> TestStep:
         return next(s for s in self.steps if s.id == step_id)
 
+    def _log(self, step_id: int, message: str):
+        step = self._step_by_id(step_id)
+        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        step.logs.append(f"[{ts}] {message}")
+
     async def _mark(self, step_id: int, status: StepStatus, detail: str = ""):
         step = self._step_by_id(step_id)
         step.status = status
@@ -211,8 +219,10 @@ class XpecdTest:
         await self._publish()
 
         cp = get_charge_point(charge_point_id)
+        self._log(1, f"Looking up charge point '{charge_point_id}'")
         if not cp:
             self.state = "failed"
+            self._log(1, f"Charge point '{charge_point_id}' not found or not connected")
             await self._mark(1, StepStatus.FAILED, f"Charger '{charge_point_id}' não está ligado")
             for s in self._phase1_steps[1:]:
                 s.status = StepStatus.SKIPPED
@@ -220,6 +230,7 @@ class XpecdTest:
             await self._publish()
             return
 
+        self._log(1, f"Charge point '{charge_point_id}' found — OCPP connection established")
         await self._mark(1, StepStatus.PASSED, "Conexão OCPP estabelecida, BootNotification aceite")
 
         try:
@@ -268,58 +279,74 @@ class XpecdTest:
     async def _step_get_default(self, cp):
         await self._mark(2, StepStatus.RUNNING)
         try:
+            self._log(2, "Sending GetConfiguration(['WebSocketPingTimeout'])")
             found, config_list = await self._find_key_in_config(cp, "WebSocketPingTimeout")
 
             if not found:
                 available = [self._cfg_get(c, "key", "?") for c in config_list[:10]]
+                self._log(2, f"Key not found. Available keys: {', '.join(available)}")
                 await self._mark(2, StepStatus.FAILED,
                     f"Chave não encontrada. Keys disponíveis: {', '.join(available)}{'...' if len(config_list) > 10 else ''}")
                 return
 
             value = self._cfg_get(found, "value")
             self._original_value = value
+            self._log(2, f"GetConfiguration response: value='{value}'")
             await self._mark(2, StepStatus.PASSED, f"Valor retornado = '{value}'")
         except asyncio.TimeoutError:
+            self._log(2, "GetConfiguration timed out")
             await self._mark(2, StepStatus.FAILED, "Timeout")
         except Exception as e:
+            self._log(2, f"Error: {e}")
             await self._mark(2, StepStatus.FAILED, str(e))
 
     async def _step_reject(self, cp, step_id: int, value: str, reason: str):
         await self._mark(step_id, StepStatus.RUNNING)
         try:
+            self._log(step_id, f"Sending ChangeConfiguration('WebSocketPingTimeout', '{value}')")
             resp = await cp.change_configuration("WebSocketPingTimeout", value)
             status = self._extract_status(resp)
+            self._log(step_id, f"Response status: '{status}'")
             if status == "Rejected":
+                self._log(step_id, f"Value '{value}' correctly rejected ({reason})")
                 await self._mark(step_id, StepStatus.PASSED, f"'{value}' rejeitado ({reason})")
             else:
+                self._log(step_id, f"Expected 'Rejected' but got '{status}'")
                 await self._mark(step_id, StepStatus.FAILED, f"'{value}' retornou '{status}' (esperava 'Rejected')")
         except asyncio.TimeoutError:
+            self._log(step_id, "ChangeConfiguration timed out")
             await self._mark(step_id, StepStatus.FAILED, "Timeout")
         except Exception as e:
+            self._log(step_id, f"Error: {e}")
             await self._mark(step_id, StepStatus.FAILED, str(e))
 
     async def _step_accept(self, cp, step_id: int, value: str):
         await self._mark(step_id, StepStatus.RUNNING)
         try:
+            self._log(step_id, f"Sending ChangeConfiguration('WebSocketPingTimeout', '{value}')")
             resp = await cp.change_configuration("WebSocketPingTimeout", value)
             status = self._extract_status(resp)
+            self._log(step_id, f"Response status: '{status}'")
             if status == "Accepted":
+                self._log(step_id, f"Value '{value}' accepted as expected")
                 await self._mark(step_id, StepStatus.PASSED, f"'{value}' aceite")
             else:
+                self._log(step_id, f"Expected 'Accepted' but got '{status}'")
                 await self._mark(step_id, StepStatus.FAILED, f"'{value}' retornou '{status}' (esperava 'Accepted')")
         except asyncio.TimeoutError:
+            self._log(step_id, "ChangeConfiguration timed out")
             await self._mark(step_id, StepStatus.FAILED, "Timeout")
         except Exception as e:
+            self._log(step_id, f"Error: {e}")
             await self._mark(step_id, StepStatus.FAILED, str(e))
 
     # ── Phase 2: Ping/Pong Test ──────────────────────────────────────────────
 
-    async def start_pingpong(self, charge_point_id: str, pong_delay_s: float = 20.0):
+    async def start_pingpong(self, charge_point_id: str):
         if self._server is not None:
             raise RuntimeError("Servidor de teste já está ativo")
 
         self.charge_point_id = charge_point_id
-        self._pong_delay_s = pong_delay_s
         self._charger_connected = asyncio.Event()
         self._protocol = None
         self._charger_ws = None
@@ -329,9 +356,7 @@ class XpecdTest:
             s.detail = ""
             s.started_at = None
             s.finished_at = None
-
-        step7 = self._step_by_id(7)
-        step7.description = f"Pong atrasado {pong_delay_s:.0f}s (< 60s) — conexão permanece ativa"
+            s.logs = []
 
         self.state = "waiting_for_charger"
         await self._publish()
@@ -367,12 +392,15 @@ class XpecdTest:
     async def _run_pingpong_sequence(self):
         try:
             url = f"wss://ocpp.gatoescondido.com/test-ocpp/{self.charge_point_id}"
+            self._log(5, f"Test server listening on port {TEST_SERVER_PORT}")
+            self._log(5, f"Waiting for charger connection at {url}")
             await self._mark(5, StepStatus.RUNNING,
                 f"A aguardar conexão do charger ao servidor de teste: {url}")
 
             try:
                 await asyncio.wait_for(self._charger_connected.wait(), timeout=300)
             except asyncio.TimeoutError:
+                self._log(5, "Timeout: charger did not connect within 300s")
                 await self._mark(5, StepStatus.FAILED,
                     f"Charger não se ligou ao servidor de teste em 5 min ({url})")
                 for s in self._phase2_steps:
@@ -385,6 +413,7 @@ class XpecdTest:
                 await self.stop_pingpong()
                 return
 
+            self._log(5, f"Charger connected from {self._charger_ws.remote_address}")
             await self._mark(5, StepStatus.PASSED,
                 f"Charger conectado ao servidor de teste ({url})")
 
@@ -409,67 +438,242 @@ class XpecdTest:
             await self.stop_pingpong()
 
     async def _step_pong_delay(self):
-        """Step 7: Pong atrasado 20s (< 60s) — conexão permanece ativa."""
-        delay = getattr(self, '_pong_delay_s', 20.0)
-        observe_s = delay * 2.25
-        await self._mark(7, StepStatus.RUNNING, f"Pong atrasado {delay:.0f}s (< 60s) — a observar conexão...")
+        """Step 7: Pong delayed 20s/40s/60s — connection must stay open."""
+        delays = [20, 40, 60]
+        await self._mark(7, StepStatus.RUNNING,
+            f"Testing pong delays: {delays}s — connection must stay open")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
-            await self._mark(7, StepStatus.FAILED, "Sem conexão ao charger")
+            self._log(7, "No charger connection available")
+            await self._mark(7, StepStatus.FAILED, "No charger connection")
             return
 
-        proto.pong_mode = PongMode.DELAY
-        proto.pong_delay_s = delay
-        proto.ping_count = 0
-
         try:
-            await asyncio.sleep(observe_s)
+            for delay in delays:
+                if not self._charger_ws.open:
+                    self._log(7, f"Charger disconnected before testing {delay}s delay")
+                    await self._mark(7, StepStatus.FAILED,
+                        f"Charger disconnected before {delay}s delay test")
+                    return
 
-            if self._charger_ws.open:
-                pings = proto.ping_count
-                await self._mark(7, StepStatus.PASSED,
-                    f"Conexão permanece ativa. Pong atrasado {delay:.0f}s, {pings} pings recebidos em {observe_s:.0f}s")
-            else:
-                await self._mark(7, StepStatus.FAILED,
-                    "Charger desconectou durante teste de delay (não esperado)")
+                observe_s = delay * 2.25
+                self._log(7, f"Setting pong delay to {delay}s, observing for {observe_s:.0f}s")
+                proto.pong_mode = PongMode.DELAY
+                proto.pong_delay_s = delay
+                proto.ping_count = 0
+
+                await asyncio.sleep(observe_s)
+
+                if self._charger_ws.open:
+                    pings = proto.ping_count
+                    self._log(7, f"PASS: {delay}s delay — connection alive, {pings} pings in {observe_s:.0f}s")
+                else:
+                    self._log(7, f"FAIL: Charger disconnected during {delay}s delay test")
+                    await self._mark(7, StepStatus.FAILED,
+                        f"Charger disconnected during {delay}s delay test")
+                    return
+
+                proto.pong_mode = PongMode.NORMAL
+                if delay != delays[-1]:
+                    self._log(7, "Resetting to normal pong before next delay test")
+                    await asyncio.sleep(3)
+
+            self._log(7, f"All delay tests passed: {delays}s")
+            await self._mark(7, StepStatus.PASSED,
+                f"Connection stayed open for all delays ({', '.join(f'{d}s' for d in delays)})")
         except Exception as e:
+            self._log(7, f"Error: {e}")
             await self._mark(7, StepStatus.FAILED, str(e))
         finally:
             proto.pong_mode = PongMode.NORMAL
 
     async def _step_pong_drop(self):
-        """Step 8: Pong suprimido > 60s — charger fecha socket aos ~60s."""
-        await self._mark(8, StepStatus.RUNNING, "Pong suprimido — charger deve fechar socket aos ~60s")
+        """Step 8: Pong suppressed > 60s — charger closes socket at ~60s."""
+        self._log(8, "Starting pong drop test — suppressing all pong responses")
+        await self._mark(8, StepStatus.RUNNING, "Pong suppressed — charger should close socket at ~60s")
 
         proto = self._protocol
         if not proto or not self._charger_ws:
-            await self._mark(8, StepStatus.FAILED, "Sem conexão ao charger")
+            self._log(8, "No charger connection available")
+            await self._mark(8, StepStatus.FAILED, "No charger connection")
             return
 
         if not self._charger_ws.open:
-            await self._mark(8, StepStatus.SKIPPED, "Charger já desconectado (do passo anterior)")
+            self._log(8, "Charger already disconnected from previous step")
+            await self._mark(8, StepStatus.SKIPPED, "Charger already disconnected (from previous step)")
             return
 
         proto.pong_mode = PongMode.DROP
         proto.ping_count = 0
         drop_start = time.time()
+        self._log(8, "Pong mode set to DROP — all pong frames suppressed")
 
         try:
-            for _ in range(90):
+            for tick in range(90):
                 await asyncio.sleep(1)
                 if not self._charger_ws.open:
                     elapsed = time.time() - drop_start
+                    self._log(8, f"Charger closed socket after {elapsed:.1f}s ({proto.ping_count} pings sent)")
                     await self._mark(8, StepStatus.PASSED,
-                        f"Charger fechou socket após {elapsed:.1f}s sem pong "
-                        f"({proto.ping_count} pings enviados)")
+                        f"Charger closed socket after {elapsed:.1f}s without pong "
+                        f"({proto.ping_count} pings sent)")
                     return
+                if (tick + 1) % 15 == 0:
+                    self._log(8, f"Still connected after {tick + 1}s, {proto.ping_count} pings so far")
 
+            self._log(8, f"FAIL: Charger did NOT disconnect after 90s ({proto.ping_count} pings)")
             await self._mark(8, StepStatus.FAILED,
-                f"Charger NÃO desconectou após 90s sem pong "
-                f"({proto.ping_count} pings recebidos)")
+                f"Charger did NOT disconnect after 90s without pong "
+                f"({proto.ping_count} pings received)")
         except Exception as e:
+            self._log(8, f"Error: {e}")
             await self._mark(8, StepStatus.FAILED, str(e))
+
+    def generate_report(self) -> str:
+        now = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+        cp_id = html.escape(self.charge_point_id or "N/A")
+        all_passed = all(s.status == StepStatus.PASSED for s in self.steps)
+        overall = "PASS" if all_passed else "FAIL"
+        overall_color = "var(--pass)" if all_passed else "var(--fail)"
+        overall_border = overall_color
+
+        def status_pill(status: StepStatus) -> str:
+            cls = {"passed": "result--pass", "failed": "result--fail"}.get(status.value, "result--skip")
+            label = status.value.upper()
+            return f'<span class="result {cls}">{label}</span>'
+
+        def step_row(s: "TestStep") -> str:
+            duration = f"{s.finished_at - s.started_at:.1f}s" if s.started_at and s.finished_at else "-"
+            detail = html.escape(s.detail) if s.detail else ""
+            logs_html = ""
+            if s.logs:
+                items = "".join(f"<li>{html.escape(l)}</li>" for l in s.logs)
+                logs_html = f'<details><summary>Logs ({len(s.logs)} entries)</summary><ul>{items}</ul></details>'
+            return (
+                f"<tr>"
+                f"<td><strong>#{s.id}</strong></td>"
+                f"<td><strong>{html.escape(s.name)}</strong></td>"
+                f"<td>{html.escape(s.description)}</td>"
+                f"<td style='text-align:center'>{status_pill(s.status)}</td>"
+                f"<td>{duration}</td>"
+                f"<td>{detail}{logs_html}</td>"
+                f"</tr>"
+            )
+
+        phase1_rows = "".join(step_row(s) for s in self.steps if s.id in PHASE1_IDS)
+        phase2_rows = "".join(step_row(s) for s in self.steps if s.id in PHASE2_IDS)
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XPECD-5262 Test Report — {cp_id}</title>
+<style>
+:root {{ --siemens-petrol: #009999; --siemens-ink: #001b2e; --siemens-blue: #007993; --mist: #f3f7f8; --line: #d7e2e5; --muted: #52636d; --pass: #107c41; --fail: #b42318; }}
+* {{ box-sizing: border-box; }}
+body {{ margin: 0; background: #e9f0f2; color: var(--siemens-ink); font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; line-height: 1.45; }}
+.card {{ max-width: 1180px; min-height: 100vh; margin: 0 auto; background: #fff; box-shadow: 0 0 32px rgba(0, 27, 46, .12); }}
+.header {{ position: relative; overflow: hidden; min-height: 218px; padding: 32px 48px; color: #fff; background: var(--siemens-ink); display: flex; justify-content: space-between; align-items: flex-start; }}
+.header::after {{ content: ""; position: absolute; right: -70px; bottom: -145px; width: 520px; height: 340px; border: 48px solid var(--siemens-petrol); border-radius: 50%; opacity: .95; }}
+.brand, .header-copy, .meta {{ position: relative; z-index: 1; }}
+.brand {{ font-family: Arial, sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -2px; line-height: 1; color: var(--siemens-petrol); }}
+.header-copy {{ align-self: flex-end; margin-top: 72px; }}
+.eyebrow {{ margin-bottom: 8px; color: #8ce0dc; font-size: 11px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; }}
+.header h1 {{ max-width: 660px; margin: 0; font-size: clamp(28px, 4vw, 42px); font-weight: 300; letter-spacing: -.8px; line-height: 1.06; }}
+.header h1 strong {{ font-weight: 700; }}
+.subtitle {{ margin: 12px 0 0; color: #c7dde2; font-size: 15px; }}
+.meta {{ min-width: 190px; margin-left: 28px; padding: 14px 0 14px 18px; border-left: 2px solid var(--siemens-petrol); font-size: 12px; line-height: 1.8; }}
+.meta span {{ display: block; color: #9fb7c0; text-transform: uppercase; letter-spacing: .7px; font-size: 10px; }}
+.meta strong {{ color: #fff; font-size: 15px; font-weight: 600; }}
+.content {{ padding: 40px 48px 54px; overflow-x: hidden; }}
+.summary-box {{ display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; margin-bottom: 40px; padding: 20px 24px; border: 1px solid var(--line); border-left: 6px solid {overall_border}; background: var(--mist); }}
+.summary-state {{ color: {overall_color}; font-size: 12px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }}
+.summary-box h3 {{ margin: 2px 0 3px; font-size: 21px; font-weight: 600; letter-spacing: -.25px; }}
+.summary-box p {{ margin: 0; color: var(--muted); }}
+.section-title {{ display: flex; align-items: baseline; gap: 12px; margin: 34px 0 12px; color: var(--siemens-ink); font-size: 20px; font-weight: 600; letter-spacing: -.3px; }}
+.section-title::before {{ content: ""; width: 22px; height: 4px; background: var(--siemens-petrol); }}
+.table-wrap {{ width: 100%; overflow-x: auto; border: 1px solid var(--line); }}
+table {{ width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; }}
+th {{ padding: 12px 14px; background: var(--siemens-ink); border-right: 1px solid #244051; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .75px; text-align: left; text-transform: uppercase; }}
+th:last-child {{ border-right: 0; }}
+td {{ padding: 14px; border-bottom: 1px solid var(--line); color: #263b47; font-size: 13px; vertical-align: middle; overflow-wrap: anywhere; word-break: break-word; }}
+tbody tr:nth-child(even) {{ background: #f9fbfc; }}
+tbody tr:hover {{ background: #e9f7f7; }}
+tbody tr:last-child td {{ border-bottom: 0; }}
+td strong {{ color: var(--siemens-ink); font-weight: 650; }}
+.result {{ display: inline-block; min-width: 68px; padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .6px; text-align: center; text-transform: uppercase; }}
+.result--pass {{ background: #dff3e7; color: var(--pass); }}
+.result--fail {{ background: #fde8e6; color: var(--fail); }}
+.result--skip {{ background: #fef3cd; color: #856404; }}
+details {{ margin-top: 8px; }}
+details ul {{ max-width: 100%; margin: 6px 0 0; padding: 10px 25px; background: #f8fafb; border-radius: 4px; overflow-wrap: anywhere; word-break: break-word; }}
+details li {{ margin: 5px 0; font-size: 12px; font-family: Consolas, "Courier New", monospace; }}
+summary {{ color: var(--siemens-blue) !important; font-weight: 600; cursor: pointer; }}
+.footer {{ display: flex; justify-content: space-between; gap: 16px; padding: 20px 48px; background: var(--siemens-ink); color: #b6cbd3; font-size: 11px; letter-spacing: .3px; }}
+.footer strong {{ color: #fff; font-weight: 600; }}
+@media print {{ body {{ background: #fff; }} .card {{ max-width: none; box-shadow: none; }} }}
+</style>
+</head>
+<body>
+<div class="card">
+    <div class="header">
+        <div class="brand" aria-label="Siemens">SIEMENS</div>
+        <div class="header-copy">
+            <div class="eyebrow">SiCharge D / XPECD-5262</div>
+            <h1>WebSocketPingTimeout <strong>Validation Report</strong></h1>
+            <p class="subtitle">Automated verification of WebSocketPingTimeout configuration and ping/pong behaviour.</p>
+        </div>
+        <div class="meta">
+            <span>Generated</span>
+            <strong>{now}</strong>
+            <span>Charge Point</span>
+            <strong>{cp_id}</strong>
+        </div>
+    </div>
+    <div class="content">
+        <div class="summary-box">
+            <div class="summary-state">{overall}</div>
+            <div>
+                <h3>Test {overall.lower()}ed</h3>
+                <p>Charge Point: <strong>{cp_id}</strong> &middot; Steps: <strong>{sum(1 for s in self.steps if s.status == StepStatus.PASSED)}/{len(self.steps)} passed</strong></p>
+            </div>
+        </div>
+
+        <div class="section-title">Phase 1 — Configuration Validation</div>
+        <div class="table-wrap"><table>
+            <thead><tr>
+                <th style="width:6%">#</th>
+                <th style="width:14%">Step</th>
+                <th style="width:28%">Description</th>
+                <th style="width:10%;text-align:center">Result</th>
+                <th style="width:8%">Duration</th>
+                <th style="width:34%">Detail</th>
+            </tr></thead>
+            <tbody>{phase1_rows}</tbody>
+        </table></div>
+
+        <div class="section-title">Phase 2 — Ping/Pong Behaviour</div>
+        <div class="table-wrap"><table>
+            <thead><tr>
+                <th style="width:6%">#</th>
+                <th style="width:14%">Step</th>
+                <th style="width:28%">Description</th>
+                <th style="width:10%;text-align:center">Result</th>
+                <th style="width:8%">Duration</th>
+                <th style="width:34%">Detail</th>
+            </tr></thead>
+            <tbody>{phase2_rows}</tbody>
+        </table></div>
+    </div>
+    <div class="footer">
+        <span><strong>Siemens</strong> — XPECD-5262 WebSocketPingTimeout Test</span>
+        <span>Report generated automatically</span>
+    </div>
+</div>
+</body>
+</html>"""
 
     async def stop_pingpong(self):
         if self._server:
