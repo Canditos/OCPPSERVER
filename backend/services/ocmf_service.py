@@ -270,20 +270,27 @@ def verify_ocmf_signature(
     sig_raw = parsed.signature_data.strip()
     sig_bytes = None
 
-    try:
-        sig_bytes = base64.b64decode(sig_raw)
-    except Exception:
-        pass
+    # Try hex first: hex chars (0-9, A-F) are also valid base64, so base64 would silently
+    # decode a hex DER signature into garbage. Detect hex by checking all chars are hex + even len.
+    hex_only = re.sub(r"[^0-9a-fA-F]", "", sig_raw, flags=re.IGNORECASE)
+    if len(hex_only) == len(sig_raw) and len(sig_raw) % 2 == 0:
+        try:
+            sig_bytes = binascii.unhexlify(sig_raw)
+        except Exception:
+            pass
 
     if not sig_bytes:
         try:
-            sig_bytes = binascii.unhexlify(re.sub(r"[^0-9a-fA-F]", "", sig_raw))
+            sig_bytes = base64.b64decode(sig_raw)
         except Exception:
-            return {
-                "verified": False,
-                "error": "Assinatura digital 'SD' não está em formato Base64 ou Hexadecimal válido",
-                "parsed": parsed.to_dict(),
-            }
+            pass
+
+    if not sig_bytes:
+        return {
+            "verified": False,
+            "error": "Assinatura digital 'SD' não está em formato Base64 ou Hexadecimal válido",
+            "parsed": parsed.to_dict(),
+        }
 
     # Convert raw IEEE P1363 (R || S, 64 bytes) to ASN.1 DER if necessary
     der_signature = sig_bytes
