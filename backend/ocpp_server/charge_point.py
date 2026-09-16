@@ -58,6 +58,7 @@ class ChargePoint(OcppChargePoint):
     def __init__(self, cp_id: str, connection, client_ip: str = "unknown"):
         super().__init__(cp_id, connection)
         self.client_ip = client_ip
+        self._polling_tx_ids: set[int] = set()
 
     async def _log_message(self, direction: str, action: str, payload: dict):
         try:
@@ -146,6 +147,22 @@ class ChargePoint(OcppChargePoint):
 
         # Trigger automatic legal meter key discovery in background
         asyncio.create_task(self._auto_discover_meter_keys())
+
+        # Resume MeterValues polling for any transaction that was already Active before
+        # this reconnect (e.g. after a backend restart/redeploy, in-memory poll tasks
+        # are lost even though the charging session itself is still ongoing).
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Transaction).where(
+                        Transaction.charge_point_id == self.id,
+                        Transaction.status == "Active",
+                    )
+                )
+                for tx in result.scalars().all():
+                    self._start_meter_poll(tx.transaction_id, tx.connector_id)
+        except Exception as e:
+            logger.debug(f"{self.id}: resuming MeterValues polling failed: {e}")
 
     async def _auto_discover_meter_keys(self):
         """Queries charger for meter public keys via GetConfiguration and registers them in DB."""
@@ -485,7 +502,7 @@ class ChargePoint(OcppChargePoint):
 
         # This meter model doesn't proactively send periodic MeterValues; actively poll
         # for them via TriggerMessage so live power/energy isn't stuck at 0 while charging.
-        asyncio.create_task(self._poll_meter_values_while_active(tx_id, connector_id))
+        self._start_meter_poll(tx_id, connector_id)
 
         await event_bus.publish("transaction_started", {
             "charge_point_id": self.id,
@@ -499,21 +516,32 @@ class ChargePoint(OcppChargePoint):
             id_tag_info={"status": AuthorizationStatus.accepted}
         )
 
+    def _start_meter_poll(self, tx_id: int, connector_id: int):
+        """Starts the MeterValues poll task for a transaction, avoiding duplicate loops
+        (e.g. if a reconnect resumes polling for a transaction already being polled)."""
+        if tx_id in self._polling_tx_ids:
+            return
+        self._polling_tx_ids.add(tx_id)
+        asyncio.create_task(self._poll_meter_values_while_active(tx_id, connector_id))
+
     async def _poll_meter_values_while_active(self, tx_id: int, connector_id: int, interval_s: int = 30, max_hours: int = 24):
         """Periodically asks the charger (via TriggerMessage) to send MeterValues for a
         transaction, for chargers/firmwares that don't push them on their own schedule."""
-        max_iterations = int(max_hours * 3600 / interval_s)
-        for _ in range(max_iterations):
-            await asyncio.sleep(interval_s)
-            try:
-                async with AsyncSessionLocal() as db:
-                    result = await db.execute(select(Transaction).where(Transaction.transaction_id == tx_id))
-                    tx = result.scalar_one_or_none()
-                    if not tx or tx.status != "Active":
-                        return
-                await self.trigger_message("MeterValues", connector_id)
-            except Exception as e:
-                logger.debug(f"{self.id}: MeterValues poll for TX #{tx_id} failed: {e}")
+        try:
+            max_iterations = int(max_hours * 3600 / interval_s)
+            for _ in range(max_iterations):
+                await asyncio.sleep(interval_s)
+                try:
+                    async with AsyncSessionLocal() as db:
+                        result = await db.execute(select(Transaction).where(Transaction.transaction_id == tx_id))
+                        tx = result.scalar_one_or_none()
+                        if not tx or tx.status != "Active":
+                            return
+                    await self.trigger_message("MeterValues", connector_id)
+                except Exception as e:
+                    logger.debug(f"{self.id}: MeterValues poll for TX #{tx_id} failed: {e}")
+        finally:
+            self._polling_tx_ids.discard(tx_id)
 
     @on(Action.StopTransaction)
     async def on_stop_transaction(self, transaction_id, meter_stop, timestamp, **kwargs):
