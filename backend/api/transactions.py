@@ -69,14 +69,22 @@ async def list_transactions(
             if d.energy_kwh is None or meter_kwh > d.energy_kwh:
                 d.energy_kwh = meter_kwh
 
-        if (
-            not include_empty
-            and tx.status == "Completed"
-            and tx.meter_stop is None
-            and latest_meter is None
+        # Hide noise transactions: Completed sessions with no proof of real charging
+        # (no signed OCMF data, no MeterValues telemetry) AND either never got a
+        # meter_stop (dangling) or reported zero net energy (meter_stop == meter_start,
+        # e.g. a duplicate StartTransaction retry the charger stopped immediately).
+        has_no_evidence = (
+            latest_meter is None
             and not tx.ocmf_start_raw
             and not tx.ocmf_stop_raw
             and not await _has_meter_values(db, tx)
+        )
+        is_zero_energy = tx.meter_stop is None or (d.energy_kwh is not None and d.energy_kwh <= 0)
+        if (
+            not include_empty
+            and tx.status == "Completed"
+            and has_no_evidence
+            and is_zero_energy
         ):
             continue
 

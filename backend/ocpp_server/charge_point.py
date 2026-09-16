@@ -175,6 +175,21 @@ class ChargePoint(OcppChargePoint):
         except Exception as e:
             logger.debug(f"{self.id}: auto discover meter keys via GetConfiguration: {e}")
 
+        # Self-heal: re-check OCMF verification for this charger's past transactions on
+        # every (re)connect. A transaction can be stuck with ocmf_verified=False if it was
+        # verified before the meter's public key was registered/corrected in DB; since
+        # `_save_meter_key` above only fires when a NEW key is discovered via
+        # GetConfiguration (which this meter model doesn't expose that way), stale results
+        # would otherwise never get corrected without a manual API call.
+        try:
+            from api.ocmf import reverify_transactions_internal
+            async with AsyncSessionLocal() as db:
+                reverified = await reverify_transactions_internal(db, charge_point_id=self.id)
+                if reverified:
+                    logger.info(f"{self.id}: OCMF reverification on reconnect fixed {reverified} transaction(s)")
+        except Exception as e:
+            logger.debug(f"{self.id}: OCMF reverification on reconnect failed: {e}")
+
     async def _save_meter_key(self, connector_id: int, public_key_hex: str, source: str):
         """Saves a discovered meter public key to DB and re-verifies past transactions."""
         from services.ocmf_service import load_public_key_from_string, verify_ocmf_signature
@@ -468,6 +483,10 @@ class ChargePoint(OcppChargePoint):
                 charger.status = "Charging"
                 await db.commit()
 
+        # This meter model doesn't proactively send periodic MeterValues; actively poll
+        # for them via TriggerMessage so live power/energy isn't stuck at 0 while charging.
+        asyncio.create_task(self._poll_meter_values_while_active(tx_id, connector_id))
+
         await event_bus.publish("transaction_started", {
             "charge_point_id": self.id,
             "transaction_id": tx_id,
@@ -479,6 +498,22 @@ class ChargePoint(OcppChargePoint):
             transaction_id=tx_id,
             id_tag_info={"status": AuthorizationStatus.accepted}
         )
+
+    async def _poll_meter_values_while_active(self, tx_id: int, connector_id: int, interval_s: int = 30, max_hours: int = 24):
+        """Periodically asks the charger (via TriggerMessage) to send MeterValues for a
+        transaction, for chargers/firmwares that don't push them on their own schedule."""
+        max_iterations = int(max_hours * 3600 / interval_s)
+        for _ in range(max_iterations):
+            await asyncio.sleep(interval_s)
+            try:
+                async with AsyncSessionLocal() as db:
+                    result = await db.execute(select(Transaction).where(Transaction.transaction_id == tx_id))
+                    tx = result.scalar_one_or_none()
+                    if not tx or tx.status != "Active":
+                        return
+                await self.trigger_message("MeterValues", connector_id)
+            except Exception as e:
+                logger.debug(f"{self.id}: MeterValues poll for TX #{tx_id} failed: {e}")
 
     @on(Action.StopTransaction)
     async def on_stop_transaction(self, transaction_id, meter_stop, timestamp, **kwargs):

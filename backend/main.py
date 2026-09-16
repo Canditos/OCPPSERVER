@@ -103,6 +103,19 @@ async def startup():
             if not os.environ.get("ADMIN_DEFAULT_PASSWORD"):
                 logging.warning(f"Admin user created with generated password: {admin_pw} — change it immediately or set ADMIN_DEFAULT_PASSWORD env var")
 
+    # Self-heal any OCMF/Eichrecht verification results that went stale (e.g. computed
+    # before the meter's public key was registered, or by an older code path). This
+    # re-checks every transaction that has signed OCMF data against the currently
+    # registered public keys, so "sem Eichrecht" badges don't linger incorrectly.
+    try:
+        from api.ocmf import reverify_transactions_internal
+        async with AsyncSessionLocal() as session:
+            reverified = await reverify_transactions_internal(session)
+            if reverified:
+                logging.info(f"Startup OCMF reverification: {reverified} transaction(s) re-checked")
+    except Exception as e:
+        logging.warning(f"Startup OCMF reverification failed: {e}")
+
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):
         port = int(os.environ["OCPP_STANDALONE_PORT"])
