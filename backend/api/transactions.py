@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, func
 from database import get_db
 from models.transaction import Transaction, MeterValue
 from models.user import User
@@ -16,11 +16,21 @@ def _meter_value_tx_ids(tx: Transaction) -> list[int]:
     return [tx.id, tx.transaction_id]
 
 
+async def _has_meter_values(db: AsyncSession, tx: Transaction) -> bool:
+    result = await db.execute(
+        select(func.count(MeterValue.id)).where(
+            MeterValue.transaction_id.in_(_meter_value_tx_ids(tx))
+        )
+    )
+    return (result.scalar() or 0) > 0
+
+
 @router.get("", response_model=list[TransactionOut])
 async def list_transactions(
     cp_id: str | None = Query(None),
     status: str | None = Query(None),
     limit: int = 100,
+    include_empty: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
     # Fetch all users to map RFID -> user info
@@ -58,6 +68,17 @@ async def list_transactions(
             meter_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
             if d.energy_kwh is None or meter_kwh > d.energy_kwh:
                 d.energy_kwh = meter_kwh
+
+        if (
+            not include_empty
+            and tx.status == "Completed"
+            and tx.meter_stop is None
+            and latest_meter is None
+            and not tx.ocmf_start_raw
+            and not tx.ocmf_stop_raw
+            and not await _has_meter_values(db, tx)
+        ):
+            continue
 
         # Map user info from RFID tag
         user = user_by_tag.get(tx.id_tag)

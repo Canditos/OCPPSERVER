@@ -400,19 +400,36 @@ class ChargePoint(OcppChargePoint):
                 id_tag_info={"status": auth_status}
             )
 
-        # Idempotency & Deduplication: Check if duplicate StartTransaction arrived in the last 15 seconds
+        try:
+            start_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            start_dt = datetime.utcnow()
+
+        # Idempotency & Deduplication: absorb charger retransmissions for the
+        # same physical session, even if a stale duplicate was already auto-closed.
         async with AsyncSessionLocal() as db:
             r_dup = await db.execute(
                 select(Transaction).where(
                     Transaction.charge_point_id == self.id,
                     Transaction.connector_id == connector_id,
                     Transaction.id_tag == id_tag,
-                    Transaction.status == "Active"
+                    Transaction.meter_start == meter_start,
                 ).order_by(Transaction.start_time.desc()).limit(1)
             )
             existing_tx = r_dup.scalar_one_or_none()
             now_dt = datetime.utcnow()
-            if existing_tx and existing_tx.start_time and (now_dt - existing_tx.start_time).total_seconds() < 120:
+            is_duplicate = False
+            if existing_tx and existing_tx.start_time:
+                same_start_event = abs((existing_tx.start_time - start_dt).total_seconds()) <= 2
+                recent_active_retry = existing_tx.status == "Active" and (now_dt - existing_tx.start_time).total_seconds() < 120
+                zero_value_replay = (
+                    existing_tx.status == "Completed"
+                    and (existing_tx.meter_stop is None or existing_tx.meter_stop == existing_tx.meter_start)
+                    and same_start_event
+                )
+                is_duplicate = same_start_event or recent_active_retry or zero_value_replay
+
+            if existing_tx and is_duplicate:
                 logger.info(f"Duplicate StartTransaction detected for {self.id} (connector {connector_id}). Reusing TX #{existing_tx.transaction_id}")
                 await self._log_message("IN", "StartTransaction", {
                     "connector_id": connector_id,
@@ -444,7 +461,7 @@ class ChargePoint(OcppChargePoint):
                     connector_id=connector_id,
                     id_tag=id_tag,
                     meter_start=meter_start,
-                    start_time=datetime.fromisoformat(timestamp.replace("Z", "+00:00")).replace(tzinfo=None),
+                    start_time=start_dt,
                     status="Active",
                 )
                 db.add(tx)

@@ -307,6 +307,26 @@ class ChargePointV201(BaseChargePointV201):
                     self._db_charger_id = c_row.id
 
             if event_type == TransactionEventType.started:
+                if tx_guid:
+                    r_existing = await db.execute(
+                        select(Transaction).where(
+                            Transaction.charge_point_id == self.charge_point_id,
+                            Transaction.transaction_guid == tx_guid,
+                        ).order_by(Transaction.start_time.desc()).limit(1)
+                    )
+                    existing_tx = r_existing.scalar_one_or_none()
+                    if existing_tx:
+                        self._tx_guid_map[tx_guid] = existing_tx.transaction_id
+                        logger.info(
+                            "[%s] Duplicate OCPP 2.0.1 Started for guid=%s. Reusing TX #%s",
+                            self.charge_point_id,
+                            tx_guid,
+                            existing_tx.transaction_id,
+                        )
+                        return call_result.TransactionEventPayload(
+                            id_token_info={"status": "Accepted"} if id_token else None
+                        )
+
                 # Assign numeric transaction_id for DB compatibility
                 import random
                 num_tx_id = random.randint(100000, 999999)
