@@ -148,9 +148,12 @@ class ChargePoint(OcppChargePoint):
         # Trigger automatic legal meter key discovery in background
         asyncio.create_task(self._auto_discover_meter_keys())
 
-        # Resume MeterValues polling for any transaction that was already Active before
-        # this reconnect (e.g. after a backend restart/redeploy, in-memory poll tasks
-        # are lost even though the charging session itself is still ongoing).
+    async def resume_active_polling(self):
+        """Resume MeterValues polling for any transaction that was already Active before
+        this (re)connection (e.g. after a backend restart/redeploy, in-memory poll tasks
+        are lost even though the charging session itself is still ongoing). Called on
+        every WebSocket (re)connect, since some chargers only send BootNotification once
+        per physical power-cycle and won't resend it on a plain reconnect."""
         try:
             async with AsyncSessionLocal() as db:
                 result = await db.execute(

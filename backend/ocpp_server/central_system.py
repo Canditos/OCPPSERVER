@@ -69,6 +69,7 @@ async def on_connect_fastapi(websocket, charge_point_id: str, ocpp_version: str 
     else:
         cp = ChargePoint(charge_point_id, adapter, client_ip)
         logger.info(f"Dual-Stack: Charger connected as OCPP 1.6-J: {charge_point_id} from {client_ip}")
+        asyncio.create_task(cp.resume_active_polling())
 
     CONNECTED[charge_point_id] = cp
 
