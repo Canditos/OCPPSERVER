@@ -10,6 +10,12 @@ from energy import delta_kwh, to_watt_hours
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
+def _meter_value_tx_ids(tx: Transaction) -> list[int]:
+    if tx.id == tx.transaction_id:
+        return [tx.id]
+    return [tx.id, tx.transaction_id]
+
+
 @router.get("", response_model=list[TransactionOut])
 async def list_transactions(
     cp_id: str | None = Query(None),
@@ -41,7 +47,7 @@ async def list_transactions(
         meter_result = await db.execute(
             select(MeterValue)
             .where(
-                MeterValue.transaction_id == tx.id,
+                MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
                 MeterValue.measurand == 'Energy.Active.Import.Register'
             )
             .order_by(MeterValue.timestamp.desc())
@@ -66,9 +72,16 @@ async def list_transactions(
 
 @router.get("/{tx_id}/meter-values", response_model=list[MeterValueOut])
 async def get_meter_values(tx_id: int, db: AsyncSession = Depends(get_db)):
+    tx_result = await db.execute(
+        select(Transaction).where(
+            (Transaction.id == tx_id) | (Transaction.transaction_id == tx_id)
+        )
+    )
+    tx = tx_result.scalar_one_or_none()
+    tx_ids = _meter_value_tx_ids(tx) if tx else [tx_id]
     result = await db.execute(
         select(MeterValue)
-        .where(MeterValue.transaction_id == tx_id)
+        .where(MeterValue.transaction_id.in_(tx_ids))
         .order_by(MeterValue.timestamp.asc())
     )
     return list(result.scalars().all())
@@ -77,11 +90,19 @@ async def get_meter_values(tx_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/{tx_id}/live-power")
 async def get_live_power(tx_id: int, db: AsyncSession = Depends(get_db)):
     """Get latest power and energy reading for an active transaction."""
+    tx_result = await db.execute(
+        select(Transaction).where(
+            (Transaction.id == tx_id) | (Transaction.transaction_id == tx_id)
+        )
+    )
+    tx = tx_result.scalar_one_or_none()
+    tx_ids = _meter_value_tx_ids(tx) if tx else [tx_id]
+
     # Get latest Power.Active.Import measurement
     power_result = await db.execute(
         select(MeterValue)
         .where(
-            MeterValue.transaction_id == tx_id,
+            MeterValue.transaction_id.in_(tx_ids),
             MeterValue.measurand == 'Power.Active.Import'
         )
         .order_by(MeterValue.timestamp.desc())
@@ -93,17 +114,13 @@ async def get_live_power(tx_id: int, db: AsyncSession = Depends(get_db)):
     energy_result = await db.execute(
         select(MeterValue)
         .where(
-            MeterValue.transaction_id == tx_id,
+            MeterValue.transaction_id.in_(tx_ids),
             MeterValue.measurand == 'Energy.Active.Import.Register'
         )
         .order_by(MeterValue.timestamp.desc())
         .limit(1)
     )
     energy_meter = energy_result.scalar_one_or_none()
-    
-    # Get transaction to get meter_start for calculation
-    tx_result = await db.execute(select(Transaction).where(Transaction.id == tx_id))
-    tx = tx_result.scalar_one_or_none()
     
     return {
         "power_w": float(power_meter.value) if power_meter else 0.0,
@@ -159,7 +176,7 @@ async def get_active_transaction(cp_id: str, connector_id: int | None = None, db
         meter_result = await db.execute(
             select(MeterValue)
             .where(
-                MeterValue.transaction_id == tx.id,
+                MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
                 MeterValue.measurand == 'Energy.Active.Import.Register'
             )
             .order_by(MeterValue.timestamp.desc())
@@ -220,7 +237,7 @@ async def get_all_active_transactions(cp_id: str, db: AsyncSession = Depends(get
             meter_result = await db.execute(
                 select(MeterValue)
                 .where(
-                    MeterValue.transaction_id == tx.id,
+                    MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
                     MeterValue.measurand == 'Energy.Active.Import.Register'
                 )
                 .order_by(MeterValue.timestamp.desc())

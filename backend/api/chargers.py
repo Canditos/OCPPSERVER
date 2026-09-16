@@ -64,7 +64,7 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
             # Get latest power, energy & SoC from database
             r_mv = await db.execute(
                 select(MeterValue)
-                .where(MeterValue.transaction_id == tx.id)
+                .where(MeterValue.transaction_id.in_([tx.id, tx.transaction_id]))
                 .order_by(MeterValue.timestamp.desc())
                 .limit(15)
             )

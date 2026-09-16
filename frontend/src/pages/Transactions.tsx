@@ -213,7 +213,7 @@ export function Transactions() {
                         <ShieldCheck className="w-3 h-3 text-emerald-500" />
                         <span>OCMF Válido</span>
                       </button>
-                    ) : tx.ocmf_stop_raw ? (
+                    ) : (tx.ocmf_stop_raw || tx.ocmf_start_raw) ? (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -283,7 +283,7 @@ export function Transactions() {
                             <span className="text-slate-400">Padrão</span>
                           )}
                         </span>
-                        {tx.ocmf_stop_raw && (
+                        {(tx.ocmf_stop_raw || tx.ocmf_start_raw) && (
                           <button
                             onClick={() => setSelectedOcmfTx(tx.transaction_id)}
                             className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"

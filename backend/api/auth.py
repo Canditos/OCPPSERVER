@@ -367,7 +367,7 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
             elif tx.status == "Active" and active_charge_data is None:
                 mv_res = await db.execute(
                     select(MeterValue)
-                    .where(MeterValue.transaction_id == tx.transaction_id)
+                    .where(MeterValue.transaction_id.in_([tx.id, tx.transaction_id]))
                     .order_by(MeterValue.timestamp.desc())
                     .limit(6)
                 )
@@ -446,7 +446,7 @@ async def list_users(
         if active_tx:
             mv_res = await db.execute(
                 select(MeterValue)
-                .where(MeterValue.transaction_id == active_tx.transaction_id)
+                .where(MeterValue.transaction_id.in_([active_tx.id, active_tx.transaction_id]))
                 .order_by(MeterValue.timestamp.desc())
                 .limit(6)
             )
@@ -826,7 +826,7 @@ async def notify_move_car(
             target_user = r_u.scalar_one_or_none()
             if tx.meter_start is not None:
                 r_mv = await db.execute(
-                    select(MeterValue).where(MeterValue.transaction_id == tx.transaction_id)
+                    select(MeterValue).where(MeterValue.transaction_id.in_([tx.id, tx.transaction_id]))
                     .order_by(MeterValue.timestamp.desc()).limit(5)
                 )
                 for mv in r_mv.scalars().all():
@@ -851,4 +851,3 @@ async def notify_move_car(
         "recipient": target_user.email,
         "username": target_user.username
     }
-

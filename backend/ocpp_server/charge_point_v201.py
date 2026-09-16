@@ -29,7 +29,7 @@ from models.transaction import Transaction, MeterValue
 from models.authorized_tag import AuthorizedTag
 from models.user import User
 from sqlalchemy import select, update
-from energy import to_watt_hours
+from energy import to_watt_hours, to_watts
 
 logger = logging.getLogger(__name__)
 
@@ -272,23 +272,32 @@ class ChargePointV201(BaseChargePointV201):
         latest_power_w = 0.0
         latest_energy_wh = 0.0
         soc_pct = None
+        parsed_meter_values = []
 
         if meter_value:
             for mv_batch in meter_value:
                 sampled_values = mv_batch.get("sampled_value", [])
                 for sv in sampled_values:
                     measurand = sv.get("measurand", "Energy.Active.Import.Register")
-                    val = float(sv.get("value", 0))
+                    try:
+                        val = float(sv.get("value", 0))
+                    except (ValueError, TypeError):
+                        logger.warning("[%s] Ignoring non-numeric OCPP 2.0.1 MeterValue for %s", self.charge_point_id, measurand)
+                        continue
+                    unit_info = sv.get("unit_of_measure") or {}
+                    unit = unit_info.get("unit") if isinstance(unit_info, dict) else sv.get("unit")
                     if "Power" in measurand:
-                        latest_power_w = val
+                        latest_power_w = to_watts(val, unit)
+                        parsed_meter_values.append(("Power.Active.Import", latest_power_w, "W"))
                     elif "Energy" in measurand:
-                        unit_info = sv.get("unit_of_measure") or {}
                         latest_energy_wh = to_watt_hours(
                             val,
-                            unit_info.get("unit") if isinstance(unit_info, dict) else sv.get("unit"),
+                            unit,
                         )
+                        parsed_meter_values.append(("Energy.Active.Import.Register", latest_energy_wh, "Wh"))
                     elif "SoC" in measurand or "StateOfCharge" in measurand:
                         soc_pct = val
+                        parsed_meter_values.append(("SoC", soc_pct, unit or "Percent"))
 
         async with AsyncSessionLocal() as db:
             if not self._db_charger_id:
@@ -344,28 +353,36 @@ class ChargePointV201(BaseChargePointV201):
 
             elif event_type == TransactionEventType.updated:
                 num_tx_id = self._tx_guid_map.get(tx_guid)
+                if not num_tx_id:
+                    r_tx_by_guid = await db.execute(
+                        select(Transaction).where(
+                            Transaction.charge_point_id == self.charge_point_id,
+                            Transaction.transaction_guid == tx_guid,
+                            Transaction.status == "Active",
+                        )
+                    )
+                    tx_by_guid = r_tx_by_guid.scalar_one_or_none()
+                    if tx_by_guid:
+                        num_tx_id = tx_by_guid.transaction_id
+                        self._tx_guid_map[tx_guid] = num_tx_id
                 if num_tx_id:
-                    # Save meter values
-                    if latest_power_w > 0:
-                        db.add(MeterValue(
-                            transaction_id=num_tx_id,
-                            charger_id=self._db_charger_id or 1,
-                            connector_id=connector_id,
-                            timestamp=now,
-                            measurand="Power.Active.Import",
-                            value=latest_power_w,
-                            unit="W",
-                        ))
-                    if latest_energy_wh > 0:
-                        db.add(MeterValue(
-                            transaction_id=num_tx_id,
-                            charger_id=self._db_charger_id or 1,
-                            connector_id=connector_id,
-                            timestamp=now,
-                            measurand="Energy.Active.Import.Register",
-                            value=latest_energy_wh,
-                            unit="Wh",
-                        ))
+                    r_tx = await db.execute(select(Transaction).where(Transaction.transaction_id == num_tx_id))
+                    tx = r_tx.scalar_one_or_none()
+                    if tx:
+                        for measurand, value, unit in parsed_meter_values:
+                            if value is None:
+                                continue
+                            if measurand != "Power.Active.Import" and value <= 0:
+                                continue
+                            db.add(MeterValue(
+                                transaction_id=tx.id,
+                                charger_id=self._db_charger_id or 1,
+                                connector_id=connector_id,
+                                timestamp=now,
+                                measurand=measurand,
+                                value=value,
+                                unit=unit,
+                            ))
                     await db.commit()
 
             elif event_type == TransactionEventType.ended:
@@ -378,7 +395,22 @@ class ChargePointV201(BaseChargePointV201):
                         tx.status = "Completed"
                         tx.stop_time = now
                         tx.stop_reason = stopped_reason
-                        tx.meter_stop = int(latest_energy_wh) or (tx.meter_start + 15000)
+                        if latest_energy_wh > 0:
+                            tx.meter_stop = int(latest_energy_wh)
+                        for measurand, value, unit in parsed_meter_values:
+                            if value is None:
+                                continue
+                            if measurand != "Power.Active.Import" and value <= 0:
+                                continue
+                            db.add(MeterValue(
+                                transaction_id=tx.id,
+                                charger_id=self._db_charger_id or 1,
+                                connector_id=connector_id,
+                                timestamp=now,
+                                measurand=measurand,
+                                value=value,
+                                unit=unit,
+                            ))
 
                 # Reset connector to Available
                 r_conn = await db.execute(

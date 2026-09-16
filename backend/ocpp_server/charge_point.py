@@ -26,6 +26,7 @@ from models.meter_public_key import MeterPublicKey
 from services.email_service import notify_ac_suspended_ev, notify_dc_charging_completed
 from services.ocmf_service import parse_ocmf, verify_ocmf_signature
 from sqlalchemy import select, update, func
+from energy import to_watts
 
 logger = logging.getLogger(__name__)
 _TX_COUNTER = 100000
@@ -292,6 +293,34 @@ class ChargePoint(OcppChargePoint):
             if key:
                 key.serial_number = serial
                 await db.commit()
+
+    async def _apply_ocmf_to_transaction(self, db, tx: Transaction, connector_id: int, raw_ocmf: str) -> None:
+        if not tx.ocmf_start_raw:
+            tx.ocmf_start_raw = raw_ocmf
+        tx.ocmf_stop_raw = raw_ocmf
+
+        parsed = parse_ocmf(raw_ocmf)
+        if parsed.is_valid_format:
+            tx.ocmf_meter_serial = parsed.gateway_id or tx.ocmf_meter_serial
+            if parsed.signer_public_key and len(parsed.signer_public_key) >= 64:
+                await self._save_meter_key(connector_id, parsed.signer_public_key, "OCMF SE field")
+
+        r_key = await db.execute(
+            select(MeterPublicKey).where(
+                MeterPublicKey.charge_point_id == self.id,
+                MeterPublicKey.connector_id == connector_id,
+                MeterPublicKey.is_active == True,
+            )
+        )
+        meter_key = r_key.scalar_one_or_none()
+        if meter_key:
+            result = verify_ocmf_signature(raw_ocmf, meter_key.public_key_hex, meter_key.curve_name)
+            tx.ocmf_verified = result.get("verified", False)
+            tx.ocmf_verification_error = result.get("error")
+            tx.ocmf_meter_serial = result.get("meter_serial") or tx.ocmf_meter_serial
+        else:
+            tx.ocmf_verified = False
+            tx.ocmf_verification_error = "Chave pública do medidor não configurada"
 
     @on(Action.Heartbeat)
     async def on_heartbeat(self, **kwargs):
@@ -598,10 +627,25 @@ class ChargePoint(OcppChargePoint):
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = result.scalar_one_or_none()
+            tx = None
             db_tx_id = None
             if tx_id_ocpp and charger:
                 r2 = await db.execute(select(Transaction).where(Transaction.transaction_id == tx_id_ocpp))
                 tx = r2.scalar_one_or_none()
+                if tx:
+                    db_tx_id = tx.id
+            if not tx and charger:
+                r_active = await db.execute(
+                    select(Transaction)
+                    .where(
+                        Transaction.charge_point_id == self.id,
+                        Transaction.connector_id == connector_id,
+                        Transaction.status == "Active",
+                    )
+                    .order_by(Transaction.start_time.desc())
+                    .limit(1)
+                )
+                tx = r_active.scalar_one_or_none()
                 if tx:
                     db_tx_id = tx.id
 
@@ -609,20 +653,33 @@ class ChargePoint(OcppChargePoint):
             for mv in meter_value:
                 ts = mv.get("timestamp", _now().isoformat())
                 for sv in mv.get("sampled_value", []):
+                    val_raw = str(sv.get("value", ""))
+                    sv_format = sv.get("format")
+                    if "OCMF|" in val_raw or (sv_format == "SignedData" and "OCMF" in val_raw):
+                        if tx:
+                            await self._apply_ocmf_to_transaction(db, tx, connector_id, val_raw)
+                        continue
                     try:
-                        val = float(sv.get("value", 0))
+                        val = float(val_raw)
                     except (ValueError, TypeError):
-                        val = 0.0
+                        logger.warning("%s: non-numeric MeterValue ignored for %s (%s)", self.id, sv.get("measurand"), sv_format)
+                        continue
+                    measurand = sv.get("measurand", "Energy.Active.Import.Register")
+                    unit = sv.get("unit")
+                    if "power" in str(measurand).lower():
+                        val = to_watts(val, unit)
+                        unit = "W"
                     row = MeterValue(
                         transaction_id=db_tx_id or 0,
                         charger_id=charger.id if charger else 0,
                         connector_id=connector_id,
                         timestamp=datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None),
-                        measurand=sv.get("measurand", "Energy.Active.Import.Register"),
+                        measurand=measurand,
                         value=val,
-                        unit=sv.get("unit"),
+                        unit=unit,
                         context=sv.get("context"),
                         phase=sv.get("phase"),
+                        format=sv_format or "Raw",
                     )
                     db.add(row)
                     meter_data.append({
@@ -718,7 +775,7 @@ class ChargePoint(OcppChargePoint):
                         if driver_user and driver_user.email:
                             r_mv = await email_db.execute(
                                 select(MeterValue)
-                                .where(MeterValue.transaction_id == active_tx.transaction_id)
+                                .where(MeterValue.transaction_id.in_([active_tx.id, active_tx.transaction_id]))
                                 .order_by(MeterValue.timestamp.desc())
                                 .limit(5)
                             )
