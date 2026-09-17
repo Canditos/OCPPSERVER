@@ -54,6 +54,64 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _sampled_values(payload: dict) -> list[dict]:
+    values = payload.get("sampled_value", payload.get("sampledValue", []))
+    return values if isinstance(values, list) else []
+
+
+def _extract_ocmf_payload(meter_values) -> str | None:
+    if isinstance(meter_values, dict):
+        meter_values = [meter_values]
+    if not isinstance(meter_values, list):
+        return None
+
+    for meter_value in meter_values:
+        if not isinstance(meter_value, dict):
+            continue
+        for sampled_value in _sampled_values(meter_value):
+            if not isinstance(sampled_value, dict):
+                continue
+            value = str(sampled_value.get("value", ""))
+            value_format = sampled_value.get("format")
+            if "OCMF|" in value or (value_format == "SignedData" and "OCMF" in value):
+                return value
+    return None
+
+
+async def reconcile_duplicate_active_transactions(db, charge_point_id: str | None = None) -> int:
+    q = select(Transaction).where(Transaction.status == "Active")
+    if charge_point_id:
+        q = q.where(Transaction.charge_point_id == charge_point_id)
+    q = q.order_by(
+        Transaction.charge_point_id.asc(),
+        Transaction.connector_id.asc(),
+        Transaction.start_time.desc(),
+        Transaction.id.desc(),
+    )
+    result = await db.execute(q)
+
+    latest_by_connector: dict[tuple[str, int], Transaction] = {}
+    closed = 0
+    for tx in result.scalars().all():
+        key = (tx.charge_point_id, tx.connector_id)
+        newer_tx = latest_by_connector.get(key)
+        if newer_tx is None:
+            latest_by_connector[key] = tx
+            continue
+
+        tx.status = "Completed"
+        tx.stop_time = tx.stop_time or newer_tx.start_time or _now()
+        tx.stop_reason = tx.stop_reason or "ReplacedByNewStartTransaction"
+        if tx.meter_stop is None:
+            tx.meter_stop = newer_tx.meter_start if newer_tx.meter_start is not None else tx.meter_start
+        closed += 1
+        latest_by_connector[key] = tx
+
+    if closed:
+        await db.commit()
+    return closed
+
+
 class ChargePoint(OcppChargePoint):
     def __init__(self, cp_id: str, connection, client_ip: str = "unknown"):
         super().__init__(cp_id, connection)
@@ -489,6 +547,27 @@ class ChargePoint(OcppChargePoint):
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = result.scalar_one_or_none()
             if charger:
+                r_previous_active = await db.execute(
+                    select(Transaction).where(
+                        Transaction.charge_point_id == self.id,
+                        Transaction.connector_id == connector_id,
+                        Transaction.status == "Active",
+                    )
+                )
+                for previous_tx in r_previous_active.scalars().all():
+                    previous_tx.status = "Completed"
+                    previous_tx.stop_time = previous_tx.stop_time or start_dt
+                    previous_tx.stop_reason = previous_tx.stop_reason or "ReplacedByNewStartTransaction"
+                    if previous_tx.meter_stop is None:
+                        previous_tx.meter_stop = meter_start
+                    logger.info(
+                        "%s: auto-completed stale active TX #%s on connector %s before starting TX #%s",
+                        self.id,
+                        previous_tx.transaction_id,
+                        connector_id,
+                        tx_id,
+                    )
+
                 tx = Transaction(
                     transaction_id=tx_id,
                     charger_id=charger.id,
@@ -575,16 +654,7 @@ class ChargePoint(OcppChargePoint):
 
                 # Process signed OCMF transactionData if provided by charger (LEM DCBM)
                 txn_data = kwargs.get("transaction_data") or kwargs.get("transactionData", [])
-                ocmf_stop = None
-                if txn_data and isinstance(txn_data, list):
-                    for t_mv in txn_data:
-                        if isinstance(t_mv, dict):
-                            for sv in t_mv.get("sampled_value", []):
-                                if isinstance(sv, dict):
-                                    val_str = str(sv.get("value", ""))
-                                    if "OCMF|" in val_str or (sv.get("format") == "SignedData" and "OCMF" in val_str):
-                                        ocmf_stop = val_str
-                                        break
+                ocmf_stop = _extract_ocmf_payload(txn_data)
 
                 if ocmf_stop:
                     tx.ocmf_stop_raw = ocmf_stop
@@ -735,7 +805,7 @@ class ChargePoint(OcppChargePoint):
             meter_data = []
             for mv in meter_value:
                 ts = mv.get("timestamp", _now().isoformat())
-                for sv in mv.get("sampled_value", []):
+                for sv in _sampled_values(mv):
                     val_raw = str(sv.get("value", ""))
                     sv_format = sv.get("format")
                     if "OCMF|" in val_raw or (sv_format == "SignedData" and "OCMF" in val_raw):

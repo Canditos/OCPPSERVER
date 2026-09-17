@@ -78,7 +78,7 @@ async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
 @app.on_event("startup")
 async def startup():
     await init_db()
-    from ocpp_server.charge_point import _init_tx_counter
+    from ocpp_server.charge_point import _init_tx_counter, reconcile_duplicate_active_transactions
     await _init_tx_counter()
 
     # Seed default admin and user if users table is empty
@@ -115,6 +115,17 @@ async def startup():
                 logging.info(f"Startup OCMF reverification: {reverified} transaction(s) re-checked")
     except Exception as e:
         logging.warning(f"Startup OCMF reverification failed: {e}")
+
+    # A physical connector can only have one live transaction. If a charger/backend
+    # missed StopTransaction during a reconnect, close older duplicate "Active" rows
+    # so the UI cannot show more charging sessions than plugs.
+    try:
+        async with AsyncSessionLocal() as session:
+            closed = await reconcile_duplicate_active_transactions(session)
+            if closed:
+                logging.info(f"Startup transaction reconciliation: closed {closed} stale active transaction(s)")
+    except Exception as e:
+        logging.warning(f"Startup transaction reconciliation failed: {e}")
 
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):
