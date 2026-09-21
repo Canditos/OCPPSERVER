@@ -10,7 +10,7 @@ import { safeFormatDate } from '../utils/date'
 import { api } from '../api'
 import { MeterChart } from '../components/MeterChart'
 import { OcmfAuditModal } from '../components/OcmfAuditModal'
-import type { Charger, Transaction } from '../types'
+import type { Charger, MeterKeyData, Transaction } from '../types'
 
 function StatusBadge({ status }: { status: string }) {
   const cls = status === 'Active'
@@ -27,6 +27,11 @@ function StatusBadge({ status }: { status: string }) {
 
 export function Transactions() {
   const { data: chargers = [] } = useQuery<Charger[]>({ queryKey: ['chargers'], queryFn: api.getChargers })
+  const { data: meterKeys = [] } = useQuery<MeterKeyData[]>({
+    queryKey: ['ocmf-meter-keys'],
+    queryFn: () => api.getMeterKeys(),
+    refetchInterval: 30000,
+  })
   const [filterCp, setFilterCp] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -115,6 +120,15 @@ export function Transactions() {
             : tx.status === 'Active' ? 'Em curso…' : null
 
           const isOpen = expanded === tx.id
+          const charger = chargers.find((item) => item.charge_point_id === tx.charge_point_id)
+          const hasActiveErk = meterKeys.some((key) =>
+            key.charge_point_id === tx.charge_point_id
+            && key.connector_id === tx.connector_id
+            && key.is_active !== false
+            && key.is_valid !== false
+          )
+          const isErkCompliant = Boolean(charger?.is_eichrecht_compliant && hasActiveErk)
+          const isErkMissingKey = Boolean(charger?.is_eichrecht_compliant && !hasActiveErk)
 
           return (
             <div
@@ -213,6 +227,30 @@ export function Transactions() {
                         <ShieldCheck className="w-3 h-3 text-emerald-500" />
                         <span>OCMF Válido</span>
                       </button>
+                    ) : tx.status === 'Active' && isErkCompliant ? (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center gap-1"
+                        title="Carregador Eichrecht com ERK ativa. A assinatura OCMF final será validada no fim da carga."
+                      >
+                        <ShieldCheck className="w-3 h-3 text-blue-500" />
+                        <span>ERK Compliance</span>
+                      </span>
+                    ) : tx.status === 'Active' && isErkMissingKey ? (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1"
+                        title="O carregador está marcado como Eichrecht, mas não existe uma ERK ativa para este conector."
+                      >
+                        <ShieldAlert className="w-3 h-3 text-amber-500" />
+                        <span>ERK por configurar</span>
+                      </span>
+                    ) : tx.status !== 'Active' && isErkCompliant && !tx.ocmf_start_raw && !tx.ocmf_stop_raw ? (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25 flex items-center gap-1"
+                        title="A ERK está configurada, mas o carregador não enviou o documento OCMF desta sessão."
+                      >
+                        <ShieldAlert className="w-3 h-3 text-red-500" />
+                        <span>OCMF não recebido</span>
+                      </span>
                     ) : (tx.ocmf_stop_raw || tx.ocmf_start_raw) ? (
                       <button
                         onClick={(e) => {
@@ -274,6 +312,21 @@ export function Transactions() {
                           {tx.ocmf_verified ? (
                             <span className="text-emerald-500 flex items-center gap-1">
                               <ShieldCheck className="w-3.5 h-3.5" /> Assinado & Válido
+                            </span>
+                          ) : tx.status === 'Active' && isErkCompliant ? (
+                            <span
+                              className="text-blue-500 flex items-center gap-1"
+                              title="A validação da assinatura OCMF é concluída no fim da carga."
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" /> ERK ativa · validação no fim
+                            </span>
+                          ) : tx.status === 'Active' && isErkMissingKey ? (
+                            <span className="text-amber-500 flex items-center gap-1">
+                              <ShieldAlert className="w-3.5 h-3.5" /> ERK por configurar
+                            </span>
+                          ) : tx.status !== 'Active' && isErkCompliant && !tx.ocmf_start_raw && !tx.ocmf_stop_raw ? (
+                            <span className="text-red-500 flex items-center gap-1">
+                              <ShieldAlert className="w-3.5 h-3.5" /> OCMF final não recebido
                             </span>
                           ) : tx.ocmf_stop_raw ? (
                             <span className="text-amber-500 flex items-center gap-1">

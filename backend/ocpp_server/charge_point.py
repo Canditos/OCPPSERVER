@@ -523,6 +523,26 @@ class ChargePoint(OcppChargePoint):
                 is_duplicate = same_start_event or recent_active_retry or zero_value_replay
 
             if existing_tx and is_duplicate:
+                # A status read can briefly see the connector as Available while the
+                # charger is still completing its start sequence. Recover that session
+                # when the charger retransmits the same StartTransaction.
+                if (
+                    existing_tx.status == "Completed"
+                    and existing_tx.stop_reason == "EVDisconnected"
+                    and existing_tx.meter_stop is None
+                    and same_start_event
+                ):
+                    existing_tx.status = "Active"
+                    existing_tx.stop_time = None
+                    existing_tx.stop_reason = None
+                    await db.commit()
+                    self._start_meter_poll(existing_tx.transaction_id, connector_id)
+                    logger.info(
+                        "%s: restored prematurely closed TX #%s on connector %s",
+                        self.id,
+                        existing_tx.transaction_id,
+                        connector_id,
+                    )
                 logger.info(f"Duplicate StartTransaction detected for {self.id} (connector {connector_id}). Reusing TX #{existing_tx.transaction_id}")
                 await self._log_message("IN", "StartTransaction", {
                     "connector_id": connector_id,
