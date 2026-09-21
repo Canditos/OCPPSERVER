@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -236,24 +234,8 @@ async def get_all_active_transactions(cp_id: str, db: AsyncSession = Depends(get
     r_u = await db.execute(select(User))
     users_by_tag = {u.rfid_tag: u for u in r_u.scalars().all() if u.rfid_tag}
 
-    from models.charger import Connector, Charger
     for tx in txs:
         if tx.connector_id in out:
-            continue
-        # Verify physical connector state
-        r_con = await db.execute(
-            select(Connector).join(Charger).where(
-                Charger.charge_point_id == cp_id,
-                Connector.connector_id == tx.connector_id
-            )
-        )
-        p_con = r_con.scalar_one_or_none()
-        age_seconds = (datetime.utcnow() - tx.start_time).total_seconds() if tx.start_time else 0
-        if p_con and p_con.status in ["Available", "Unavailable"] and age_seconds > 120:
-            tx.status = "Completed"
-            tx.stop_time = tx.stop_time or datetime.utcnow()
-            tx.stop_reason = tx.stop_reason or "EVDisconnected"
-            await db.commit()
             continue
         d = TransactionOut.model_validate(tx)
         if tx.meter_stop is not None:

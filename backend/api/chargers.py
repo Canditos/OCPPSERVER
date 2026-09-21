@@ -46,16 +46,6 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
         c_out = ConnectorOut.model_validate(conn)
         tx = active_txs.get(conn.connector_id)
         if tx:
-            # If physical connector is Available/Unavailable, auto-complete dangling transaction
-            if conn.status in ["Available", "Unavailable"]:
-                age_seconds = (datetime.utcnow() - tx.start_time).total_seconds() if tx.start_time else 0
-                if age_seconds > 120:
-                    tx.status = "Completed"
-                    tx.stop_time = tx.stop_time or datetime.utcnow()
-                    tx.stop_reason = tx.stop_reason or "EVDisconnected"
-                    await db.commit()
-                    enriched.append(c_out)
-                    continue
             c_out.active_transaction_id = tx.transaction_id
             c_out.active_id_tag = tx.id_tag
             c_out.active_start_time = tx.start_time
