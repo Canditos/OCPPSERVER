@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, DateTime, Integer, Float, ForeignKey, Boolean, Text
+from sqlalchemy import String, DateTime, Integer, Float, ForeignKey, Boolean, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 
@@ -22,15 +22,6 @@ class Transaction(Base):
     stop_time: Mapped[datetime | None] = mapped_column(DateTime)
     stop_reason: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), default="Active")
-    evse_id: Mapped[int | None] = mapped_column(Integer, default=1, nullable=True)
-    id_token_type: Mapped[str | None] = mapped_column(String(32), default="ISO14443", nullable=True)
-    transaction_guid: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    ocmf_start_raw: Mapped[str | None] = mapped_column(String, nullable=True)
-    ocmf_stop_raw: Mapped[str | None] = mapped_column(String, nullable=True)
-    ocmf_verified: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
-    ocmf_verification_error: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    ocmf_meter_serial: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    signed_energy_kwh: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # OCMF / Eichrecht Certification
     ocmf_start_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -41,11 +32,23 @@ class Transaction(Base):
     signed_energy_kwh: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     charger: Mapped["Charger"] = relationship(back_populates="transactions")
-    meter_values: Mapped[list["MeterValue"]] = relationship(back_populates="transaction", cascade="all, delete-orphan", lazy="selectin")
+    meter_values: Mapped[list["MeterValue"]] = relationship(
+        back_populates="transaction",
+        cascade="all, delete-orphan",
+        lazy="raise",
+    )
 
 
 class MeterValue(Base):
     __tablename__ = "meter_values"
+    __table_args__ = (
+        Index(
+            "ix_meter_values_transaction_measurand_timestamp",
+            "transaction_id",
+            "measurand",
+            "timestamp",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_id: Mapped[int] = mapped_column(Integer, ForeignKey("transactions.id"), index=True)

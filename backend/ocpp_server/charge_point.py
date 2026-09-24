@@ -105,7 +105,49 @@ async def reconcile_duplicate_active_transactions(db, charge_point_id: str | Non
         if tx.meter_stop is None:
             tx.meter_stop = newer_tx.meter_start if newer_tx.meter_start is not None else tx.meter_start
         closed += 1
-        latest_by_connector[key] = tx
+
+    if closed:
+        await db.commit()
+    return closed
+
+
+async def reconcile_stale_active_transactions(db, charge_point_id: str | None = None) -> int:
+    """Close old active rows when the persisted connector is not occupied."""
+    q = (
+        select(Transaction, Connector)
+        .join(
+            Connector,
+            (Connector.charger_id == Transaction.charger_id)
+            & (Connector.connector_id == Transaction.connector_id),
+        )
+        .where(
+            Transaction.status == "Active",
+            Connector.status.in_(("Available", "Unavailable")),
+        )
+    )
+    if charge_point_id:
+        q = q.where(Transaction.charge_point_id == charge_point_id)
+
+    result = await db.execute(q)
+    now = _now()
+    closed = 0
+    for tx, connector in result.all():
+        age_seconds = (now - tx.start_time).total_seconds() if tx.start_time else 0
+        if age_seconds <= 120:
+            continue
+        tx.status = "Completed"
+        tx.stop_time = tx.stop_time or now
+        tx.stop_reason = tx.stop_reason or "EVDisconnected"
+        if tx.meter_stop is None:
+            tx.meter_stop = tx.meter_start
+        closed += 1
+        logger.info(
+            "%s: closed stale TX #%s on connector %s because persisted status is %s",
+            tx.charge_point_id,
+            tx.transaction_id,
+            tx.connector_id,
+            connector.status,
+        )
 
     if closed:
         await db.commit()
@@ -213,6 +255,32 @@ class ChargePoint(OcppChargePoint):
         every WebSocket (re)connect, since some chargers only send BootNotification once
         per physical power-cycle and won't resend it on a plain reconnect."""
         try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Transaction).where(
+                        Transaction.charge_point_id == self.id,
+                        Transaction.status == "Active",
+                    )
+                )
+                active_transactions = list(result.scalars().all())
+
+            # A reconnect does not prove that a persisted Active row is still
+            # charging. Ask the charger for its physical connector state first;
+            # StatusNotification closes old rows that are now Available.
+            for connector_id in {tx.connector_id for tx in active_transactions}:
+                try:
+                    await self.trigger_message("StatusNotification", connector_id)
+                except Exception as e:
+                    logger.debug(
+                        "%s: could not refresh connector %s before resuming polling: %s",
+                        self.id,
+                        connector_id,
+                        e,
+                    )
+
+            if active_transactions:
+                await asyncio.sleep(2)
+
             async with AsyncSessionLocal() as db:
                 result = await db.execute(
                     select(Transaction).where(
@@ -655,61 +723,88 @@ class ChargePoint(OcppChargePoint):
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Transaction).where(Transaction.transaction_id == transaction_id))
             tx = result.scalar_one_or_none()
-            if tx:
-                if tx.status == "Completed":
-                    logger.info(f"Duplicate StopTransaction for TX #{transaction_id} ignored (already Completed, stored meter_stop={tx.meter_stop})")
-                    await self._log_message("IN", "StopTransaction", {
-                        "transaction_id": transaction_id,
-                        "meter_stop": meter_stop,
-                        "note": "Duplicate retransmission ignored",
-                    })
-                    return call_result.StopTransactionPayload(
-                        id_tag_info={"status": AuthorizationStatus.accepted}
-                    )
-                tx.meter_stop = meter_stop
+            if not tx:
+                # Never infer connector 1 for an unknown transaction. A delayed
+                # StopTransaction from a previous session must not close a
+                # currently active connector.
+                logger.warning(
+                    "%s: StopTransaction for unknown TX #%s ignored",
+                    self.id,
+                    transaction_id,
+                )
+                await self._log_message("IN", "StopTransaction", {
+                    "transaction_id": transaction_id,
+                    "meter_stop": meter_stop,
+                    "note": "Unknown transaction ignored",
+                })
+                return call_result.StopTransactionPayload(
+                    id_tag_info={"status": AuthorizationStatus.accepted}
+                )
+
+            if tx.status == "Completed":
+                logger.info(f"Duplicate StopTransaction for TX #{transaction_id} ignored (already Completed, stored meter_stop={tx.meter_stop})")
+                await self._log_message("IN", "StopTransaction", {
+                    "transaction_id": transaction_id,
+                    "meter_stop": meter_stop,
+                    "note": "Duplicate retransmission ignored",
+                })
+                return call_result.StopTransactionPayload(
+                    id_tag_info={"status": AuthorizationStatus.accepted}
+                )
+
+            tx.meter_stop = meter_stop
+            try:
                 tx.stop_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).replace(tzinfo=None)
-                tx.stop_reason = reason
-                tx.status = "Completed"
-                stopped_connector_id = tx.connector_id
+            except (TypeError, ValueError):
+                logger.warning(
+                    "%s: invalid StopTransaction timestamp %r for TX #%s; using server time",
+                    self.id,
+                    timestamp,
+                    transaction_id,
+                )
+                tx.stop_time = _now()
+            tx.stop_reason = reason
+            tx.status = "Completed"
+            stopped_connector_id = tx.connector_id
 
-                # Process signed OCMF transactionData if provided by charger (LEM DCBM)
-                txn_data = kwargs.get("transaction_data") or kwargs.get("transactionData", [])
-                ocmf_stop = _extract_ocmf_payload(txn_data)
+            # Process signed OCMF transactionData if provided by charger (LEM DCBM)
+            txn_data = kwargs.get("transaction_data") or kwargs.get("transactionData", [])
+            ocmf_stop = _extract_ocmf_payload(txn_data)
 
-                if ocmf_stop:
-                    tx.ocmf_stop_raw = ocmf_stop
-                    r_k = await db.execute(
-                        select(MeterPublicKey).where(
-                            MeterPublicKey.charge_point_id == self.id,
-                            MeterPublicKey.connector_id == stopped_connector_id,
-                            MeterPublicKey.is_active == True
-                        )
+            if ocmf_stop:
+                tx.ocmf_stop_raw = ocmf_stop
+                r_k = await db.execute(
+                    select(MeterPublicKey).where(
+                        MeterPublicKey.charge_point_id == self.id,
+                        MeterPublicKey.connector_id == stopped_connector_id,
+                        MeterPublicKey.is_active == True
                     )
-                    m_key = r_k.scalar_one_or_none()
+                )
+                m_key = r_k.scalar_one_or_none()
 
-                    # If no key in DB, try to extract from OCMF SE field and auto-register
-                    if not m_key:
-                        parsed_oc = parse_ocmf(ocmf_stop)
-                        tx.ocmf_meter_serial = parsed_oc.gateway_id
-                        if parsed_oc.signer_public_key and len(parsed_oc.signer_public_key) >= 64:
-                            await self._save_meter_key(stopped_connector_id, parsed_oc.signer_public_key, "OCMF SE field")
-                            r_k2 = await db.execute(
-                                select(MeterPublicKey).where(
-                                    MeterPublicKey.charge_point_id == self.id,
-                                    MeterPublicKey.connector_id == stopped_connector_id,
-                                    MeterPublicKey.is_active == True
-                                )
+                # If no key in DB, try to extract from OCMF SE field and auto-register
+                if not m_key:
+                    parsed_oc = parse_ocmf(ocmf_stop)
+                    tx.ocmf_meter_serial = parsed_oc.gateway_id
+                    if parsed_oc.signer_public_key and len(parsed_oc.signer_public_key) >= 64:
+                        await self._save_meter_key(stopped_connector_id, parsed_oc.signer_public_key, "OCMF SE field")
+                        r_k2 = await db.execute(
+                            select(MeterPublicKey).where(
+                                MeterPublicKey.charge_point_id == self.id,
+                                MeterPublicKey.connector_id == stopped_connector_id,
+                                MeterPublicKey.is_active == True
                             )
-                            m_key = r_k2.scalar_one_or_none()
+                        )
+                        m_key = r_k2.scalar_one_or_none()
 
-                    if m_key:
-                        v_res = verify_ocmf_signature(ocmf_stop, m_key.public_key_hex, m_key.curve_name)
-                        tx.ocmf_verified = v_res.get("verified", False)
-                        tx.ocmf_verification_error = v_res.get("error")
-                        tx.ocmf_meter_serial = v_res.get("meter_serial") or tx.ocmf_meter_serial
-                    else:
-                        tx.ocmf_verified = False
-                        tx.ocmf_verification_error = "Chave pública do medidor não configurada"
+                if m_key:
+                    v_res = verify_ocmf_signature(ocmf_stop, m_key.public_key_hex, m_key.curve_name)
+                    tx.ocmf_verified = v_res.get("verified", False)
+                    tx.ocmf_verification_error = v_res.get("error")
+                    tx.ocmf_meter_serial = v_res.get("meter_serial") or tx.ocmf_meter_serial
+                else:
+                    tx.ocmf_verified = False
+                    tx.ocmf_verification_error = "Chave pública do medidor não configurada"
 
             # Update charger and connector status
             r_charger = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
@@ -748,7 +843,6 @@ class ChargePoint(OcppChargePoint):
                     timestamp=_now(),
                 )
                 db.add(avail)
-                await db.commit()
 
                 # Email notification for DC charging or transaction stop
                 if tx and tx.id_tag:
@@ -778,6 +872,10 @@ class ChargePoint(OcppChargePoint):
                                 )
                     except Exception as e:
                         logger.error(f"Error checking email notification on StopTransaction: {e}")
+
+            # Persist the transaction even if the charger row is temporarily
+            # unavailable; the StopTransaction itself is still authoritative.
+            await db.commit()
 
         await event_bus.publish("transaction_stopped", {
             "charge_point_id": self.id,
@@ -832,6 +930,13 @@ class ChargePoint(OcppChargePoint):
                         if tx:
                             await self._apply_ocmf_to_transaction(db, tx, connector_id, val_raw)
                         continue
+                    if db_tx_id is None:
+                        logger.warning(
+                            "%s: ignoring MeterValue for connector %s without a valid transaction",
+                            self.id,
+                            connector_id,
+                        )
+                        continue
                     try:
                         val = float(val_raw)
                     except (ValueError, TypeError):
@@ -876,6 +981,7 @@ class ChargePoint(OcppChargePoint):
         await self._log_message("IN", "StatusNotification", {
             "connector_id": connector_id, "status": status, "error_code": error_code
         })
+        effective_status = status
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
             charger = result.scalar_one_or_none()
@@ -893,14 +999,52 @@ class ChargePoint(OcppChargePoint):
                     if not conn:
                         conn = Connector(charger_id=charger.id, connector_id=connector_id)
                         db.add(conn)
-                    conn.status = status
+                    active_result = await db.execute(
+                        select(Transaction)
+                        .where(
+                            Transaction.charge_point_id == self.id,
+                            Transaction.connector_id == connector_id,
+                            Transaction.status == "Active",
+                        )
+                        .order_by(Transaction.start_time.desc())
+                        .limit(1)
+                    )
+                    active_tx = active_result.scalar_one_or_none()
+                    now = _now()
+                    if active_tx and status in ("Available", "Unavailable"):
+                        age_seconds = (
+                            (now - active_tx.start_time).total_seconds()
+                            if active_tx.start_time
+                            else 0
+                        )
+                        if age_seconds > 120:
+                            active_tx.status = "Completed"
+                            active_tx.stop_time = active_tx.stop_time or now
+                            active_tx.stop_reason = active_tx.stop_reason or "EVDisconnected"
+                            active_tx.meter_stop = (
+                                active_tx.meter_stop
+                                if active_tx.meter_stop is not None
+                                else active_tx.meter_start
+                            )
+                            logger.info(
+                                "%s: closed stale TX #%s after StatusNotification %s on connector %s",
+                                self.id,
+                                active_tx.transaction_id,
+                                status,
+                                connector_id,
+                            )
+                            active_tx = None
+                    # Do not let a stale Available notification make an
+                    # occupied connector look free in the API/UI.
+                    effective_status = "Charging" if active_tx and status in ("Available", "Unavailable") else status
+                    conn.status = effective_status
                     conn.error_code = error_code
                     conn.updated_at = _now()
 
                     # Sync overall charger status
                     r_all_conn = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
                     all_conns = r_all_conn.scalars().all()
-                    if any(c.status == "Charging" for c in all_conns):
+                    if any(c.status in ("Charging", "Preparing", "SuspendedEV", "SuspendedEVSE", "Finishing") for c in all_conns):
                         charger.status = "Charging"
                     elif any(c.status == "Faulted" for c in all_conns):
                         charger.status = "Faulted"
@@ -923,7 +1067,7 @@ class ChargePoint(OcppChargePoint):
         await event_bus.publish("status_notification", {
             "charge_point_id": self.id,
             "connector_id": connector_id,
-            "status": status,
+            "status": effective_status,
             "error_code": error_code,
         })
 

@@ -46,6 +46,11 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
         c_out = ConnectorOut.model_validate(conn)
         tx = active_txs.get(conn.connector_id)
         if tx:
+            # An active OCPP transaction means the connector is occupied even
+            # when a charger sends a stale Available notification during a
+            # reconnect/startup sequence.
+            if c_out.status in ("Available", "Unavailable"):
+                c_out.status = "Charging"
             c_out.active_transaction_id = tx.transaction_id
             c_out.active_id_tag = tx.id_tag
             c_out.active_start_time = tx.start_time

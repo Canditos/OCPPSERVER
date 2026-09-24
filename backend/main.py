@@ -78,7 +78,11 @@ async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
 @app.on_event("startup")
 async def startup():
     await init_db()
-    from ocpp_server.charge_point import _init_tx_counter, reconcile_duplicate_active_transactions
+    from ocpp_server.charge_point import (
+        _init_tx_counter,
+        reconcile_duplicate_active_transactions,
+        reconcile_stale_active_transactions,
+    )
     await _init_tx_counter()
 
     # Seed default admin and user if users table is empty
@@ -126,6 +130,17 @@ async def startup():
                 logging.info(f"Startup transaction reconciliation: closed {closed} stale active transaction(s)")
     except Exception as e:
         logging.warning(f"Startup transaction reconciliation failed: {e}")
+
+    try:
+        async with AsyncSessionLocal() as session:
+            closed = await reconcile_stale_active_transactions(session)
+            if closed:
+                logging.info(
+                    "Startup connector-state reconciliation: closed "
+                    f"{closed} active transaction(s) on non-occupied connectors"
+                )
+    except Exception as e:
+        logging.warning(f"Startup connector-state reconciliation failed: {e}")
 
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):

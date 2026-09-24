@@ -16,15 +16,6 @@ def _meter_value_tx_ids(tx: Transaction) -> list[int]:
     return [tx.id, tx.transaction_id]
 
 
-async def _has_meter_values(db: AsyncSession, tx: Transaction) -> bool:
-    result = await db.execute(
-        select(func.count(MeterValue.id)).where(
-            MeterValue.transaction_id.in_(_meter_value_tx_ids(tx))
-        )
-    )
-    return (result.scalar() or 0) > 0
-
-
 @router.get("", response_model=list[TransactionOut])
 async def list_transactions(
     cp_id: str | None = Query(None),
@@ -45,6 +36,44 @@ async def list_transactions(
         q = q.where(Transaction.status == status)
     result = await db.execute(q)
     txs = result.scalars().all()
+
+    meter_ids = {
+        meter_id
+        for tx in txs
+        for meter_id in _meter_value_tx_ids(tx)
+    }
+    latest_energy_by_id: dict[int, MeterValue] = {}
+    meter_ids_with_values: set[int] = set()
+    if meter_ids:
+        latest_timestamp = (
+            select(
+                MeterValue.transaction_id.label("transaction_id"),
+                func.max(MeterValue.timestamp).label("timestamp"),
+            )
+            .where(
+                MeterValue.transaction_id.in_(meter_ids),
+                MeterValue.measurand == "Energy.Active.Import.Register",
+            )
+            .group_by(MeterValue.transaction_id)
+            .subquery()
+        )
+        latest_result = await db.execute(
+            select(MeterValue).join(
+                latest_timestamp,
+                (MeterValue.transaction_id == latest_timestamp.c.transaction_id)
+                & (MeterValue.timestamp == latest_timestamp.c.timestamp),
+            )
+        )
+        for meter_value in latest_result.scalars().all():
+            latest_energy_by_id[meter_value.transaction_id] = meter_value
+
+        evidence_result = await db.execute(
+            select(MeterValue.transaction_id)
+            .where(MeterValue.transaction_id.in_(meter_ids))
+            .distinct()
+        )
+        meter_ids_with_values = set(evidence_result.scalars().all())
+
     out = []
     for tx in txs:
         d = TransactionOut.model_validate(tx)
@@ -54,16 +83,16 @@ async def list_transactions(
         if tx.meter_stop is not None and tx.meter_start is not None:
             d.energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
 
-        meter_result = await db.execute(
-            select(MeterValue)
-            .where(
-                MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
-                MeterValue.measurand == 'Energy.Active.Import.Register'
-            )
-            .order_by(MeterValue.timestamp.desc())
-            .limit(1)
+        tx_meter_ids = _meter_value_tx_ids(tx)
+        latest_meter = max(
+            (
+                latest_energy_by_id[meter_id]
+                for meter_id in tx_meter_ids
+                if meter_id in latest_energy_by_id
+            ),
+            key=lambda meter_value: meter_value.timestamp,
+            default=None,
         )
-        latest_meter = meter_result.scalar_one_or_none()
         if latest_meter:
             meter_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
             if d.energy_kwh is None or meter_kwh > d.energy_kwh:
@@ -77,7 +106,7 @@ async def list_transactions(
             latest_meter is None
             and not tx.ocmf_start_raw
             and not tx.ocmf_stop_raw
-            and not await _has_meter_values(db, tx)
+            and not any(meter_id in meter_ids_with_values for meter_id in tx_meter_ids)
         )
         is_zero_energy = tx.meter_stop is None or (d.energy_kwh is not None and d.energy_kwh <= 0)
         if (

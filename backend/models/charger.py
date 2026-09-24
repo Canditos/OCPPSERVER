@@ -32,9 +32,17 @@ class Charger(Base):
     is_eichrecht_compliant: Mapped[bool] = mapped_column(Boolean, default=False)
 
     connectors: Mapped[list["Connector"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
-    transactions: Mapped[list["Transaction"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+    transactions: Mapped[list["Transaction"]] = relationship(
+        back_populates="charger",
+        cascade="all, delete-orphan",
+        lazy="raise",
+    )
     configurations: Mapped[list["ChargerConfiguration"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
-    messages: Mapped[list["OcppMessage"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
+    messages: Mapped[list["OcppMessage"]] = relationship(
+        back_populates="charger",
+        cascade="all, delete-orphan",
+        lazy="raise",
+    )
     certificates: Mapped[list["ChargerCertificate"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     device_components: Mapped[list["DeviceComponent"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
     meter_public_keys: Mapped[list["MeterPublicKey"]] = relationship(back_populates="charger", cascade="all, delete-orphan", lazy="selectin")
