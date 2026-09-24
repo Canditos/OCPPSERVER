@@ -723,6 +723,8 @@ class ChargePoint(OcppChargePoint):
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Transaction).where(Transaction.transaction_id == transaction_id))
             tx = result.scalar_one_or_none()
+            txn_data = kwargs.get("transaction_data") or kwargs.get("transactionData", [])
+            ocmf_stop = _extract_ocmf_payload(txn_data)
             if not tx:
                 # Never infer connector 1 for an unknown transaction. A delayed
                 # StopTransaction from a previous session must not close a
@@ -742,11 +744,31 @@ class ChargePoint(OcppChargePoint):
                 )
 
             if tx.status == "Completed":
-                logger.info(f"Duplicate StopTransaction for TX #{transaction_id} ignored (already Completed, stored meter_stop={tx.meter_stop})")
+                recovered_ocmf = bool(ocmf_stop and not tx.ocmf_stop_raw)
+                if recovered_ocmf:
+                    await self._apply_ocmf_to_transaction(
+                        db,
+                        tx,
+                        tx.connector_id,
+                        ocmf_stop,
+                    )
+                    await db.commit()
+                    logger.info(
+                        "%s: recovered OCMF from duplicate StopTransaction for TX #%s",
+                        self.id,
+                        transaction_id,
+                    )
+                logger.info(
+                    "Duplicate StopTransaction for TX #%s ignored "
+                    "(already Completed, stored meter_stop=%s)",
+                    transaction_id,
+                    tx.meter_stop,
+                )
                 await self._log_message("IN", "StopTransaction", {
                     "transaction_id": transaction_id,
                     "meter_stop": meter_stop,
                     "note": "Duplicate retransmission ignored",
+                    "ocmf_recovered": recovered_ocmf,
                 })
                 return call_result.StopTransactionPayload(
                     id_tag_info={"status": AuthorizationStatus.accepted}
@@ -768,9 +790,6 @@ class ChargePoint(OcppChargePoint):
             stopped_connector_id = tx.connector_id
 
             # Process signed OCMF transactionData if provided by charger (LEM DCBM)
-            txn_data = kwargs.get("transaction_data") or kwargs.get("transactionData", [])
-            ocmf_stop = _extract_ocmf_payload(txn_data)
-
             if ocmf_stop:
                 tx.ocmf_stop_raw = ocmf_stop
                 r_k = await db.execute(

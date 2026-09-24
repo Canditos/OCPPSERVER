@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -9,6 +10,7 @@ from database import Base
 from models.charger import Charger, Connector
 from models.transaction import MeterValue, Transaction
 from ocpp_server.charge_point import (
+    ChargePoint,
     reconcile_duplicate_active_transactions,
     reconcile_stale_active_transactions,
 )
@@ -154,6 +156,61 @@ class TransactionReconciliationTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(len(result), 1)
             self.assertEqual(result[0].energy_kwh, 2.0)
+
+    async def test_duplicate_stop_recovers_late_ocmf(self):
+        now = datetime.utcnow()
+        async with self.sessions() as session:
+            charger = Charger(charge_point_id="CP-4", status="Available")
+            session.add(charger)
+            await session.flush()
+            session.add(
+                Transaction(
+                    transaction_id=30,
+                    charger_id=charger.id,
+                    charge_point_id=charger.charge_point_id,
+                    connector_id=1,
+                    id_tag="TAG",
+                    meter_start=1000,
+                    meter_stop=2000,
+                    start_time=now - timedelta(minutes=10),
+                    stop_time=now,
+                    status="Completed",
+                )
+            )
+            await session.commit()
+
+        raw_ocmf = 'OCMF|{"FV":"1.0"}|{"SA":"ECDSA","SD":"signature"}'
+        charge_point = ChargePoint("CP-4", AsyncMock())
+        charge_point._log_message = AsyncMock()
+
+        async def apply_ocmf(db, tx, connector_id, payload):
+            self.assertEqual(connector_id, 1)
+            self.assertEqual(payload, raw_ocmf)
+            tx.ocmf_stop_raw = payload
+
+        charge_point._apply_ocmf_to_transaction = AsyncMock(side_effect=apply_ocmf)
+        with patch("ocpp_server.charge_point.AsyncSessionLocal", self.sessions):
+            await charge_point.on_stop_transaction(
+                transaction_id=30,
+                meter_stop=2000,
+                timestamp=now.isoformat(),
+                transaction_data=[
+                    {
+                        "sampledValue": [
+                            {"format": "SignedData", "value": raw_ocmf}
+                        ]
+                    }
+                ],
+            )
+
+        charge_point._apply_ocmf_to_transaction.assert_awaited_once()
+        async with self.sessions() as session:
+            tx = (
+                await session.execute(
+                    select(Transaction).where(Transaction.transaction_id == 30)
+                )
+            ).scalar_one()
+            self.assertEqual(tx.ocmf_stop_raw, raw_ocmf)
 
     def test_large_history_relationships_are_not_implicitly_loaded(self):
         self.assertEqual(inspect(Charger).relationships.transactions.lazy, "raise")
