@@ -412,6 +412,15 @@ async def get_root_ca_certificate():
     return PlainTextResponse(content=cert_pem, media_type="application/x-pem-file")
 
 
+@router.get("/ca/v2g-root-cert")
+async def get_v2g_root_ca_certificate():
+    """Download the ISO 15118 V2G Root CA certificate in PEM format."""
+    from iso15118_pki import get_or_create_v2g_root_ca
+    v2g_pem, _ = get_or_create_v2g_root_ca()
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content=v2g_pem, media_type="application/x-pem-file")
+
+
 @router.get("/{cp_id}/certificates", response_model=list[CertificateOut])
 async def list_charger_certificates(cp_id: str, db: AsyncSession = Depends(get_db)):
     """List all X.509 certificates registered for this charge point, including the CSMS Root CA."""
