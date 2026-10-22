@@ -1433,3 +1433,31 @@ class ChargePoint(OcppChargePoint):
         resp = await self.call(req)
         await self._log_message("OUT", "GetCompositeSchedule", payload_kwargs)
         return resp
+
+    async def install_certificate(self, certificate_type: str, certificate: str):
+        from ocpp.v16 import call
+        req = call.InstallCertificatePayload(
+            certificate_type=certificate_type,
+            certificate=certificate,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "InstallCertificate", {"certificate_type": certificate_type})
+        return resp
+
+    async def get_installed_certificate_ids(self, certificate_type: str):
+        from ocpp.v16 import call
+        req = call.GetInstalledCertificateIdsPayload(
+            certificate_type=certificate_type,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "GetInstalledCertificateIds", {"certificate_type": certificate_type})
+        return resp
+
+    async def delete_certificate(self, certificate_hash_data: dict):
+        from ocpp.v16 import call
+        req = call.DeleteCertificatePayload(
+            certificate_hash_data=certificate_hash_data,
+        )
+        resp = await self.call(req)
+        await self._log_message("OUT", "DeleteCertificate", {"certificate_hash_data": certificate_hash_data})
+        return resp

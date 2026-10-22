@@ -608,3 +608,42 @@ class ChargePointV201(BaseChargePointV201):
         trig = trigger_map.get(requested_message, MessageTriggerType.heartbeat)
         req = call.TriggerMessagePayload(requested_message=trig)
         return await self.call(req)
+
+    async def install_certificate(self, certificate_type: str, certificate: str):
+        from ocpp.v201 import call
+        from ocpp.v201.enums import InstallCertificateUseEnumType
+        # Map common names to enum
+        c_map = {
+            "CentralSystemRootCertificate": InstallCertificateUseEnumType.csms_root_certificate,
+            "ManufacturerRootCertificate": InstallCertificateUseEnumType.manufacturer_root_certificate,
+            "V2GRootCertificate": InstallCertificateUseEnumType.v2g_root_certificate,
+            "MOERRootCertificate": InstallCertificateUseEnumType.mo_root_certificate,
+        }
+        use_type = c_map.get(certificate_type, InstallCertificateUseEnumType.csms_root_certificate)
+        req = call.InstallCertificatePayload(
+            certificate_type=use_type,
+            certificate=certificate,
+        )
+        return await self.call(req)
+
+    async def get_installed_certificate_ids(self, certificate_type: str = "CentralSystemRootCertificate"):
+        from ocpp.v201 import call
+        from ocpp.v201.enums import GetCertificateIdUseEnumType
+        c_map = {
+            "CentralSystemRootCertificate": GetCertificateIdUseEnumType.csms_root_certificate,
+            "ManufacturerRootCertificate": GetCertificateIdUseEnumType.manufacturer_root_certificate,
+            "V2GRootCertificate": GetCertificateIdUseEnumType.v2g_root_certificate,
+            "MOERRootCertificate": GetCertificateIdUseEnumType.mo_root_certificate,
+        }
+        use_type = c_map.get(certificate_type, GetCertificateIdUseEnumType.csms_root_certificate)
+        req = call.GetInstalledCertificateIdsPayload(
+            certificate_type=[use_type],
+        )
+        return await self.call(req)
+
+    async def delete_certificate(self, certificate_hash_data: dict):
+        from ocpp.v201 import call
+        req = call.DeleteCertificatePayload(
+            certificate_hash_data=certificate_hash_data,
+        )
+        return await self.call(req)

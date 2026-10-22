@@ -313,6 +313,7 @@ async def set_timezone(cp_id: str, body: TimezoneUpdate, db: AsyncSession = Depe
 # ── OCPP Security Profile & AuthorizationKey Management ──────────────────────
 
 @router.put("/{cp_id}/security", response_model=ChargerOut)
+@router.patch("/{cp_id}/security", response_model=ChargerOut)
 async def update_charger_security(cp_id: str, body: ChargerSecurityUpdate, db: AsyncSession = Depends(get_db)):
     """Configure Security Profile (0=Open, 1=BasicAuth, 2=TLS+BasicAuth) and AuthorizationKey password."""
     result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
@@ -352,6 +353,7 @@ async def update_charger_security(cp_id: str, body: ChargerSecurityUpdate, db: A
 
 
 @router.post("/{cp_id}/generate-key", response_model=GenerateKeyResponse)
+@router.post("/{cp_id}/security/generate-key", response_model=GenerateKeyResponse)
 async def generate_authorization_key(cp_id: str, db: AsyncSession = Depends(get_db)):
     """Generate a 40-character cryptographic AuthorizationKey compliant with OCPP 1.6 Security Whitepaper."""
     import secrets
@@ -376,6 +378,7 @@ async def generate_authorization_key(cp_id: str, db: AsyncSession = Depends(get_
 
 
 @router.post("/{cp_id}/sync-key", response_model=SyncKeyResponse)
+@router.post("/{cp_id}/security/sync-key", response_model=SyncKeyResponse)
 async def sync_authorization_key_to_device(cp_id: str, db: AsyncSession = Depends(get_db)):
     """Remotely apply the stored AuthorizationKey on the connected charger via OCPP ChangeConfiguration."""
     result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))
