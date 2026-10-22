@@ -61,18 +61,36 @@ async def health():
 
 
 @app.websocket("/ocpp/{charge_point_id}")
+@app.websocket("/ocpp/v201/{charge_point_id}")
+@app.websocket("/ocpp2.0.1/{charge_point_id}")
+@app.websocket("/ocpp201/{charge_point_id}")
 async def ocpp_endpoint(websocket: WebSocket, charge_point_id: str):
     """
-    OCPP 1.6 WebSocket endpoint.
+    Dual-Stack OCPP WebSocket endpoint (OCPP 1.6-J & OCPP 2.0.1).
     Charger connects to: ws(s)://HOST/ocpp/{charge_point_id}
     """
-    subprotocols = websocket.headers.get("sec-websocket-protocol", "")
-    if "ocpp1.6" in subprotocols:
-        await websocket.accept(subprotocol="ocpp1.6")
+    raw_subprotocols = websocket.headers.get("sec-websocket-protocol", "")
+    subprotocols = [s.strip().lower() for s in raw_subprotocols.split(",") if s.strip()]
+
+    path = websocket.url.path.lower()
+    is_explicit_v201 = "/v201" in path or "ocpp2" in path
+
+    selected_subprotocol = None
+    ocpp_version = "1.6"
+
+    if any("ocpp2.0.1" in s or "ocpp2.0" in s for s in subprotocols) or is_explicit_v201:
+        selected_subprotocol = "ocpp2.0.1"
+        ocpp_version = "2.0.1"
+    elif any("ocpp1.6" in s for s in subprotocols):
+        selected_subprotocol = "ocpp1.6"
+        ocpp_version = "1.6"
+
+    if selected_subprotocol:
+        await websocket.accept(subprotocol=selected_subprotocol)
     else:
         await websocket.accept()
 
-    await on_connect_fastapi(websocket, charge_point_id)
+    await on_connect_fastapi(websocket, charge_point_id, ocpp_version=ocpp_version)
 
 
 @app.on_event("startup")
