@@ -6,6 +6,7 @@ from models.transaction import Transaction, MeterValue
 from models.user import User
 from schemas import TransactionOut, MeterValueOut
 from energy import delta_kwh, to_watt_hours
+from services.ocmf_service import extract_ocmf_energy_delta_kwh
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -14,6 +15,19 @@ def _meter_value_tx_ids(tx: Transaction) -> list[int]:
     if tx.id == tx.transaction_id:
         return [tx.id]
     return [tx.id, tx.transaction_id]
+
+
+async def _latest_energy_meter(db: AsyncSession, tx: Transaction) -> MeterValue | None:
+    result = await db.execute(
+        select(MeterValue)
+        .where(
+            MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
+            MeterValue.measurand == "Energy.Active.Import.Register",
+        )
+        .order_by(MeterValue.timestamp.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 @router.get("", response_model=list[TransactionOut])
@@ -42,31 +56,8 @@ async def list_transactions(
         for tx in txs
         for meter_id in _meter_value_tx_ids(tx)
     }
-    latest_energy_by_id: dict[int, MeterValue] = {}
     meter_ids_with_values: set[int] = set()
     if meter_ids:
-        latest_timestamp = (
-            select(
-                MeterValue.transaction_id.label("transaction_id"),
-                func.max(MeterValue.timestamp).label("timestamp"),
-            )
-            .where(
-                MeterValue.transaction_id.in_(meter_ids),
-                MeterValue.measurand == "Energy.Active.Import.Register",
-            )
-            .group_by(MeterValue.transaction_id)
-            .subquery()
-        )
-        latest_result = await db.execute(
-            select(MeterValue).join(
-                latest_timestamp,
-                (MeterValue.transaction_id == latest_timestamp.c.transaction_id)
-                & (MeterValue.timestamp == latest_timestamp.c.timestamp),
-            )
-        )
-        for meter_value in latest_result.scalars().all():
-            latest_energy_by_id[meter_value.transaction_id] = meter_value
-
         evidence_result = await db.execute(
             select(MeterValue.transaction_id)
             .where(MeterValue.transaction_id.in_(meter_ids))
@@ -77,43 +68,50 @@ async def list_transactions(
     out = []
     for tx in txs:
         d = TransactionOut.model_validate(tx)
-        
-        # Prefer the final counter, but use the latest meter value when a
-        # charger omitted it or reported the same counter at stop time.
-        if tx.meter_stop is not None and tx.meter_start is not None:
+
+        # 1. First priority: Verified Eichrecht / OCMF signed energy
+        if tx.signed_energy_kwh is not None and tx.signed_energy_kwh > 0:
+            d.energy_kwh = tx.signed_energy_kwh
+
+        # 2. Extract from OCMF payload if signed_energy_kwh was missing or 0
+        if (d.energy_kwh is None or d.energy_kwh <= 0) and tx.ocmf_stop_raw:
+            ocmf_delta = extract_ocmf_energy_delta_kwh(tx.ocmf_stop_raw)
+            if ocmf_delta is not None and ocmf_delta > 0:
+                d.energy_kwh = ocmf_delta
+
+        # 3. Prefer final counter difference only when meter_stop > meter_start
+        if (
+            (d.energy_kwh is None or d.energy_kwh <= 0)
+            and tx.meter_stop is not None
+            and tx.meter_start is not None
+            and tx.meter_stop > tx.meter_start
+        ):
             d.energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
 
+        # 4. Fallback to latest MeterValue telemetry (for active sessions or PowerLoss/aborted stops)
         tx_meter_ids = _meter_value_tx_ids(tx)
-        latest_meter = max(
-            (
-                latest_energy_by_id[meter_id]
-                for meter_id in tx_meter_ids
-                if meter_id in latest_energy_by_id
-            ),
-            key=lambda meter_value: meter_value.timestamp,
-            default=None,
-        )
+        latest_meter = await _latest_energy_meter(db, tx)
+        latest_meter_kwh = None
         if latest_meter:
-            meter_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
-            if d.energy_kwh is None or meter_kwh > d.energy_kwh:
-                d.energy_kwh = meter_kwh
+            latest_meter_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
+            if d.energy_kwh is None or latest_meter_kwh > d.energy_kwh:
+                d.energy_kwh = latest_meter_kwh
 
-        # Hide noise transactions: Completed sessions with no proof of real charging
-        # (no signed OCMF data, no MeterValues telemetry) AND either never got a
-        # meter_stop (dangling) or reported zero net energy (meter_stop == meter_start,
-        # e.g. a duplicate StartTransaction retry the charger stopped immediately).
-        has_no_evidence = (
-            latest_meter is None
-            and not tx.ocmf_start_raw
-            and not tx.ocmf_stop_raw
-            and not any(meter_id in meter_ids_with_values for meter_id in tx_meter_ids)
-        )
+        if d.energy_kwh is None:
+            d.energy_kwh = 0.0
+
+        # Hide noise transactions: completed sessions without real energy delivered.
+        # (aborted handshakes where 0 Wh flowed)
+        has_positive_energy = d.energy_kwh is not None and d.energy_kwh > 0
+        has_positive_meter_delta = latest_meter_kwh is not None and latest_meter_kwh > 0
+        has_real_charging = has_positive_energy or has_positive_meter_delta
+        has_no_meter_evidence = not any(meter_id in meter_ids_with_values for meter_id in tx_meter_ids)
         is_zero_energy = tx.meter_stop is None or (d.energy_kwh is not None and d.energy_kwh <= 0)
         if (
             not include_empty
             and tx.status == "Completed"
-            and has_no_evidence
-            and is_zero_energy
+            and not has_real_charging
+            and (has_no_meter_evidence or is_zero_energy)
         ):
             continue
 
@@ -219,7 +217,9 @@ async def get_active_transaction(cp_id: str, connector_id: int | None = None, db
     if not tx:
         return None
     d = TransactionOut.model_validate(tx)
-    if tx.meter_stop is not None:
+    if tx.signed_energy_kwh is not None:
+        d.energy_kwh = tx.signed_energy_kwh
+    elif tx.meter_stop is not None:
         d.energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
 
     if tx.id_tag:
@@ -230,21 +230,22 @@ async def get_active_transaction(cp_id: str, connector_id: int | None = None, db
             d.user_email = user.email
             d.user_role = user.role
 
-    if d.energy_kwh is None:
-        meter_result = await db.execute(
-            select(MeterValue)
-            .where(
-                MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
-                MeterValue.measurand == 'Energy.Active.Import.Register'
-            )
-            .order_by(MeterValue.timestamp.desc())
-            .limit(1)
+    meter_result = await db.execute(
+        select(MeterValue)
+        .where(
+            MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
+            MeterValue.measurand == 'Energy.Active.Import.Register'
         )
-        latest_meter = meter_result.scalar_one_or_none()
-        if latest_meter:
-            d.energy_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
-        else:
-            d.energy_kwh = 0.0
+        .order_by(MeterValue.timestamp.desc())
+        .limit(1)
+    )
+    latest_meter = meter_result.scalar_one_or_none()
+    if latest_meter:
+        meter_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
+        if d.energy_kwh is None or meter_kwh > d.energy_kwh:
+            d.energy_kwh = meter_kwh
+    if d.energy_kwh is None:
+        d.energy_kwh = 0.0
 
     return d
 
@@ -267,7 +268,9 @@ async def get_all_active_transactions(cp_id: str, db: AsyncSession = Depends(get
         if tx.connector_id in out:
             continue
         d = TransactionOut.model_validate(tx)
-        if tx.meter_stop is not None:
+        if tx.signed_energy_kwh is not None:
+            d.energy_kwh = tx.signed_energy_kwh
+        elif tx.meter_stop is not None:
             d.energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
         
         user = users_by_tag.get(tx.id_tag)
@@ -276,21 +279,22 @@ async def get_all_active_transactions(cp_id: str, db: AsyncSession = Depends(get
             d.user_email = user.email
             d.user_role = user.role
 
-        if d.energy_kwh is None:
-            meter_result = await db.execute(
-                select(MeterValue)
-                .where(
-                    MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
-                    MeterValue.measurand == 'Energy.Active.Import.Register'
-                )
-                .order_by(MeterValue.timestamp.desc())
-                .limit(1)
+        meter_result = await db.execute(
+            select(MeterValue)
+            .where(
+                MeterValue.transaction_id.in_(_meter_value_tx_ids(tx)),
+                MeterValue.measurand == 'Energy.Active.Import.Register'
             )
-            latest_meter = meter_result.scalar_one_or_none()
-            if latest_meter:
-                d.energy_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
-            else:
-                d.energy_kwh = 0.0
+            .order_by(MeterValue.timestamp.desc())
+            .limit(1)
+        )
+        latest_meter = meter_result.scalar_one_or_none()
+        if latest_meter:
+            meter_kwh = delta_kwh(tx.meter_start, float(latest_meter.value), latest_meter.unit)
+            if d.energy_kwh is None or meter_kwh > d.energy_kwh:
+                d.energy_kwh = meter_kwh
+        if d.energy_kwh is None:
+            d.energy_kwh = 0.0
         
         out[tx.connector_id] = d
     return out

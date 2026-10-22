@@ -24,9 +24,9 @@ from models.authorized_tag import AuthorizedTag
 from models.user import User
 from models.meter_public_key import MeterPublicKey
 from services.email_service import notify_ac_suspended_ev, notify_dc_charging_completed
-from services.ocmf_service import parse_ocmf, verify_ocmf_signature
+from services.ocmf_service import parse_ocmf, verify_ocmf_signature, extract_ocmf_energy_delta_kwh
 from sqlalchemy import select, update, func
-from energy import to_watts
+from energy import to_watt_hours, to_watts
 
 logger = logging.getLogger(__name__)
 _TX_COUNTER = 100000
@@ -455,6 +455,37 @@ class ChargePoint(OcppChargePoint):
                 key.serial_number = serial
                 await db.commit()
 
+    @staticmethod
+    def _ocmf_total_energy_wh(raw_ocmf: str) -> float | None:
+        parsed = parse_ocmf(raw_ocmf)
+        if not parsed.is_valid_format:
+            return None
+
+        total = next(
+            (reading for reading in parsed.meter_readings if reading["obis"] == "1-0:1.8.0"),
+            None,
+        )
+        if total is not None:
+            try:
+                return to_watt_hours(float(total["value"]), total["unit"])
+            except (TypeError, ValueError):
+                return None
+
+        tariff_readings = [
+            reading
+            for reading in parsed.meter_readings
+            if reading["obis"] in {"1-0:1.8.1", "1-0:1.8.2"}
+        ]
+        if not tariff_readings:
+            return None
+        try:
+            return sum(
+                to_watt_hours(float(reading["value"]), reading["unit"])
+                for reading in tariff_readings
+            )
+        except (TypeError, ValueError):
+            return None
+
     async def _apply_ocmf_to_transaction(self, db, tx: Transaction, connector_id: int, raw_ocmf: str) -> None:
         if not tx.ocmf_start_raw:
             tx.ocmf_start_raw = raw_ocmf
@@ -482,6 +513,77 @@ class ChargePoint(OcppChargePoint):
         else:
             tx.ocmf_verified = False
             tx.ocmf_verification_error = "Chave pública do medidor não configurada"
+
+        ocmf_delta = extract_ocmf_energy_delta_kwh(tx.ocmf_stop_raw)
+        if ocmf_delta is not None and ocmf_delta > 0:
+            tx.signed_energy_kwh = ocmf_delta
+        else:
+            start_energy_wh = self._ocmf_total_energy_wh(tx.ocmf_start_raw)
+            stop_energy_wh = self._ocmf_total_energy_wh(tx.ocmf_stop_raw)
+            if start_energy_wh is not None and stop_energy_wh is not None:
+                tx.signed_energy_kwh = round(max(0.0, stop_energy_wh - start_energy_wh) / 1000.0, 3)
+
+    def _persist_transaction_data(
+        self,
+        db,
+        tx: Transaction,
+        connector_id: int,
+        txn_data,
+        fallback_timestamp: str | None = None,
+    ) -> list[MeterValue]:
+        if isinstance(txn_data, dict):
+            txn_data_list = [txn_data]
+        elif isinstance(txn_data, list):
+            txn_data_list = txn_data
+        else:
+            txn_data_list = []
+
+        created = []
+        for mv in txn_data_list:
+            if not isinstance(mv, dict):
+                continue
+            ts = mv.get("timestamp") or fallback_timestamp or _now().isoformat()
+            try:
+                mv_dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                mv_dt = tx.stop_time or _now()
+            for sv in _sampled_values(mv):
+                if not isinstance(sv, dict):
+                    continue
+                val_raw = str(sv.get("value", ""))
+                sv_format = sv.get("format")
+                if "OCMF|" in val_raw or (sv_format == "SignedData" and "OCMF" in val_raw):
+                    continue
+                try:
+                    val = float(val_raw)
+                except (ValueError, TypeError):
+                    logger.warning(
+                        "%s: non-numeric MeterValue in StopTransaction ignored for %s (%s)",
+                        self.id,
+                        sv.get("measurand"),
+                        sv_format,
+                    )
+                    continue
+                measurand = sv.get("measurand", "Energy.Active.Import.Register")
+                unit = sv.get("unit")
+                if "power" in str(measurand).lower():
+                    val = to_watts(val, unit)
+                    unit = "W"
+                row = MeterValue(
+                    transaction_id=tx.id,
+                    charger_id=tx.charger_id or 0,
+                    connector_id=connector_id,
+                    timestamp=mv_dt,
+                    measurand=measurand,
+                    value=val,
+                    unit=unit,
+                    context=sv.get("context", "Transaction.End"),
+                    phase=sv.get("phase"),
+                    format=sv_format or "Raw",
+                )
+                db.add(row)
+                created.append(row)
+        return created
 
     @on(Action.Heartbeat)
     async def on_heartbeat(self, **kwargs):
@@ -752,12 +854,26 @@ class ChargePoint(OcppChargePoint):
                         tx.connector_id,
                         ocmf_stop,
                     )
-                    await db.commit()
                     logger.info(
                         "%s: recovered OCMF from duplicate StopTransaction for TX #%s",
                         self.id,
                         transaction_id,
                     )
+                r_has_mv = await db.execute(
+                    select(MeterValue.id).where(MeterValue.transaction_id == tx.id).limit(1)
+                )
+                recovered_mv = False
+                if not r_has_mv.scalars().first():
+                    created_mvs = self._persist_transaction_data(
+                        db,
+                        tx,
+                        tx.connector_id,
+                        txn_data,
+                        timestamp,
+                    )
+                    recovered_mv = bool(created_mvs)
+                if recovered_ocmf or recovered_mv:
+                    await db.commit()
                 logger.info(
                     "Duplicate StopTransaction for TX #%s ignored "
                     "(already Completed, stored meter_stop=%s)",
@@ -791,39 +907,20 @@ class ChargePoint(OcppChargePoint):
 
             # Process signed OCMF transactionData if provided by charger (LEM DCBM)
             if ocmf_stop:
-                tx.ocmf_stop_raw = ocmf_stop
-                r_k = await db.execute(
-                    select(MeterPublicKey).where(
-                        MeterPublicKey.charge_point_id == self.id,
-                        MeterPublicKey.connector_id == stopped_connector_id,
-                        MeterPublicKey.is_active == True
-                    )
+                await self._apply_ocmf_to_transaction(
+                    db,
+                    tx,
+                    stopped_connector_id,
+                    ocmf_stop,
                 )
-                m_key = r_k.scalar_one_or_none()
 
-                # If no key in DB, try to extract from OCMF SE field and auto-register
-                if not m_key:
-                    parsed_oc = parse_ocmf(ocmf_stop)
-                    tx.ocmf_meter_serial = parsed_oc.gateway_id
-                    if parsed_oc.signer_public_key and len(parsed_oc.signer_public_key) >= 64:
-                        await self._save_meter_key(stopped_connector_id, parsed_oc.signer_public_key, "OCMF SE field")
-                        r_k2 = await db.execute(
-                            select(MeterPublicKey).where(
-                                MeterPublicKey.charge_point_id == self.id,
-                                MeterPublicKey.connector_id == stopped_connector_id,
-                                MeterPublicKey.is_active == True
-                            )
-                        )
-                        m_key = r_k2.scalar_one_or_none()
-
-                if m_key:
-                    v_res = verify_ocmf_signature(ocmf_stop, m_key.public_key_hex, m_key.curve_name)
-                    tx.ocmf_verified = v_res.get("verified", False)
-                    tx.ocmf_verification_error = v_res.get("error")
-                    tx.ocmf_meter_serial = v_res.get("meter_serial") or tx.ocmf_meter_serial
-                else:
-                    tx.ocmf_verified = False
-                    tx.ocmf_verification_error = "Chave pública do medidor não configurada"
+            self._persist_transaction_data(
+                db,
+                tx,
+                stopped_connector_id,
+                txn_data,
+                timestamp,
+            )
 
             # Update charger and connector status
             r_charger = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))

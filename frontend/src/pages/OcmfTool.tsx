@@ -10,9 +10,9 @@ import { api, OcmfVerificationResponse } from '../api'
 import type { Transaction, Charger } from '../types'
 import { safeFormatDate } from '../utils/date'
 
-const SAMPLE_LEM_PUBKEY = '04039b53aa82192578b6072ada612554a768cd0a48c0bb37b792c8938033b06e350527995ee44e71be19135402b363ae9aa347734331ae1d18abd57e5487a5368b'
+const SAMPLE_LEM_PUBKEY = '046b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c2964fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'
 
-const SAMPLE_OCMF_PAYLOAD = 'OCMF|{"FV":"1.4.0","GI":"LEM_DCBM_400_SN123456","ST":"T","IS":true,"t":"2026-08-27T11:00:00.000Z","RV":[{"t":"1-0:1.8.0","v":15849800,"u":"Wh","l":200},{"t":"1-0:1.4.0","v":27400,"u":"W"},{"t":"1-0:31.7.0","v":74.8,"u":"A"},{"t":"1-0:32.7.0","v":366.0,"u":"V"}]}|{"SA":"ECDSA-secp256r1-SHA256","SD":"MEQCIEgFeaxHCCns+dFYdnsY4K0bbOGOocWvkQCNREA4OtJjAiB3cr39IwrZ71p0zzmVXDXrWdIcOKCmkXldmUuYmCyd7w=="}'
+const SAMPLE_OCMF_PAYLOAD = 'OCMF|{"FV":"1.4.0","GI":"LEM_DCBM_400_SN123456","ST":"T","IS":true,"t":"2026-08-27T11:00:00.000Z","RV":[{"t":"1-0:1.8.0","v":15849800,"u":"Wh","l":200},{"t":"1-0:1.4.0","v":27400,"u":"W"},{"t":"1-0:31.7.0","v":74.8,"u":"A"},{"t":"1-0:32.7.0","v":366.0,"u":"V"}]}|{"SA":"ECDSA-secp256r1-SHA256","SD":"MEYCIQCveUK7hw9Mcb/oJJvvsaa9LdPJF/bSpmD20wJQ3qsQJAIhAJ5ONXguXMjUYPk8Vm38VeNv0DtaHk6Q19k3acW+7WCc"}'
 
 export function OcmfTool() {
   const [ocmfData, setOcmfData] = useState<string>(SAMPLE_OCMF_PAYLOAD)

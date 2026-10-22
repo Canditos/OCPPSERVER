@@ -290,10 +290,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     refetchInterval: 30000,
   })
 
-  // Find active transaction for the selected connector (strictly null if connector is Available)
+  // An active transaction is authoritative even if the charger reported a
+  // stale Available status during reconnect/startup.
   const restSelectedConn = (charger.connectors || []).find((c) => c.connector_id === selectedConnectorId)
-  const selectedConnectorStatusRaw = rawConnectors.find((c) => c.connector_id === selectedConnectorId)?.status
-  const isSelectedPlugAvailable = selectedConnectorStatusRaw === 'Available' || selectedConnectorStatusRaw === 'Unavailable'
 
   const rawActiveTx: any = (allActiveTransactions as any)[selectedConnectorId] ||
     (restSelectedConn?.active_transaction_id ? {
@@ -306,7 +305,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       connector_id: selectedConnectorId,
     } : null)
 
-  const activeTransactionForSelectedConnector = isSelectedPlugAvailable ? null : rawActiveTx
+  const activeTransactionForSelectedConnector = rawActiveTx
 
   // Reset optimistic status when real live status updates
   useEffect(() => {

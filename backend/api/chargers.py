@@ -54,6 +54,7 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
             c_out.active_transaction_id = tx.transaction_id
             c_out.active_id_tag = tx.id_tag
             c_out.active_start_time = tx.start_time
+            c_out.active_energy_kwh = tx.signed_energy_kwh
             user = users_by_tag.get(tx.id_tag)
             if user:
                 c_out.active_username = user.username
@@ -72,8 +73,10 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
                 if ('power' in m_name or 'active.power' in m_name) and c_out.active_power_kw is None:
                     c_out.active_power_w = float(mv.value)
                     c_out.active_power_kw = round(float(mv.value) / 1000.0, 2)
-                elif ('energy' in m_name) and c_out.active_energy_kwh is None:
-                    c_out.active_energy_kwh = delta_kwh(tx.meter_start, float(mv.value), mv.unit)
+                elif 'energy' in m_name:
+                    meter_kwh = delta_kwh(tx.meter_start, float(mv.value), mv.unit)
+                    if c_out.active_energy_kwh is None or meter_kwh > c_out.active_energy_kwh:
+                        c_out.active_energy_kwh = meter_kwh
                 elif ('soc' in m_name) and c_out.active_soc is None:
                     try:
                         c_out.active_soc = float(mv.value)

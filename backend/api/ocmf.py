@@ -11,7 +11,7 @@ from database import get_db
 from models.charger import Charger, OcppMessage
 from models.meter_public_key import MeterPublicKey
 from models.transaction import Transaction
-from services.ocmf_service import parse_ocmf, verify_ocmf_signature, load_public_key_from_string
+from services.ocmf_service import parse_ocmf, verify_ocmf_signature, extract_ocmf_energy_delta_kwh, load_public_key_from_string
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,22 @@ class MeterKeyUpdateRequest(BaseModel):
     public_key_hex: Optional[str] = None
     curve_name: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+class ManualOcmfVerifyRequest(BaseModel):
+    ocmf_data: str
+    public_key: str
+    curve_name: str = "secp256r1"
+
+
+@router.post("/verify-manual")
+async def verify_manual_ocmf(req: ManualOcmfVerifyRequest):
+    """Validate an OCMF payload supplied by the OCMF tool."""
+    return verify_ocmf_signature(
+        req.ocmf_data,
+        req.public_key,
+        req.curve_name,
+    )
 
 
 @router.get("/meter-keys")
@@ -203,8 +219,10 @@ async def get_transaction_ocmf_audit(tx_id: int, db: AsyncSession = Depends(get_
         stop_report = {"verified": False, "parsed": parse_ocmf(tx.ocmf_stop_raw).to_dict(), "error": "Chave pública do medidor não configurada"}
 
     # Calculate duration & total energy
-    energy_kwh = tx.signed_energy_kwh if tx.signed_energy_kwh is not None else (
-        ((tx.meter_stop - tx.meter_start) / 1000.0) if (tx.meter_stop is not None and tx.meter_start is not None) else 0.0
+    energy_kwh = tx.signed_energy_kwh if (tx.signed_energy_kwh is not None and tx.signed_energy_kwh > 0) else (
+        extract_ocmf_energy_delta_kwh(tx.ocmf_stop_raw) or (
+            ((tx.meter_stop - tx.meter_start) / 1000.0) if (tx.meter_stop is not None and tx.meter_start is not None and tx.meter_stop > tx.meter_start) else 0.0
+        )
     )
     duration_secs = int((tx.stop_time - tx.start_time).total_seconds()) if (tx.start_time and tx.stop_time) else None
     cost_eur = round(energy_kwh * 0.28, 2)

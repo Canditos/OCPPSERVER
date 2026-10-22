@@ -336,3 +336,28 @@ def verify_ocmf_signature(
         "readings": parsed.meter_readings,
         "parsed": parsed.to_dict(),
     }
+
+def extract_ocmf_energy_delta_kwh(raw_ocmf: str | None) -> float | None:
+    """Extracts net active imported energy in kWh from signed OCMF payload(s).
+    Supports payloads containing both start and stop readings or multiple OBIS 1-0:1.8.0 entries."""
+    if not raw_ocmf:
+        return None
+    parsed = parse_ocmf(raw_ocmf)
+    if not parsed.is_valid_format:
+        return None
+    import_readings = [r for r in parsed.meter_readings if r.get("obis") == "1-0:1.8.0"]
+    if len(import_readings) >= 2:
+        try:
+            start_val = float(import_readings[0]["value"])
+            stop_val = float(import_readings[-1]["value"])
+            start_unit = (import_readings[0].get("unit") or "kwh").strip().lower()
+            stop_unit = (import_readings[-1].get("unit") or "kwh").strip().lower()
+
+            start_kwh = start_val / 1000.0 if start_unit == "wh" else start_val
+            stop_kwh = stop_val / 1000.0 if stop_unit == "wh" else stop_val
+
+            return round(max(0.0, stop_kwh - start_kwh), 3)
+        except (ValueError, TypeError):
+            return None
+    return None
+

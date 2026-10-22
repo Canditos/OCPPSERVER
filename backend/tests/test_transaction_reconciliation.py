@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from api.transactions import list_transactions
+from api.transactions import get_all_active_transactions, list_transactions
 from database import Base
 from models.charger import Charger, Connector
 from models.transaction import MeterValue, Transaction
@@ -157,6 +157,155 @@ class TransactionReconciliationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(result), 1)
             self.assertEqual(result[0].energy_kwh, 2.0)
 
+    async def test_transaction_list_uses_latest_meter_for_active_signed_zero(self):
+        now = datetime.utcnow()
+        async with self.sessions() as session:
+            charger = Charger(charge_point_id="CP-LIST-LIVE", status="Charging")
+            session.add(charger)
+            await session.flush()
+            transaction = Transaction(
+                transaction_id=21,
+                charger_id=charger.id,
+                charge_point_id=charger.charge_point_id,
+                connector_id=2,
+                id_tag="TAG",
+                meter_start=1000,
+                start_time=now,
+                status="Active",
+                signed_energy_kwh=0.0,
+            )
+            session.add(transaction)
+            await session.flush()
+            session.add(
+                MeterValue(
+                    transaction_id=transaction.id,
+                    charger_id=charger.id,
+                    connector_id=2,
+                    timestamp=now,
+                    measurand="Energy.Active.Import.Register",
+                    value=33000,
+                    unit="Wh",
+                )
+            )
+            await session.commit()
+
+            result = await list_transactions(
+                cp_id=charger.charge_point_id,
+                status="Active",
+                include_empty=True,
+                db=session,
+            )
+
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0].energy_kwh, 32.0)
+
+    async def test_zero_energy_completed_transactions_are_filtered_from_history(self):
+        now = datetime.utcnow()
+        async with self.sessions() as session:
+            charger = Charger(charge_point_id="CP-4", status="Available")
+            session.add(charger)
+            await session.flush()
+            transaction = Transaction(
+                transaction_id=40,
+                charger_id=charger.id,
+                charge_point_id=charger.charge_point_id,
+                connector_id=1,
+                id_tag="TAG",
+                meter_start=1000,
+                meter_stop=1000,
+                start_time=now - timedelta(minutes=5),
+                stop_time=now,
+                status="Completed",
+            )
+            session.add(transaction)
+            await session.flush()
+            session.add(
+                MeterValue(
+                    transaction_id=transaction.id,
+                    charger_id=charger.id,
+                    connector_id=1,
+                    timestamp=now,
+                    measurand="Energy.Active.Import.Register",
+                    value=1000,
+                    unit="Wh",
+                )
+            )
+            await session.commit()
+
+            result = await list_transactions(
+                cp_id=None,
+                status=None,
+                limit=100,
+                include_empty=False,
+                db=session,
+            )
+
+            self.assertEqual(result, [])
+
+    async def test_ocmf_readings_calculate_signed_energy(self):
+        now = datetime.utcnow()
+        async with self.sessions() as session:
+            charger = Charger(charge_point_id="CP-OCMF", status="Charging")
+            session.add(charger)
+            await session.flush()
+            transaction = Transaction(
+                transaction_id=50,
+                charger_id=charger.id,
+                charge_point_id=charger.charge_point_id,
+                connector_id=1,
+                id_tag="TAG",
+                meter_start=0,
+                start_time=now,
+                status="Active",
+            )
+            session.add(transaction)
+            await session.flush()
+
+            charge_point = ChargePoint("CP-OCMF", AsyncMock())
+            start_ocmf = 'OCMF|{"FV":"1.0","RV":[{"t":"1-0:1.8.0","v":10000,"u":"Wh"}]}|{"SA":"ECDSA","SD":"signature"}'
+            stop_ocmf = 'OCMF|{"FV":"1.0","RV":[{"t":"1-0:1.8.0","v":12500,"u":"Wh"}]}|{"SA":"ECDSA","SD":"signature"}'
+            await charge_point._apply_ocmf_to_transaction(session, transaction, 1, start_ocmf)
+            await charge_point._apply_ocmf_to_transaction(session, transaction, 1, stop_ocmf)
+            await session.commit()
+
+            self.assertEqual(transaction.signed_energy_kwh, 2.5)
+
+    async def test_active_transaction_uses_newer_meter_value_over_zero_signed_energy(self):
+        now = datetime.utcnow()
+        async with self.sessions() as session:
+            charger = Charger(charge_point_id="CP-LIVE", status="Charging")
+            session.add(charger)
+            await session.flush()
+            transaction = Transaction(
+                transaction_id=60,
+                charger_id=charger.id,
+                charge_point_id=charger.charge_point_id,
+                connector_id=1,
+                id_tag="TAG",
+                meter_start=1000,
+                start_time=now,
+                status="Active",
+                signed_energy_kwh=0.0,
+            )
+            session.add(transaction)
+            await session.flush()
+            session.add(
+                MeterValue(
+                    transaction_id=transaction.id,
+                    charger_id=charger.id,
+                    connector_id=1,
+                    timestamp=now,
+                    measurand="Energy.Active.Import.Register",
+                    value=3500,
+                    unit="Wh",
+                )
+            )
+            await session.commit()
+
+            result = await get_all_active_transactions("CP-LIVE", db=session)
+
+            self.assertEqual(result[1].energy_kwh, 2.5)
+
     async def test_duplicate_stop_recovers_late_ocmf(self):
         now = datetime.utcnow()
         async with self.sessions() as session:
@@ -211,6 +360,84 @@ class TransactionReconciliationTests(unittest.IsolatedAsyncioTestCase):
                 )
             ).scalar_one()
             self.assertEqual(tx.ocmf_stop_raw, raw_ocmf)
+
+    async def test_stop_transaction_data_supplies_final_energy_for_short_session(self):
+        now = datetime.utcnow()
+        charge_point = ChargePoint("CP-STOP-DATA", AsyncMock())
+        charge_point._log_message = AsyncMock()
+        with patch("ocpp_server.charge_point.AsyncSessionLocal", self.sessions), patch(
+            "ocpp_server.charge_point.event_bus.publish", new_callable=AsyncMock
+        ):
+            async with self.sessions() as session:
+                charger = Charger(charge_point_id=charge_point.id, status="Charging")
+                session.add(charger)
+                await session.flush()
+                session.add(Connector(charger_id=charger.id, connector_id=1, status="Charging"))
+                session.add(
+                    Transaction(
+                        transaction_id=70,
+                        charger_id=charger.id,
+                        charge_point_id=charge_point.id,
+                        connector_id=1,
+                        id_tag="TAG",
+                        meter_start=1000,
+                        meter_stop=1000,
+                        start_time=now - timedelta(seconds=12),
+                        status="Active",
+                    )
+                )
+                await session.commit()
+
+            await charge_point.on_stop_transaction(
+                transaction_id=70,
+                meter_stop=1000,
+                timestamp=now.isoformat(),
+                transaction_data=[
+                    {
+                        "timestamp": now.isoformat(),
+                        "sampledValue": [
+                            {
+                                "value": "1500",
+                                "measurand": "Energy.Active.Import.Register",
+                                "unit": "Wh",
+                                "context": "Transaction.End",
+                            },
+                            {
+                                "value": "1200",
+                                "measurand": "Power.Active.Import",
+                                "unit": "W",
+                                "context": "Transaction.End",
+                            },
+                        ],
+                    }
+                ],
+            )
+
+        async with self.sessions() as session:
+            result = await list_transactions(
+                cp_id=charge_point.id,
+                status="Completed",
+                include_empty=False,
+                db=session,
+            )
+            meter_values = (
+                await session.execute(
+                    select(MeterValue)
+                    .join(Transaction, MeterValue.transaction_id == Transaction.id)
+                    .where(Transaction.transaction_id == 70)
+                    .order_by(MeterValue.measurand)
+                )
+            ).scalars().all()
+
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0].energy_kwh, 0.5)
+            self.assertEqual(
+                [(value.measurand, value.value, value.unit) for value in meter_values],
+                [
+                    ("Energy.Active.Import.Register", 1500.0, "Wh"),
+                    ("Power.Active.Import", 1200.0, "W"),
+                ],
+            )
 
     def test_large_history_relationships_are_not_implicitly_loaded(self):
         self.assertEqual(inspect(Charger).relationships.transactions.lazy, "raise")
