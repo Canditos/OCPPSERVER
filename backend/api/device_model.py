@@ -190,7 +190,10 @@ async def issue_pnc_contract(
     admin: User = Depends(require_admin),
 ):
     """Generate an ISO 15118 Contract Certificate for Plug & Charge (PnC) simulation."""
+    from iso15118_pki import get_or_create_mo_sub_ca, get_or_create_v2g_root_ca
     contract = issue_contract_certificate(req.emaid, req.validity_days)
+    mo_cert_pem, _ = get_or_create_mo_sub_ca()
+    v2g_cert_pem, _ = get_or_create_v2g_root_ca()
     return {
         "status": "issued",
         "emaid": contract["emaid"],
@@ -198,5 +201,8 @@ async def issue_pnc_contract(
         "valid_from": contract["valid_from"],
         "valid_to": contract["valid_to"],
         "certificate_pem": contract["certificate_pem"],
+        "private_key_pem": contract["private_key_pem"],
+        "sub1_certificate_pem": mo_cert_pem,
+        "v2g_root_certificate_pem": v2g_cert_pem,
         "ca_chain_pem": contract["ca_chain_pem"],
     }
