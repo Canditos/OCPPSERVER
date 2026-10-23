@@ -274,6 +274,13 @@ async def get_charger_availability(cp_id: str, db: AsyncSession = Depends(get_db
     }
 
 
+@router.get("/{cp_id}/success-rate", response_model=dict)
+async def get_charger_success_rate_alias(cp_id: str, db: AsyncSession = Depends(get_db)):
+    """Alias for /transactions/{cp_id}/success-rate"""
+    from api.transactions import get_charging_success_rate
+    return await get_charging_success_rate(cp_id, db)
+
+
 @router.get("/{cp_id}/messages", response_model=list[OcppMessageOut])
 async def get_messages(cp_id: str, limit: int = 10000, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Charger).where(Charger.charge_point_id == cp_id))

@@ -331,7 +331,7 @@ export const api = {
 
   // Eichrecht & Success Rate & Timezone
   getChargingSuccessRate: (cpId: string) =>
-    http.get<Record<string, { total_transactions: number; completed_transactions: number; success_rate: number }>>(`/chargers/${cpId}/success-rate`).then(r => r.data),
+    http.get<Record<string, { total_transactions: number; completed_transactions: number; success_rate: number }>>(`/transactions/${cpId}/success-rate`).then(r => r.data),
   setChargerEichrecht: (cpId: string, enabled: boolean) =>
     http.patch(`/chargers/${cpId}/eichrecht`, { is_eichrecht_compliant: enabled }).then(r => r.data),
   setChargerTimezone: (cpId: string, timezone: string) =>
