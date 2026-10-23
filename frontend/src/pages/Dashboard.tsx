@@ -1,15 +1,19 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Zap, Wifi, RotateCcw, AlertTriangle, Server, Activity, ChevronDown, ChevronRight, Search, X, Filter, Square, Play, Sparkles } from 'lucide-react'
+import {
+  Zap, Wifi, RotateCcw, AlertTriangle, Server, Activity,
+  ChevronDown, ChevronRight, Search, X, Filter, Square, Play, Sparkles,
+  LayoutGrid, List
+} from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
 import { SimulatorModal } from '../components/SimulatorModal'
+import { FleetStatusRibbon, StatusFilterType } from '../components/dashboard/FleetStatusRibbon'
+import { FleetTableView } from '../components/dashboard/FleetTableView'
 import { useChargerStore } from '../store/chargerStore'
 import { useChargerUiStore } from '../store/chargerUiStore'
 import type { Charger } from '../types'
 import { useI18n } from '../i18n'
-
-type StatusFilterType = 'all' | 'online' | 'charging' | 'available' | 'faulted'
 
 interface KpiProps {
   label: string
@@ -203,6 +207,7 @@ export function Dashboard() {
   const totalChargingKw = totalChargingWatts / 1000
 
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all')
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
 
@@ -224,6 +229,7 @@ export function Dashboard() {
         if (!isChargerOnline(c) || isChargerCharging(c) || isChargerFaulted(c)) return false
       }
       if (statusFilter === 'faulted' && !isChargerFaulted(c)) return false
+      if (statusFilter === 'offline' && isChargerOnline(c)) return false
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
@@ -264,11 +270,31 @@ export function Dashboard() {
           <h1 className="text-2xl font-bold text-shimmer">Central System</h1>
           <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">OCPP 1.6-J & 2.0.1 Ready · @Canditos Mission Control</p>
         </div>
-        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm w-fit">
-          <Activity className="w-4 h-4 text-emerald-500 dark:text-emerald-400 animate-pulse-slow" />
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('dashboard.registeredEvents', { count: events.length })}</span>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleFleetSelfHeal}
+            disabled={isFleetHealing || chargers.length === 0}
+            className="btn-secondary text-xs py-1.5 px-3 rounded-full flex items-center gap-1.5 font-bold cursor-pointer transition-all shadow-sm"
+            title="Executar auto-diagnóstico e reconciliação em toda a frota"
+          >
+            <Sparkles className={`w-3.5 h-3.5 text-blue-500 ${isFleetHealing ? 'animate-spin' : ''}`} />
+            <span>{isFleetHealing ? 'A sincronizar frota…' : 'Diagnóstico de Frota'}</span>
+          </button>
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm w-fit">
+            <Activity className="w-4 h-4 text-emerald-500 dark:text-emerald-400 animate-pulse-slow" />
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t('dashboard.registeredEvents', { count: events.length })}</span>
+          </div>
         </div>
       </div>
+
+      {/* FLEET DIAGNOSIS FEEDBACK TOAST */}
+      {fleetFeedback && (
+        <div className="p-3.5 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-900 dark:text-blue-200 text-xs font-semibold flex items-center gap-2 shadow-sm animate-fade-in">
+          <Sparkles className="w-4 h-4 shrink-0 text-blue-500" />
+          <span>{fleetFeedback}</span>
+        </div>
+      )}
 
       {/* LIVE SIMULATION ACTIVE BANNER */}
       {simStatus?.is_running && (
@@ -356,6 +382,20 @@ export function Dashboard() {
         />
       </div>
 
+      {/* AMPECO FLEET STATUS RIBBON */}
+      <FleetStatusRibbon
+        total={total}
+        available={available}
+        charging={charging}
+        faulted={faulted}
+        offline={total - online}
+        activeFilter={statusFilter}
+        onSelectFilter={(f) => {
+          setStatusFilter(f)
+          scrollToSection('chargers-section')
+        }}
+      />
+
       {/* CHARGERS SECTION */}
       <div id="chargers-section" className="space-y-6">
         {/* Filter & Search Bar */}
@@ -436,8 +476,38 @@ export function Dashboard() {
               <span>Simulador Virtual</span>
             </button>
 
+            {/* View Mode Toggle (Studio Grid vs Table) */}
+            <div className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'
+                }`}
+                title="Grelha Studio"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Grelha</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'
+                }`}
+                title="Tabela Operacional AMPECO"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tabela</span>
+              </button>
+            </div>
+
             {/* Real-time Search Bar */}
-            <div className="relative min-w-[220px] flex-1 md:flex-initial">
+            <div className="relative min-w-[200px] flex-1 md:flex-initial">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 pointer-events-none" />
             <input
               type="text"
@@ -507,28 +577,38 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Stations Grid with Groups */}
+        {/* Stations View: Table or Grid */}
         {!isLoading && filteredChargers.length > 0 && (
-          <div className="space-y-6">
-            {hasGroups ? (
-              <>
-                {grouped.sortedGroups.map((g) => (
-                  <GroupSection key={g} groupName={g} chargers={grouped.map[g]} />
-                ))}
-                {grouped.ungrouped.length > 0 && (
-                  <GroupSection
-                    groupName={t('dashboard.noGroup')}
-                    chargers={grouped.ungrouped}
-                    isNoGroup
-                  />
-                )}
-              </>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {filteredChargers.map((c) => <ChargerCard key={c.id} charger={c} />)}
-              </div>
-            )}
-          </div>
+          viewMode === 'table' ? (
+            <FleetTableView
+              chargers={filteredChargers}
+              onSelfHealSuccess={() => {
+                refetchChargers()
+                queryClient.invalidateQueries({ queryKey: ['chargers'] })
+              }}
+            />
+          ) : (
+            <div className="space-y-6">
+              {hasGroups ? (
+                <>
+                  {grouped.sortedGroups.map((g) => (
+                    <GroupSection key={g} groupName={g} chargers={grouped.map[g]} />
+                  ))}
+                  {grouped.ungrouped.length > 0 && (
+                    <GroupSection
+                      groupName={t('dashboard.noGroup')}
+                      chargers={grouped.ungrouped}
+                      isNoGroup
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredChargers.map((c) => <ChargerCard key={c.id} charger={c} />)}
+                </div>
+              )}
+            </div>
+          )
         )}
       </div>
 

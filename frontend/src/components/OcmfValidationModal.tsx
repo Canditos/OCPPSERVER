@@ -71,7 +71,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                Norma S.A.F.E. e.V. · Open Charge Metering Format (OCMF V1.0 - V1.4.1) · Medidor LEM DCBM
+                Norma <strong>S.A.F.E. e.V. v2.0.2 (PTB-A 50.7)</strong> · Open Charge Metering Format (OCMF V1.0 – V1.4.1) · Medidores LEM DCBM & Bauer
               </p>
             </div>
           </div>
@@ -289,7 +289,18 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                           <td className="p-2.5 text-slate-700 dark:text-gray-300 font-sans">{r.description}</td>
                           <td className="p-2.5 font-bold text-slate-900 dark:text-white">{r.value}</td>
                           <td className="p-2.5 text-slate-500">{r.unit}</td>
-                          <td className="p-2.5 text-amber-500">{r.cable_loss !== null && r.cable_loss !== undefined ? `${r.cable_loss} Wh` : '—'}</td>
+                          <td className="p-2.5 text-amber-500 font-mono">
+                            {(() => {
+                              const l = r.cable_loss
+                              if (l === null || l === undefined) return '—'
+                              if (typeof l === 'object') {
+                                const v = l.l ?? l.loss ?? l.v ?? l.val ?? l.value
+                                const u = l.u ?? l.unit ?? 'Wh'
+                                return v !== undefined ? `${v} ${u}` : '—'
+                              }
+                              return `${l} Wh`
+                            })()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

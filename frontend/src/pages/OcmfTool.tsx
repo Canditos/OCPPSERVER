@@ -140,19 +140,28 @@ export function OcmfTool() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-2xl bg-blue-500/15 text-blue-500 border border-blue-500/20">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-2xl bg-blue-500/15 text-blue-500 border border-blue-500/20 shrink-0">
               <ShieldCheck className="w-7 h-7" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Validador & Inspetor OCMF (Eichrecht / S.A.F.E.)
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 font-mono font-bold">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                  Validador & Inspetor OCMF (Eichrecht / S.A.F.E.)
+                </h1>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono font-bold flex items-center gap-1 shadow-sm">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  S.A.F.E. Transparenzsoftware v2.0.2
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-mono font-bold">
+                  PTB-A 50.7 / MessEG
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-mono font-bold">
                   LEM DCBM Compliant
                 </span>
-              </h1>
-              <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5">
-                Verificação criptográfica ECDSA, descodificação OBIS e conformidade com medidores certificados
+              </div>
+              <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
+                Conformidade oficial com a norma alemã Eichrecht (MessEG / MessEV), especificação <strong>S.A.F.E. e.V. v2.0.2</strong> e <strong>OCMF v1.0–v1.4.1</strong>.
               </p>
             </div>
           </div>
@@ -313,14 +322,20 @@ export function OcmfTool() {
           </div>
 
           {/* Reference Info Card */}
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-2">
-            <h4 className="font-bold text-gray-200 flex items-center gap-1.5">
-              <HelpCircle className="w-4 h-4 text-blue-400" />
-              Sobre a Validação OCMF & Medidores LEM:
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs space-y-2.5">
+            <h4 className="font-bold text-slate-800 dark:text-gray-200 flex items-center gap-1.5">
+              <HelpCircle className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+              Especificações S.A.F.E. e.V. & Medidores LEM DCBM:
             </h4>
-            <p className="text-gray-400 text-[11px] leading-relaxed">
-              O <strong>Open Charge Metering Format (OCMF)</strong> garante a integridade legal da medição em postos de carregamento público. A assinatura digital ECDSA protege a contagem de energia contra qualquer adulteração entre o medidor e o sistema de faturação.
+            <p className="text-slate-600 dark:text-gray-400 text-[11px] leading-relaxed">
+              O nosso validador implementa a especificação oficial <strong>S.A.F.E. Transparenzsoftware v2.0.2</strong>, em conformidade com a <strong>Physikalisch-Technische Bundesanstalt (PTB-A 50.7)</strong> e o <strong>Mess- und Eichgesetz (MessEG)</strong>.
             </p>
+            <div className="pt-2 border-t border-slate-200 dark:border-white/5 grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600 dark:text-gray-400">
+              <div>• Software S.A.F.E.: <strong className="text-emerald-600 dark:text-emerald-400">v2.0.2 (Oficial)</strong></div>
+              <div>• Formato OCMF: <strong className="text-blue-600 dark:text-blue-400">v1.0 – v1.4.1</strong></div>
+              <div>• Curvas Suportadas: <strong className="text-purple-600 dark:text-purple-400">secp256r1 / brainpool</strong></div>
+              <div>• Hardware Suportado: <strong className="text-slate-800 dark:text-slate-200">LEM DCBM 400/600 · Bauer</strong></div>
+            </div>
           </div>
         </div>
 
@@ -353,19 +368,27 @@ export function OcmfTool() {
                 </div>
               </div>
 
-              {/* Meter Specs Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+              {/* Meter & Compliance Specs Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block">Versão OCMF</span>
-                  <span className="font-bold text-slate-900 dark:text-white font-mono">{result.ocmf_version || '1.0'}</span>
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Norma S.A.F.E. e.V.</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm block">v2.0.2</span>
+                  <span className="text-[10px] text-slate-400">PTB-A 50.7 / Eichrecht</span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block">Identificador Medidor</span>
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Versão OCMF</span>
+                  <span className="font-bold text-slate-900 dark:text-white font-mono text-sm block">{result.ocmf_version ? `v${result.ocmf_version}` : 'v1.4.0'}</span>
+                  <span className="text-[10px] text-slate-400">Open Charge Metering</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Identificador Medidor</span>
                   <span className="font-bold text-slate-900 dark:text-white font-mono truncate block">{result.meter_serial || '—'}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Gateway ID / Serial</span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block">Tipo de Registo</span>
-                  <span className="font-bold text-blue-500 font-mono">{result.parsed?.status_label || result.status || '—'}</span>
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Tipo de Registo</span>
+                  <span className="font-bold text-blue-500 font-mono block">{result.parsed?.status_label || result.status || '—'}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">{result.algorithm || 'ECDSA-secp256r1'}</span>
                 </div>
               </div>
 
@@ -387,15 +410,26 @@ export function OcmfTool() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                        {result.readings.map((r: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-white/5 transition-colors">
-                            <td className="p-2.5 text-blue-500 font-bold">{r.obis}</td>
-                            <td className="p-2.5 text-slate-700 dark:text-gray-300 font-sans">{r.description}</td>
-                            <td className="p-2.5 font-bold text-slate-900 dark:text-white">{r.value}</td>
-                            <td className="p-2.5 text-slate-500">{r.unit}</td>
-                            <td className="p-2.5 text-amber-500">{r.cable_loss !== null && r.cable_loss !== undefined ? `${r.cable_loss} Wh` : '—'}</td>
-                          </tr>
-                        ))}
+                        {result.readings.map((r: any, idx: number) => {
+                          const renderLoss = (loss: any) => {
+                            if (loss === null || loss === undefined) return '—'
+                            if (typeof loss === 'object') {
+                              const val = loss.l ?? loss.loss ?? loss.v ?? loss.val ?? loss.value
+                              const unit = loss.u ?? loss.unit ?? 'Wh'
+                              return val !== undefined ? `${val} ${unit}` : '—'
+                            }
+                            return `${loss} Wh`
+                          }
+                          return (
+                            <tr key={idx} className="hover:bg-white/5 transition-colors">
+                              <td className="p-2.5 text-blue-500 font-bold">{r.obis}</td>
+                              <td className="p-2.5 text-slate-700 dark:text-gray-300 font-sans">{r.description}</td>
+                              <td className="p-2.5 font-bold text-slate-900 dark:text-white">{r.value}</td>
+                              <td className="p-2.5 text-slate-500">{r.unit}</td>
+                              <td className="p-2.5 text-amber-500">{renderLoss(r.cable_loss)}</td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

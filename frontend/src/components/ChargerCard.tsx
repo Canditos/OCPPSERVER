@@ -14,6 +14,8 @@ import { BatteryIndicator } from './BatteryIndicator'
 import { api } from '../api'
 import type { Charger } from '../types'
 import { useI18n } from '../i18n'
+import { ChargerTagModal } from './charger-card/ChargerTagModal'
+import { ChargerSecurityModal } from './charger-card/ChargerSecurityModal'
 
 function LiveKw({ watts }: { watts: number }) {
   if (watts >= 1000) {
@@ -141,83 +143,10 @@ export function ChargerCard({ charger }: { charger: Charger }) {
 
   // Security Modal state
   const [showSecModal, setShowSecModal] = useState(false)
-  const [secProfile, setSecProfile] = useState<number>(charger.security_profile ?? 0)
-  const [authKey, setAuthKey] = useState<string>(charger.auth_password || '')
-  const [authEnabled, setAuthEnabled] = useState<boolean>(charger.auth_enabled ?? false)
-  const [showKey, setShowKey] = useState<boolean>(false)
-  const [copiedKey, setCopiedKey] = useState<boolean>(false)
-  const [secFeedback, setSecFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [isSavingSec, setIsSavingSec] = useState(false)
-
-  useEffect(() => {
-    setSecProfile(charger.security_profile ?? 0)
-    setAuthKey(charger.auth_password || '')
-    setAuthEnabled(charger.auth_enabled ?? false)
-  }, [charger])
-
   const handleOpenSecModal = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setShowSecModal(true)
-    setSecProfile(charger.security_profile ?? 0)
-    setAuthKey(charger.auth_password || '')
-    setAuthEnabled(charger.auth_enabled ?? false)
-    setSecFeedback(null)
-  }
-
-  const handleSaveSecurity = async () => {
-    setIsSavingSec(true)
-    setSecFeedback(null)
-    try {
-      await api.updateChargerSecurity(charger.charge_point_id, {
-        security_profile: secProfile,
-        auth_password: authKey,
-        auth_enabled: authEnabled || secProfile >= 1,
-      })
-      setSecFeedback({ type: 'success', message: 'Segurança guardada com sucesso!' })
-      queryClient.invalidateQueries({ queryKey: ['chargers'] })
-      setTimeout(() => {
-        setShowSecModal(false)
-        setSecFeedback(null)
-      }, 1200)
-    } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro: ${err?.response?.data?.detail || err.message}` })
-    } finally {
-      setIsSavingSec(false)
-    }
-  }
-
-  const handleGenerateKey = async () => {
-    setIsSavingSec(true)
-    try {
-      const res = await api.generateChargerKey(charger.charge_point_id)
-      setAuthKey(res.authorization_key)
-      setSecFeedback({ type: 'success', message: 'Nova AuthorizationKey gerada!' })
-      queryClient.invalidateQueries({ queryKey: ['chargers'] })
-    } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro ao gerar: ${err?.response?.data?.detail || err.message}` })
-    } finally {
-      setIsSavingSec(false)
-    }
-  }
-
-  const handleSyncKey = async () => {
-    setIsSavingSec(true)
-    try {
-      const res = await api.syncChargerKey(charger.charge_point_id)
-      setSecFeedback({ type: 'success', message: `Chave enviada ao posto via OCPP (${res.status})` })
-    } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro ao sincronizar: ${err?.response?.data?.detail || err.message}` })
-    } finally {
-      setIsSavingSec(false)
-    }
-  }
-
-  const handleCopyKey = () => {
-    if (!authKey) return
-    navigator.clipboard.writeText(authKey)
-    setCopiedKey(true)
-    setTimeout(() => setCopiedKey(false), 2000)
   }
 
   // Fetch authorized tags
@@ -1012,243 +941,22 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       )}
 
       {/* Quick Add Tag Modal */}
-      {showTagModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
-          onClick={() => setShowTagModal(false)}
-        >
-          <div
-            className="w-full max-w-md bg-gray-900 border border-white/15 rounded-2xl p-5 shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
-                  <Tag className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-gray-100">{t('chargerCard.authorizedTagTitle')}</h3>
-                  <p className="text-xs text-gray-500">{t('chargerCard.authorizedTagSubtitle')}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowTagModal(false)}
-                className="p-1 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Presets */}
-            <div className="space-y-1.5">
-              <span className="text-xs text-gray-400 font-medium">{t('chargerCard.quickSuggestions')}</span>
-              <div className="flex flex-wrap gap-1.5">
-                {['VERSICHARGE_TAG', 'ADMIN_TAG', 'MASTER_RFID', 'TAG_001'].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => {
-                      setNewTagId(preset)
-                      setNewTagDesc(`Tag ${preset}`)
-                    }}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-emerald-400 border border-emerald-500/20 font-mono"
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Inputs */}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">{t('chargerCard.tagIdLabel')}</label>
-                <input
-                  type="text"
-                  value={newTagId}
-                  onChange={(e) => setNewTagId(e.target.value)}
-                  placeholder={t('chargerCard.tagIdPlaceholder')}
-                  className="input w-full font-mono text-sm uppercase"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">{t('chargerCard.descriptionLabel')}</label>
-                <input
-                  type="text"
-                  value={newTagDesc}
-                  onChange={(e) => setNewTagDesc(e.target.value)}
-                  placeholder={t('chargerCard.descriptionPlaceholder')}
-                  className="input w-full text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-              <button
-                type="button"
-                onClick={() => handleSaveAndStart(newTagId, newTagDesc, false)}
-                disabled={isSavingTag || !newTagId.trim()}
-                className="flex-1 btn-secondary text-xs py-2 rounded-xl text-gray-300 hover:text-white"
-              >
-                {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t('chargerCard.saveTag')}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSaveAndStart(newTagId, newTagDesc, true)}
-                disabled={isSavingTag || !newTagId.trim()}
-                className="flex-1 btn bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-md font-semibold"
-              >
-                {isSavingTag ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" fill="currentColor" />}
-                <span>{t('chargerCard.saveAndStart')}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ChargerTagModal
+        isOpen={showTagModal}
+        onClose={() => setShowTagModal(false)}
+        onSaveAndStart={handleSaveAndStart}
+        isSaving={isSavingTag}
+        initialTagId={newTagId}
+      />
 
       {/* Quick Security & AuthorizationKey Modal */}
-      {showSecModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
-          onClick={(e) => { e.stopPropagation(); setShowSecModal(false) }}
-        >
-          <div
-            className="w-full max-w-md bg-gray-900 border border-white/15 rounded-2xl shadow-2xl p-5 space-y-4 animate-scale-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                  <Shield className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-gray-100">Segurança & AuthorizationKey</h3>
-                  <p className="text-xs text-gray-500 font-mono">{charger.charge_point_id}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSecModal(false)}
-                className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Alert feedback */}
-            {secFeedback && (
-              <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
-                secFeedback.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
-              }`}>
-                {secFeedback.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />}
-                <span>{secFeedback.message}</span>
-              </div>
-            )}
-
-            {/* Profile selector */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-300">Perfil de Segurança (OCPP 1.6)</label>
-              <select
-                value={secProfile}
-                onChange={(e) => {
-                  const val = Number(e.target.value)
-                  setSecProfile(val)
-                  if (val >= 1) setAuthEnabled(true)
-                }}
-                className="select w-full text-xs py-2 bg-gray-800/90 border-white/10"
-              >
-                <option value={0}>Profile 0 — Aberto / Unsecure (ws:// sem password)</option>
-                <option value={1}>Profile 1 — HTTP Basic Auth (ws:// com password)</option>
-                <option value={2}>Profile 2 — TLS + Basic Auth (wss:// encriptado com password)</option>
-                <option value={3}>Profile 3 — mTLS (TLS Mútuo com Certificados Digitais X.509)</option>
-              </select>
-            </div>
-
-            {/* AuthorizationKey */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-gray-300">AuthorizationKey (Password do Posto)</label>
-                <button
-                  type="button"
-                  onClick={handleGenerateKey}
-                  disabled={isSavingSec}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5" /> Gerar Chave Segura
-                </button>
-              </div>
-
-              <div className="relative flex items-center">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={authKey}
-                  onChange={(e) => setAuthKey(e.target.value)}
-                  placeholder="Introduza ou gere a password do posto"
-                  className="input pr-20 text-xs font-mono bg-gray-800/90 border-white/10 w-full"
-                />
-                <div className="absolute right-1.5 flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
-                    title={showKey ? 'Ocultar' : 'Mostrar'}
-                  >
-                    {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCopyKey}
-                    disabled={!authKey}
-                    className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
-                    title="Copiar Chave"
-                  >
-                    {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Header preview if key present */}
-            {authKey && secProfile >= 1 && (
-              <div className="p-2.5 rounded-lg bg-white/4 border border-white/8 space-y-1">
-                <span className="text-[10px] text-gray-400 font-medium">Cabeçalho HTTP Basic para o Carregador:</span>
-                <p className="text-[10px] font-mono text-gray-300 break-all bg-gray-950/80 p-1.5 rounded border border-white/5 select-all">
-                  Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
-                </p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-              <button
-                type="button"
-                onClick={handleSyncKey}
-                disabled={isSavingSec || !isOnline || !authKey}
-                className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-2 px-3 rounded-xl flex items-center gap-1.5 disabled:opacity-40 transition-all"
-                title={isOnline ? 'Enviar chave ao posto via OCPP' : 'Posto offline'}
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Sincronizar no Posto</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSaveSecurity}
-                disabled={isSavingSec}
-                className="flex-1 btn-primary text-xs py-2 rounded-xl flex items-center justify-center gap-1.5 font-semibold"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>{isSavingSec ? 'A guardar...' : 'Guardar Segurança'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ChargerSecurityModal
+        isOpen={showSecModal}
+        onClose={() => setShowSecModal(false)}
+        charger={charger}
+        isOnline={Boolean(isOnline)}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: ['chargers'] })}
+      />
     </div>
   )
 }

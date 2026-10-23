@@ -9,13 +9,15 @@ export interface OcmfVerificationResponse {
   meter_model?: string
   meter_serial?: string | null
   ocmf_version?: string | null
+  safe_version?: string | null
+  safe_standard?: string | null
   status?: string | null
   readings?: Array<{
     obis: string
     description: string
     value: string | number
     unit: string
-    cable_loss?: number | null
+    cable_loss?: any
   }>
   signature_raw?: string
 }

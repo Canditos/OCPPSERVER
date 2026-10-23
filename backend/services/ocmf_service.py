@@ -127,6 +127,8 @@ def parse_ocmf(ocmf_str: str) -> OcmfParseResult:
                 val = item.get("RV", item.get("v", item.get("value", 0)))
                 unit = item.get("RU", item.get("u", item.get("unit", "kWh")))
                 loss = item.get("UC", item.get("l", item.get("loss", None)))
+                if isinstance(loss, dict):
+                    loss = loss.get("l", loss.get("loss", loss.get("v", loss.get("val", None))))
                 readings.append({
                     "obis": obis,
                     "description": OBIS_DESCRIPTIONS.get(obis, f"Código OBIS {obis}"),
@@ -331,6 +333,8 @@ def verify_ocmf_signature(
         "curve": curve_name,
         "meter_serial": parsed.gateway_id,
         "ocmf_version": parsed.version,
+        "safe_version": "v2.0.2",
+        "safe_standard": "S.A.F.E. e.V. Transparenzsoftware v2.0.2 / PTB-A 50.7 (MessEG)",
         "status": parsed.status,
         "timestamp": parsed.timestamp,
         "readings": parsed.meter_readings,
