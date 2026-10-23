@@ -409,11 +409,24 @@ async def apply_profile(req: ApplyProfileRequest, db: AsyncSession = Depends(get
     cp = get_charge_point(cp_id)
     if cp:
         try:
-            # 1. Clear previous profiles on the charger to prevent stack conflicts
+            # 1. Clear previous profiles on the charger across all connectors to prevent stack/connector conflicts
             try:
-                await cp.clear_charging_profile(connector_id=connector_id)
+                await cp.clear_charging_profile()
             except Exception as e_clear:
-                logger.info(f"Clean clear before set: {e_clear}")
+                logger.info(f"Global clear before set failed ({e_clear}), falling back to connector-specific clear")
+                try:
+                    await cp.clear_charging_profile(connector_id=0)
+                except Exception:
+                    pass
+                try:
+                    await cp.clear_charging_profile(connector_id=1)
+                except Exception:
+                    pass
+                if connector_id not in (0, 1):
+                    try:
+                        await cp.clear_charging_profile(connector_id=connector_id)
+                    except Exception:
+                        pass
 
             # 2. Send SetChargingProfile
             resp = await cp.set_charging_profile(

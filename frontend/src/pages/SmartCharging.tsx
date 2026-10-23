@@ -131,6 +131,7 @@ export function SmartCharging() {
 
   // Composite schedule query results
   const [compositeData, setCompositeData] = useState<any | null>(null)
+  const [compositeConnectorId, setCompositeConnectorId] = useState<number>(1)
 
   // Find currently deployed active profile
   const activeProfile = profiles.find((p) => p.is_deployed)
@@ -193,7 +194,9 @@ export function SmartCharging() {
       showToast('success', t('smart.applyProfileSuccess', { name: preset.name, cp: selectedCpId }))
       await refetchProfiles()
       if (isOnline) {
-        setTimeout(() => handleFetchCompositeSchedule(), 600)
+        const queryConn = preset.purpose === 'ChargePointMaxProfile' ? 0 : 1
+        setCompositeConnectorId(queryConn)
+        setTimeout(() => handleFetchCompositeSchedule(queryConn), 600)
       }
     } catch (err: any) {
       showToast('error', t('smart.applyProfileError', { error: err?.response?.data?.detail || err.message }))
@@ -258,7 +261,9 @@ export function SmartCharging() {
       showToast('success', t('smart.customProfileSuccess', { name: profileName }))
       await refetchProfiles()
       if (isOnline) {
-        setTimeout(() => handleFetchCompositeSchedule(), 600)
+        const queryConn = purpose === 'ChargePointMaxProfile' ? 0 : connectorId
+        setCompositeConnectorId(queryConn)
+        setTimeout(() => handleFetchCompositeSchedule(queryConn), 600)
       }
     } catch (err: any) {
       showToast('error', t('smart.customProfileError', { error: err?.response?.data?.detail || err.message }))
@@ -281,14 +286,15 @@ export function SmartCharging() {
     }
   }
 
-  const handleFetchCompositeSchedule = async () => {
+  const handleFetchCompositeSchedule = async (targetConnId?: number) => {
     if (!selectedCpId) return
+    const connToQuery = targetConnId !== undefined ? targetConnId : compositeConnectorId
     setLoadingAction('composite')
     try {
       const activeUnit = activeProfile?.charging_rate_unit || (isDC ? 'W' : 'A')
       const data = await api.getCompositeSchedule({
         charge_point_id: selectedCpId,
-        connector_id: connectorId || 1,
+        connector_id: connToQuery,
         duration: 86400,
         rate_unit: activeUnit,
       })
@@ -1068,7 +1074,9 @@ export function SmartCharging() {
                           showToast('success', t('smart.profileRedeployed', { id: prof.profile_id }))
                           refetchProfiles()
                           if (isOnline) {
-                            setTimeout(() => handleFetchCompositeSchedule(), 600)
+                            const queryConn = prof.purpose === 'ChargePointMaxProfile' ? 0 : (prof.connector_id || 1)
+                            setCompositeConnectorId(queryConn)
+                            setTimeout(() => handleFetchCompositeSchedule(queryConn), 600)
                           }
                         })}
                         disabled={!isOnline}
@@ -1097,19 +1105,34 @@ export function SmartCharging() {
 
         {/* Composite Schedule Query */}
         <div className="card border border-white/8 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-cyan-400" />
               <h3 className="text-sm font-bold text-gray-200">{t('smart.compositeTitle')}</h3>
             </div>
-            <button
-              onClick={handleFetchCompositeSchedule}
-              disabled={!isOnline || loadingAction !== null}
-              className="btn-secondary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 text-cyan-300 hover:text-white"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>{loadingAction === 'composite' ? t('smart.querying') : t('smart.queryStation')}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <select
+                  value={compositeConnectorId}
+                  onChange={(e) => setCompositeConnectorId(Number(e.target.value))}
+                  className="select appearance-none pr-8 text-xs py-1.5 bg-gray-900/80 border-white/10 text-gray-200"
+                  title="Conector / Alvo a consultar"
+                >
+                  <option value={1}>{t('smart.connector1')}</option>
+                  <option value={2}>{t('smart.connector2')}</option>
+                  <option value={0}>{t('smart.allConnectorsOption')}</option>
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+              </div>
+              <button
+                onClick={() => handleFetchCompositeSchedule()}
+                disabled={!isOnline || loadingAction !== null}
+                className="btn-secondary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 text-cyan-300 hover:text-white"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{loadingAction === 'composite' ? t('smart.querying') : t('smart.queryStation')}</span>
+              </button>
+            </div>
           </div>
 
           <p className="text-xs text-gray-500">
@@ -1120,7 +1143,7 @@ export function SmartCharging() {
             <div className="p-3 rounded-xl bg-gray-950/80 border border-white/10 font-mono text-xs text-gray-300 space-y-2 overflow-x-auto max-h-56">
               <div className="flex justify-between border-b border-white/5 pb-1 text-gray-500 text-[11px]">
                 <span>Status: <strong className="text-emerald-400">{compositeData.status}</strong></span>
-                <span>Tomada: #{compositeData.connector_id}</span>
+                <span>{compositeData.connector_id === 0 ? 'Posto Geral (#0)' : `Tomada: #${compositeData.connector_id}`}</span>
               </div>
               <pre className="text-[11px] text-cyan-300 whitespace-pre-wrap">
                 {JSON.stringify(compositeData.charging_schedule || compositeData, null, 2)}
