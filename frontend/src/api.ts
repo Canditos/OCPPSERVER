@@ -1,17 +1,38 @@
 export type { MeterKeyData, OcmfAuditReport } from './types'
 export type TransactionOcmfReport = import('./types').OcmfAuditReport
 
+export interface SafeProfileEvaluation {
+  version: string
+  label: string
+  compliant: boolean
+  status: string
+  standard: string
+  download_url: string
+  manual_url?: string
+  sha256?: string
+  notes?: string
+  warnings?: string[]
+}
+
 export interface OcmfVerificationResponse {
   verified: boolean
   error?: string | null
   parsed?: Record<string, any> | null
+  algorithm?: string | null
+  curve?: string
   curve_name?: string
   meter_model?: string
   meter_serial?: string | null
   ocmf_version?: string | null
   safe_version?: string | null
   safe_standard?: string | null
+  safe_profile?: '1.4.1' | '1.3.0' | 'both' | string
+  profiles?: {
+    v141?: SafeProfileEvaluation
+    v130?: SafeProfileEvaluation
+  }
   status?: string | null
+  timestamp?: string | null
   readings?: Array<{
     obis: string
     description: string

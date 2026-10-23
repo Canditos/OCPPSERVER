@@ -71,7 +71,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                Norma <strong>S.A.F.E. e.V. v1.4.1 (PTB-A 50.7)</strong> · Open Charge Metering Format (OCMF V1.0 – V1.4.1) · Medidores LEM DCBM & Bauer
+                Norma <strong>S.A.F.E. e.V. (v1.4.1 Atual / v1.3.0 Base PTB-A 50.7)</strong> · Open Charge Metering Format (OCMF V1.0 – V1.4.1) · Medidores LEM DCBM & Bauer
               </p>
             </div>
           </div>
@@ -346,12 +346,31 @@ ${report.ocmf_start_raw}`
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-3 px-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-950 text-xs text-slate-500 dark:text-gray-400">
-          <span>Padrão S.A.F.E. e.V. · Compatível com OpenChargeMeteringFormatParser</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 px-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-950 text-xs text-slate-500 dark:text-gray-400">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Padrão S.A.F.E. e.V. (PTB-A 50.7):</span>
+            <a
+              href="https://safe-ev.org/files/software/transparenzsoftware-1.4.1.jar"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-mono"
+            >
+              <Download className="w-3 h-3" /> JAR v1.4.1 (Última)
+            </a>
+            <span>·</span>
+            <a
+              href="https://safe-ev.org/files/software/transparenzsoftware-1.3.0.jar"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 font-mono"
+            >
+              <Download className="w-3 h-3" /> JAR v1.3.0 (Base PTB)
+            </a>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white font-medium"
+            className="px-4 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white font-medium cursor-pointer"
           >
             Fechar
           </button>

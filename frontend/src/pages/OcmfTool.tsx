@@ -18,6 +18,7 @@ export function OcmfTool() {
   const [ocmfData, setOcmfData] = useState<string>(SAMPLE_OCMF_PAYLOAD)
   const [publicKey, setPublicKey] = useState<string>(SAMPLE_LEM_PUBKEY)
   const [curveName, setCurveName] = useState<string>('secp256r1')
+  const [safeProfile, setSafeProfile] = useState<'both' | '1.4.1' | '1.3.0'>('both')
   const [selectedTxId, setSelectedTxId] = useState<string>('')
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -53,9 +54,10 @@ export function OcmfTool() {
     })
   }, [transactions, erkChargePointIds])
 
-  const handleVerify = async (customPayload?: string, customKey?: string) => {
+  const handleVerify = async (customPayload?: string, customKey?: string, customProfile?: 'both' | '1.4.1' | '1.3.0') => {
     const payloadToUse = customPayload || ocmfData.trim()
     const keyToUse = customKey || publicKey.trim()
+    const profileToUse = customProfile || safeProfile
     if (!payloadToUse || !keyToUse) return
     setIsLoading(true)
     try {
@@ -63,6 +65,7 @@ export function OcmfTool() {
         ocmf_data: payloadToUse,
         public_key: keyToUse,
         curve_name: curveName,
+        safe_profile: profileToUse,
       })
       setResult(res)
     } catch (err: any) {
@@ -301,6 +304,63 @@ export function OcmfTool() {
               </div>
             </div>
 
+            {/* S.A.F.E. Version Profile Selector */}
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">
+                Perfil de Validação S.A.F.E. (Eichrecht):
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSafeProfile('both')
+                    if (result) handleVerify(undefined, undefined, 'both')
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
+                    safeProfile === 'both'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:border-blue-500/40'
+                  }`}
+                >
+                  <span className="font-bold flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-300" />
+                    Modo Dual
+                  </span>
+                  <span className="text-[10px] opacity-85">v1.3.0 + v1.4.1</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSafeProfile('1.4.1')
+                    if (result) handleVerify(undefined, undefined, '1.4.1')
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
+                    safeProfile === '1.4.1'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:border-emerald-500/40'
+                  }`}
+                >
+                  <span className="font-bold">v1.4.1 (Última)</span>
+                  <span className="text-[10px] opacity-85">Mais Recente</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSafeProfile('1.3.0')
+                    if (result) handleVerify(undefined, undefined, '1.3.0')
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
+                    safeProfile === '1.3.0'
+                      ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:border-amber-500/40'
+                  }`}
+                >
+                  <span className="font-bold">v1.3.0 (Base)</span>
+                  <span className="text-[10px] opacity-85">PTB Permanente</span>
+                </button>
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={() => handleVerify()}
@@ -397,6 +457,113 @@ export function OcmfTool() {
                   </p>
                 </div>
               </div>
+
+              {/* Dual Profile Verification Comparison (v1.4.1 Latest vs v1.3.0 Baseline) */}
+              {result.profiles && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Profile v1.4.1 (Última) */}
+                  {result.profiles.v141 && (
+                    <div className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 transition-all ${
+                      result.profiles.v141.compliant
+                        ? 'bg-emerald-500/10 border-emerald-500/30'
+                        : 'bg-red-500/10 border-red-500/30'
+                    }`}>
+                      <div>
+                        <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                            S.A.F.E. v1.4.1 (Última)
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold border ${
+                            result.profiles.v141.compliant
+                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                              : 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30'
+                          }`}>
+                            {result.profiles.v141.compliant ? 'Conforme ✅' : 'Não Conforme ❌'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-gray-300 leading-relaxed">
+                          {result.profiles.v141.notes}
+                        </p>
+                        <div className="mt-2 text-[10px] font-mono text-slate-500 dark:text-gray-400 truncate">
+                          SHA-256: <span className="text-slate-700 dark:text-gray-300 font-bold">{result.profiles.v141.sha256?.substring(0, 16)}…</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[11px]">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Versão Ativa Oficial</span>
+                        <a
+                          href={result.profiles.v141.download_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25 flex items-center gap-1 font-mono font-bold transition-colors"
+                        >
+                          <Download className="w-3 h-3" /> JAR v1.4.1
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Profile v1.3.0 (Base Permanente PTB) */}
+                  {result.profiles.v130 && (
+                    <div className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 transition-all ${
+                      result.profiles.v130.compliant
+                        ? 'bg-emerald-500/10 border-emerald-500/30'
+                        : result.verified
+                        ? 'bg-amber-500/10 border-amber-500/30'
+                        : 'bg-red-500/10 border-red-500/30'
+                    }`}>
+                      <div>
+                        <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <Shield className="w-4 h-4 text-amber-500" />
+                            S.A.F.E. v1.3.0 (Base PTB)
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold border ${
+                            result.profiles.v130.compliant
+                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                              : result.verified
+                              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                              : 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30'
+                          }`}>
+                            {result.profiles.v130.compliant
+                              ? 'Conforme ✅'
+                              : result.verified
+                              ? 'Compatível c/ Alertas ⚠️'
+                              : 'Não Conforme ❌'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-gray-300 leading-relaxed">
+                          {result.profiles.v130.notes}
+                        </p>
+                        {result.profiles.v130.warnings && result.profiles.v130.warnings.length > 0 && (
+                          <div className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-600 dark:text-amber-400 space-y-1">
+                            {result.profiles.v130.warnings.map((w: string, i: number) => (
+                              <div key={i} className="flex items-start gap-1">
+                                <span>•</span>
+                                <span>{w}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-2 text-[10px] font-mono text-slate-500 dark:text-gray-400 truncate">
+                          SHA-256: <span className="text-slate-700 dark:text-gray-300 font-bold">{result.profiles.v130.sha256?.substring(0, 16)}…</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[11px]">
+                        <span className="text-amber-600 dark:text-amber-400 font-semibold">Base Permanente</span>
+                        <a
+                          href={result.profiles.v130.download_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 flex items-center gap-1 font-mono font-bold transition-colors"
+                        >
+                          <Download className="w-3 h-3" /> JAR v1.3.0
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Meter & Compliance Specs Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">

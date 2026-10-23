@@ -41,6 +41,7 @@ class ManualOcmfVerifyRequest(BaseModel):
     ocmf_data: str
     public_key: str
     curve_name: str = "secp256r1"
+    safe_profile: str = "both"
 
 
 @router.post("/verify-manual")
@@ -50,6 +51,7 @@ async def verify_manual_ocmf(req: ManualOcmfVerifyRequest):
         req.ocmf_data,
         req.public_key,
         req.curve_name,
+        safe_profile=req.safe_profile,
     )
 
 

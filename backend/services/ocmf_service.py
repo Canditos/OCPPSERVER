@@ -245,10 +245,15 @@ def load_public_key_from_string(key_str: str, curve_hint: str = "secp256r1") -> 
 def verify_ocmf_signature(
     ocmf_str: str,
     public_key_str: str,
-    curve_name: str = "secp256r1"
+    curve_name: str = "secp256r1",
+    safe_profile: str = "both"
 ) -> Dict[str, Any]:
     """
     Verify the ECDSA signature of an OCMF message using the meter's public key.
+    Supports S.A.F.E. Transparenzsoftware profiles:
+      - '1.4.1': Newest available official release (safe-ev.org)
+      - '1.3.0': Legacy type-examination release (PTB Baumusterprüfung)
+      - 'both': Simultaneous dual evaluation comparing both profiles
     Returns validation verdict, decoded readings, and audit report.
     """
     parsed = parse_ocmf(ocmf_str)
@@ -326,6 +331,63 @@ def verify_ocmf_signature(
     if not is_valid and error_msg is None:
         error_msg = "Assinatura Criptográfica ECDSA Inválida (os dados foram alterados ou a chave pública não corresponde ao medidor)"
 
+    # Profile analysis for S.A.F.E. v1.3.0 vs v1.4.1
+    fv_str = str(parsed.version or "1.0").strip()
+    is_newer_fv = False
+    try:
+        parts = [int(p) for p in re.findall(r"\d+", fv_str)]
+        if parts and (parts[0] > 1 or (parts[0] == 1 and len(parts) > 1 and parts[1] > 3)):
+            is_newer_fv = True
+    except Exception:
+        pass
+
+    has_complex_cable_loss = any(
+        isinstance(r.get("cable_loss"), dict) for r in parsed.meter_readings
+    )
+
+    v130_warnings: List[str] = []
+    if is_newer_fv:
+        v130_warnings.append(f"Formato OCMF v{fv_str} é posterior à v1.3.0. A Transparenzsoftware v1.3.0 pode acusar aviso de versão de esquema não suportada.")
+    if has_complex_cable_loss:
+        v130_warnings.append("Contém estrutura avançada de perda de cabo DC (UC) padronizada na norma S.A.F.E. v1.4+.")
+
+    v130_compliant = is_valid and (not is_newer_fv)
+    v141_compliant = is_valid
+
+    profiles = {
+        "v141": {
+            "version": "v1.4.1",
+            "label": "S.A.F.E. Transparenzsoftware v1.4.1 (Última Versão Disponível)",
+            "compliant": v141_compliant,
+            "status": "COMPLIANT" if v141_compliant else "INVALID_SIGNATURE",
+            "standard": "PTB-A 50.7 (Eichrecht) / OCMF v1.0 – v1.4.1",
+            "download_url": "https://safe-ev.org/files/software/transparenzsoftware-1.4.1.jar",
+            "manual_url": "https://safe-ev.org/files/software/manuals/EN%201.4.1%20End_User_Manual%20for%20the%20Transparency%20Software.pdf",
+            "sha256": "8aae71e0e6563c05527738deb8524d36a2c260ddd20c8278789869389bcd166f",
+            "notes": "Suporta OCMF até v1.4.1, perdas de cabos DC (LEM DCBM) e novas curvas elípticas.",
+            "warnings": [],
+        },
+        "v130": {
+            "version": "v1.3.0",
+            "label": "S.A.F.E. Transparenzsoftware v1.3.0 (Versão Legada / PTB Baumusterprüfung)",
+            "compliant": v130_compliant,
+            "status": "COMPLIANT" if v130_compliant else ("COMPATIBLE_WITH_WARNINGS" if is_valid else "INVALID_SIGNATURE"),
+            "standard": "PTB-A 50.7 (2020–2023) / OCMF v1.0 – v1.3.0",
+            "download_url": "https://safe-ev.org/files/software/transparenzsoftware-1.3.0.jar",
+            "manual_url": "https://safe-ev.org/files/software/manuals/EN%201.3.0%20End_User_Manual%20for%20the%20Transparency%20Software.pdf",
+            "sha256": "160cef44012ba1b036aa04c0a3061be3e586dc74d59cfefc8ffb1e8d448bf3e1",
+            "notes": "Versão estipulada em certificados de exame de tipo anteriores a 2024.",
+            "warnings": v130_warnings,
+        },
+    }
+
+    selected_safe_version = "v1.3.0" if safe_profile == "1.3.0" else "v1.4.1"
+    selected_standard = (
+        "S.A.F.E. e.V. Transparenzsoftware v1.3.0 / PTB-A 50.7 (MessEG)"
+        if safe_profile == "1.3.0"
+        else "S.A.F.E. e.V. Transparenzsoftware v1.4.1 (Última Versão) / PTB-A 50.7 (MessEG)"
+    )
+
     return {
         "verified": is_valid,
         "error": error_msg,
@@ -333,8 +395,10 @@ def verify_ocmf_signature(
         "curve": curve_name,
         "meter_serial": parsed.gateway_id,
         "ocmf_version": parsed.version,
-        "safe_version": "v1.4.1",
-        "safe_standard": "S.A.F.E. e.V. Transparenzsoftware v1.4.1 (Newest Version) / PTB-A 50.7 (MessEG)",
+        "safe_version": selected_safe_version,
+        "safe_standard": selected_standard,
+        "safe_profile": safe_profile,
+        "profiles": profiles,
         "status": parsed.status,
         "timestamp": parsed.timestamp,
         "readings": parsed.meter_readings,
