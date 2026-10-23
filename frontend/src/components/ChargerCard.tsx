@@ -9,31 +9,12 @@ import {
 import { safeFormatDistance } from '../utils/date'
 import { useChargerStore } from '../store/chargerStore'
 import { useChargerUiStore } from '../store/chargerUiStore'
-import { ConnectorBadge } from './ConnectorBadge'
-import { BatteryIndicator } from './BatteryIndicator'
+import { EvseBay } from './dashboard/EvseBay'
 import { api } from '../api'
 import type { Charger } from '../types'
 import { useI18n } from '../i18n'
 import { ChargerTagModal } from './charger-card/ChargerTagModal'
 import { ChargerSecurityModal } from './charger-card/ChargerSecurityModal'
-
-function LiveKw({ watts }: { watts: number }) {
-  if (watts >= 1000) {
-    const kw = (watts / 1000).toFixed(1)
-    return (
-      <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-bold text-gradient-blue">{kw}</span>
-        <span className="text-xs text-gray-400 font-medium">kW</span>
-      </div>
-    )
-  }
-  return (
-    <div className="flex items-baseline gap-1">
-      <span className="text-2xl font-bold text-gradient-blue">{Math.round(watts)}</span>
-      <span className="text-xs text-gray-400 font-medium">W</span>
-    </div>
-  )
-}
 
 const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV', 'Finishing']
 
@@ -444,18 +425,34 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     }
   }
 
-  const handleUnlock = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const handleUnlock = async (eOrConnId?: React.MouseEvent | number) => {
+    let connId = selectedConnectorId
+    if (typeof eOrConnId === 'number') {
+      connId = eOrConnId
+    } else if (eOrConnId && 'preventDefault' in eOrConnId) {
+      eOrConnId.preventDefault()
+      eOrConnId.stopPropagation()
+    }
     setLoadingAction('unlock')
     setFeedback(null)
     try {
-      await api.unlockConnector(charger.charge_point_id, selectedConnectorId)
-      setFeedback({ type: 'success', message: t('chargerCard.unlockSent', { connector: selectedConnectorId }) })
+      await api.unlockConnector(charger.charge_point_id, connId)
+      setFeedback({ type: 'success', message: t('chargerCard.unlockSent', { connector: connId }) })
     } catch (err: unknown) {
-      setFeedback({ type: 'error', message: t('chargerCard.unlockFailed', { connector: selectedConnectorId }) })
+      setFeedback({ type: 'error', message: t('chargerCard.unlockFailed', { connector: connId }) })
     } finally {
       setLoadingAction(null)
+      setTimeout(() => setFeedback(null), 3500)
+    }
+  }
+
+  const handleNotifyDriver = async (connectorId: number) => {
+    try {
+      const resp = await api.notifyMoveCar({ charge_point_id: charger.charge_point_id, connector_id: connectorId })
+      setFeedback({ type: 'success', message: `Email enviado para ${resp.username}!` })
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao enviar aviso.' })
+    } finally {
       setTimeout(() => setFeedback(null), 3500)
     }
   }
@@ -635,167 +632,45 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         </div>
       </div>
 
-      {/* Live charging telemetry card with Driver info */}
-      {isSessionActive && (
-        <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-br from-blue-50/90 via-indigo-50/40 to-white dark:from-blue-950/30 dark:via-slate-900/50 dark:to-indigo-950/20 border border-blue-200 dark:border-blue-500/25 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600 dark:bg-blue-400" />
-              </span>
-              <span className="text-xs font-bold text-blue-900 dark:text-blue-200">
-                {activeChargingConnectors.length > 1
-                  ? `${activeChargingConnectors.length} Cargas Ativas em Simultâneo`
-                  : t('chargerCard.chargingNow')}
-              </span>
-            </div>
-            {livePowerKw !== null && <LiveKw watts={livePower!} />}
-          </div>
-
-          {/* Active User / Driver banner */}
-          {activeTransactionForSelectedConnector && (
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-sm text-xs">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
-                  <Tag className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="font-bold text-slate-900 dark:text-slate-100 text-xs block">
-                    {activeTransactionForSelectedConnector.user_username ? `${t('chargerCard.driver')}: ${activeTransactionForSelectedConnector.user_username}` : `${t('chargerCard.tag')} ${activeTransactionForSelectedConnector.id_tag}`}
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                    TX #{activeTransactionForSelectedConnector.transaction_id} {activeTransactionForSelectedConnector.user_username ? `· ${activeTransactionForSelectedConnector.id_tag}` : ''}
-                  </span>
-                </div>
-              </div>
-
-              {activeTransactionForSelectedConnector.energy_kwh !== null && activeTransactionForSelectedConnector.energy_kwh !== undefined && (
-                <div className="text-right font-mono">
-                  <span className="text-emerald-700 dark:text-emerald-400 font-black text-xs">
-                    {activeTransactionForSelectedConnector.energy_kwh} kWh
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTransactionForSelectedConnector && (
-            <button
-              type="button"
-              onClick={async (e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                try {
-                  const resp = await api.notifyMoveCar({ charge_point_id: charger.charge_point_id, connector_id: selectedConnectorId })
-                  setFeedback({ type: 'success', message: `Email enviado para ${resp.username}!` })
-                } catch (err: any) {
-                  setFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao enviar aviso.' })
-                }
-              }}
-              className="w-full py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 border border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-            >
-              <Mail className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-              <span>{t('chargerCard.askDriverToMove')}</span>
-            </button>
-          )}
-
-          {/* DUAL / MULTI-BATTERY RENDERING OR SINGLE BATTERY */}
-          {activeChargingConnectors.length > 1 ? (
-            <div className="space-y-2 pt-2 border-t border-blue-200/60 dark:border-blue-500/15">
-              <div className="flex items-center justify-between text-[11px] text-blue-900 dark:text-blue-300 font-bold px-0.5">
-                <span>Baterias em Carga (Clique para selecionar o conector):</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {activeChargingConnectors.map((c) => {
-                  const telemetry = getConnectorTelemetry(c.connector_id)
-                  const isThisSelected = selectedConnectorId === c.connector_id
-                  return (
-                    <div
-                      key={c.connector_id}
-                      onClick={() => setSelectedConnectorId(c.connector_id)}
-                      className={`cursor-pointer transition-all rounded-2xl p-1.5 ${
-                        isThisSelected
-                          ? 'ring-2 ring-blue-500 bg-blue-50/90 dark:bg-blue-500/20 shadow-md'
-                          : 'opacity-85 hover:opacity-100 bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between px-2 mb-1">
-                        <span className={`text-[11px] font-bold font-mono ${isThisSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>
-                          ⚡ Tomada #{c.connector_id}
-                        </span>
-                        {isThisSelected && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold uppercase tracking-wider shadow-sm">
-                            Selecionada
-                          </span>
-                        )}
-                      </div>
-                      <BatteryIndicator
-                        soc={telemetry.soc}
-                        isCharging={true}
-                        powerKw={telemetry.powerKw}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            (() => {
-              const activeConn = activeChargingConnectors[0] || rawConnectors.find((c) => c.connector_id === selectedConnectorId) || rawConnectors[0]
-              const tData = activeConn ? getConnectorTelemetry(activeConn.connector_id) : selectedConnTelemetry
-              const finalSoc = liveSoC !== null ? liveSoC : tData.soc
-              const finalPowerKw = livePowerKw !== null ? livePowerKw : tData.powerKw
-              return (
-                <div className="pt-2 border-t border-blue-200/60 dark:border-blue-500/15">
-                  <div className="flex items-center justify-between text-[11px] text-blue-900 dark:text-blue-300 font-bold px-0.5 mb-1.5">
-                    <span>⚡ Tomada #{activeConn ? activeConn.connector_id : selectedConnectorId} (Em Carga):</span>
-                  </div>
-                  <BatteryIndicator soc={finalSoc} isCharging={true} powerKw={finalPowerKw} />
-                </div>
-              )
-            })()
-          )}
+      {/* EVSE Bays (Bay Layout) */}
+      <div className="mb-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider">
+            Baias de Carregamento ({rawConnectors.length})
+          </span>
+          <span className="text-[11px] text-blue-600 dark:text-blue-400 font-mono font-semibold">
+            {t('chargerCard.activePlug', { id: selectedConnectorId })}
+          </span>
         </div>
-      )}
 
-      {/* Plugs / Connectors selector */}
-      <div className="mb-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">{t('chargerCard.selectPlug')}</span>
-          <span className="text-[11px] text-blue-400 font-mono font-semibold">{t('chargerCard.activePlug', { id: selectedConnectorId })}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={`grid gap-2.5 ${rawConnectors.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
           {rawConnectors.map((c) => {
             const isSelected = selectedConnectorId === c.connector_id
-            const connectorStatus = (isSelected && optimisticStatus) ? optimisticStatus : c.status
-            const successRate = successRates[String(c.connector_id)]
+            const connectorStatus = !isOnline
+              ? 'Offline'
+              : (isSelected && optimisticStatus)
+              ? optimisticStatus
+              : c.status
+            const telemetry = getConnectorTelemetry(c.connector_id)
+            const finalSoc = (isSelected && liveSoC !== null) ? liveSoC : telemetry.soc
+            const finalPowerKw = (isSelected && livePowerKw !== null) ? livePowerKw : telemetry.powerKw
+            const activeTx = (allActiveTransactions as any)?.[c.connector_id] || (isSelected ? activeTransactionForSelectedConnector : null)
+
             return (
-              <button
+              <EvseBay
                 key={c.connector_id}
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  setSelectedConnectorId(c.connector_id)
-                }}
-                className={`transition-all rounded-xl cursor-pointer relative group ${
-                  isSelected
-                    ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/20 scale-105'
-                    : 'opacity-70 hover:opacity-100 hover:scale-102'
-                }`}
-              >
-                <ConnectorBadge
-                  connectorId={c.connector_id}
-                  status={connectorStatus}
-                />
-                {/* Success Rate Tooltip */}
-                {successRate && (
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-gray-900/95 text-gray-200 px-2 py-1 rounded whitespace-nowrap border border-gray-700/50 pointer-events-none">
-                    {t('chargerCard.successRateTooltip', { value: successRate.success_rate.toFixed(1) })}
-                  </div>
-                )}
-              </button>
+                connectorId={c.connector_id}
+                status={connectorStatus}
+                powerKw={finalPowerKw}
+                soc={finalSoc}
+                energyKwh={activeTx?.energy_kwh}
+                activeTx={activeTx}
+                isSelected={isSelected}
+                isDC={isDC}
+                onSelect={() => setSelectedConnectorId(c.connector_id)}
+                onUnlock={() => handleUnlock(c.connector_id)}
+                onNotifyDriver={activeTx ? () => handleNotifyDriver(c.connector_id) : undefined}
+              />
             )
           })}
         </div>

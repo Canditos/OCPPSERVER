@@ -293,7 +293,7 @@ export function ChargerInfoSidebar({
         )}
       </div>
 
-      {/* Eichrecht / OCMF Quick Card (AMPECO Style) */}
+      {/* Eichrecht / OCMF Quick Card */}
       <div
         onClick={onOpenMetersTab}
         className="card p-3.5 border border-purple-500/20 bg-gradient-to-br from-purple-500/5 via-transparent to-transparent hover:border-purple-500/40 transition-all cursor-pointer group shadow-sm"

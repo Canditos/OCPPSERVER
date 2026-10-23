@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Zap, Wifi, RotateCcw, AlertTriangle, Server, Activity,
   ChevronDown, ChevronRight, Search, X, Filter, Square, Play, Sparkles,
-  LayoutGrid, List
+  LayoutGrid, List, Eye, EyeOff
 } from 'lucide-react'
 import { api } from '../api'
 import { ChargerCard } from '../components/ChargerCard'
@@ -207,6 +207,7 @@ export function Dashboard() {
   const totalChargingKw = totalChargingWatts / 1000
 
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all')
+  const [showOffline, setShowOffline] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -217,19 +218,29 @@ export function Dashboard() {
   }
 
   const handleKpiClick = (filter: StatusFilterType) => {
+    if (filter === 'offline') {
+      setShowOffline(true)
+    }
     setStatusFilter((prev) => (prev === filter ? 'all' : filter))
     scrollToSection('chargers-section')
   }
 
   const filteredChargers = useMemo(() => {
     return chargers.filter((c) => {
-      if (statusFilter === 'online' && !isChargerOnline(c)) return false
+      const isOnline = isChargerOnline(c)
+
+      // Rule: Do not show offline chargers by default unless explicitly viewing 'offline' or toggle is on
+      if (!isOnline && statusFilter !== 'offline' && !showOffline) {
+        return false
+      }
+
+      if (statusFilter === 'online' && !isOnline) return false
       if (statusFilter === 'charging' && !isChargerCharging(c)) return false
       if (statusFilter === 'available') {
-        if (!isChargerOnline(c) || isChargerCharging(c) || isChargerFaulted(c)) return false
+        if (!isOnline || isChargerCharging(c) || isChargerFaulted(c)) return false
       }
       if (statusFilter === 'faulted' && !isChargerFaulted(c)) return false
-      if (statusFilter === 'offline' && isChargerOnline(c)) return false
+      if (statusFilter === 'offline' && isOnline) return false
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
@@ -241,7 +252,7 @@ export function Dashboard() {
       }
       return true
     })
-  }, [chargers, statusFilter, searchQuery, liveState, groups])
+  }, [chargers, statusFilter, showOffline, searchQuery, liveState, groups])
 
   // Group chargers: named groups sorted alphabetically, then ungrouped at the end
   const grouped = useMemo(() => {
@@ -382,7 +393,7 @@ export function Dashboard() {
         />
       </div>
 
-      {/* AMPECO FLEET STATUS RIBBON */}
+      {/* FLEET STATUS RIBBON */}
       <FleetStatusRibbon
         total={total}
         available={available}
@@ -462,6 +473,35 @@ export function Dashboard() {
                 <AlertTriangle className="w-3 h-3 text-red-400" /> {t('dashboard.faults')} ({faulted})
               </button>
             )}
+
+            {total - online > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (statusFilter === 'offline') {
+                    setStatusFilter('all')
+                    setShowOffline(false)
+                  } else {
+                    setShowOffline((v) => !v)
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  showOffline || statusFilter === 'offline'
+                    ? 'bg-slate-700 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Postos offline são ocultados por padrão"
+              >
+                {showOffline || statusFilter === 'offline' ? (
+                  <EyeOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Eye className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {showOffline || statusFilter === 'offline' ? 'Ocultar Offline' : `Ver Offline (${total - online})`}
+                </span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2.5 w-full md:w-auto">
@@ -499,7 +539,7 @@ export function Dashboard() {
                     ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'
                 }`}
-                title="Tabela Operacional AMPECO"
+                title="Tabela Operacional da Frota"
               >
                 <List className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Tabela</span>

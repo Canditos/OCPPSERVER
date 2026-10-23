@@ -148,7 +148,7 @@ export function ChargerHeader({
                 </span>
               )}
 
-              {/* Quick Operation Buttons (AMPECO Style) */}
+              {/* Quick Operation Buttons */}
               <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
                 <button
                   type="button"

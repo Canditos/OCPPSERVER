@@ -154,7 +154,7 @@ export function ChargerDetail() {
 
   return (
     <div className="space-y-6 animate-fade-up">
-      {/* 1. Header with metadata and AMPECO-style Quick Operations */}
+      {/* 1. Header with metadata and Quick Operations */}
       <ChargerHeader
         charger={charger}
         isOnline={isOnline}

@@ -80,7 +80,7 @@ export function FleetStatusRibbon({
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse-slow" />
           <span className="font-bold text-slate-800 dark:text-gray-200 uppercase tracking-wider text-[11px]">
-            Estado Operacional da Frota (AMPECO EVSE Status)
+            Estado Operacional da Frota (Tempo Real)
           </span>
           <span className="text-slate-400 dark:text-gray-500 font-mono text-[10px]">
             · {total} {total === 1 ? 'Posto' : 'Postos'} Registados
