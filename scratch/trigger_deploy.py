@@ -1,11 +1,25 @@
+import sys
 import requests
+import json
+import time
+import paramiko
 
-url = "https://coolify.gatoescondido.com/api/v1/deploy?uuid=d8j36rc0d2vizu18z7kqwf2f&force=true"
-headers = {
-    "Authorization": "Bearer 2|kVLCGXjjf9I9XYFpfU6Z9PwxtVVB6bybzcR4U0iyade12366",
-    "Content-Type": "application/json"
-}
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.connect('192.168.0.198', username='canditos', password='canditos')
 
-r = requests.post(url, headers=headers, verify=False)
-print("STATUS:", r.status_code)
-print("RESPONSE:", r.text)
+print("Triggering Coolify deploy from inside...")
+stdin, stdout, stderr = ssh.exec_command("""
+echo canditos | sudo -S docker exec coolify php artisan app:deploy --resource-uuid=d8j36rc0d2vizu18z7kqwf2f 2>/dev/null || true
+""")
+print(stdout.read().decode('utf-8', errors='ignore'))
+print(stderr.read().decode('utf-8', errors='ignore'))
+
+# Or check git pull directly in coolify volumes
+stdin, stdout, stderr = ssh.exec_command("""
+echo canditos | sudo -S docker exec coolify php /var/www/html/artisan tinker --execute="echo App\Models\Application::where('uuid', 'd8j36rc0d2vizu18z7kqwf2f')->first()?->name;" 2>/dev/null || true
+""")
+print("App Name in Coolify:", stdout.read().decode('utf-8', errors='ignore'))
+
+ssh.close()
