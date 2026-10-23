@@ -58,13 +58,13 @@ async def _run_sim_bg(station_id: str, ocpp_version: str, duration: int, port: i
                 task.cancel()
         else:
             import websockets
-            from simulator_v16 import VirtualVersiChargeV16
+            from simulator_v16 import VirtualStationV16
             from ocpp.v16.enums import ChargePointErrorCode, ChargePointStatus
             from ocpp.v16 import call
             url = f"ws://127.0.0.1:{port}/ocpp/{station_id}"
             logger.info(f"Launching virtual OCPP 1.6-J station on {url}")
             async with websockets.connect(url, subprotocols=["ocpp1.6"]) as ws:
-                station = VirtualVersiChargeV16(station_id, ws)
+                station = VirtualStationV16(station_id, ws)
                 task = asyncio.create_task(station.start())
                 await station.send_boot_notification()
                 await asyncio.sleep(1)
@@ -74,7 +74,7 @@ async def _run_sim_bg(station_id: str, ocpp_version: str, duration: int, port: i
                     status=ChargePointStatus.available,
                 ))
                 await asyncio.sleep(1)
-                await station.simulate_charge_session(id_tag="VERSICHARGE_TAG", duration_seconds=duration)
+                await station.simulate_charge_session(id_tag="SIM_TAG_01", duration_seconds=duration)
                 await asyncio.sleep(2)
                 task.cancel()
     except Exception as e:

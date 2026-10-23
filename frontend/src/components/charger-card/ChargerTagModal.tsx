@@ -10,7 +10,7 @@ interface ChargerTagModalProps {
   initialTagId?: string
 }
 
-const PRESET_TAGS = ['VERSICHARGE_TAG', 'ADMIN_TAG', 'MASTER_RFID', 'TAG_001']
+const PRESET_TAGS = ['ADMIN_TAG', 'MASTER_RFID', 'TAG_001', 'TAG_002']
 
 export function ChargerTagModal({
   isOpen,

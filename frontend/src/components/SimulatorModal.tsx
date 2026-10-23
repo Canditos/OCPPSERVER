@@ -30,7 +30,7 @@ export function SimulatorModal({ isOpen, onClose }: SimulatorModalProps) {
   const launchMutation = useMutation({
     mutationFn: () =>
       api.launchSimulator({
-        station_id: ocppVersion === '2.0.1' ? 'chargerPT_v201' : 'versicharge_01',
+        station_id: ocppVersion === '2.0.1' ? 'chargerPT_v201' : 'station_01',
         ocpp_version: ocppVersion,
         duration_seconds: duration,
       }),
@@ -153,7 +153,7 @@ export function SimulatorModal({ isOpen, onClose }: SimulatorModalProps) {
               <div
                 onClick={() => {
                   setOcppVersion('1.6')
-                  setStationId('versicharge_01')
+                  setStationId('station_01')
                 }}
                 className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                   ocppVersion === '1.6'
@@ -171,7 +171,7 @@ export function SimulatorModal({ isOpen, onClose }: SimulatorModalProps) {
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-gray-400">
-                  Siemens VersiCharge Gen 3 com cartão RFID e leituras periódicas.
+                  Estação Virtual AC 22kW com cartão RFID e leituras periódicas de energia.
                 </p>
               </div>
             </div>

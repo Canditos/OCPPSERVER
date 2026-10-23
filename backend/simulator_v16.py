@@ -1,5 +1,5 @@
 """
-OCPP 1.6-J Siemens VersiCharge Virtual Station Simulator.
+OCPP 1.6-J Virtual Station Simulator.
 Simulates a smart AC Charger communicating over OCPP 1.6 JSON with RFID Authorization and MeterValues.
 """
 
@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [SIM-1.6] %(levelnam
 logger = logging.getLogger("SimulatorV16")
 
 
-class VirtualVersiChargeV16(BaseClientV16):
+class VirtualStationV16(BaseClientV16):
     _active_profiles: dict = {}
 
     @on(Action.SetChargingProfile)
@@ -99,16 +99,16 @@ class VirtualVersiChargeV16(BaseClientV16):
 
     async def send_boot_notification(self):
         req = call.BootNotificationPayload(
-            charge_point_vendor="Siemens",
-            charge_point_model="VersiCharge Gen 3 (22kW)",
-            charge_point_serial_number="SN-VC3-2026-PT",
+            charge_point_vendor="Standard EVSE",
+            charge_point_model="Smart AC Station (22kW)",
+            charge_point_serial_number="SN-AC22-2026-PT",
             firmware_version="v2.1.8-RELEASE",
         )
         resp = await self.call(req)
         logger.info(f"BootNotification response: status={resp.status}, interval={resp.interval}")
         return resp
 
-    async def simulate_charge_session(self, id_tag: str = "VERSICHARGE_TAG", duration_seconds: int = 15):
+    async def simulate_charge_session(self, id_tag: str = "SIM_TAG_01", duration_seconds: int = 15):
         now_str = datetime.now(timezone.utc).isoformat()
 
         logger.info(f"Driver swiped RFID tag: {id_tag}")
@@ -189,10 +189,14 @@ class VirtualVersiChargeV16(BaseClientV16):
         logger.info("Connector #1 is now Available.")
 
 
-async def run_simulator_16(server_url: str = "ws://127.0.0.1:8000/ocpp/versicharge_01"):
+# Backward compatibility alias
+VirtualVersiChargeV16 = VirtualStationV16
+
+
+async def run_simulator_16(server_url: str = "ws://127.0.0.1:8000/ocpp/station_01"):
     logger.info(f"Connecting to Central System at {server_url} (subprotocol: ocpp1.6)...")
     async with websockets.connect(server_url, subprotocols=["ocpp1.6"]) as ws:
-        station = VirtualVersiChargeV16("versicharge_01", ws)
+        station = VirtualStationV16("station_01", ws)
         task = asyncio.create_task(station.start())
 
         # Boot
@@ -208,7 +212,7 @@ async def run_simulator_16(server_url: str = "ws://127.0.0.1:8000/ocpp/versichar
         await asyncio.sleep(1)
 
         # Charge session
-        await station.simulate_charge_session(id_tag="VERSICHARGE_TAG", duration_seconds=12)
+        await station.simulate_charge_session(id_tag="SIM_TAG_01", duration_seconds=12)
 
         # Heartbeats
         for _ in range(3):
@@ -219,5 +223,5 @@ async def run_simulator_16(server_url: str = "ws://127.0.0.1:8000/ocpp/versichar
 
 
 if __name__ == "__main__":
-    url = sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:8000/ocpp/versicharge_01"
+    url = sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:8000/ocpp/station_01"
     asyncio.run(run_simulator_16(url))

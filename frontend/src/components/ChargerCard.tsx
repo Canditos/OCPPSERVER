@@ -253,7 +253,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   const isPreparing = isOnline && (computedStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing'))
   const isFaulted = isOnline && (computedStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted'))
 
-  const effectiveTag = selectedTag || (authorizedTags.length > 0 ? authorizedTags[0].id_tag : 'VERSICHARGE_TAG')
+  const effectiveTag = selectedTag || (authorizedTags.length > 0 ? authorizedTags[0].id_tag : 'ADMIN_TAG')
   const hasAuthorizedTag = authorizedTags.length > 0
 
   // DC detection: SICHARGE D or any model/vendor containing "DC" or ending in "D"
@@ -329,7 +329,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     e.stopPropagation()
 
     if (!hasAuthorizedTag) {
-      setNewTagId('VERSICHARGE_TAG')
+      setNewTagId('ADMIN_TAG')
       setShowTagModal(true)
       return
     }
@@ -729,7 +729,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           ) : (
             <button
               onClick={() => {
-                setNewTagId('VERSICHARGE_TAG')
+                setNewTagId('ADMIN_TAG')
                 setShowTagModal(true)
               }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-500 dark:text-amber-300 border border-amber-500/30 font-medium hover:bg-amber-500/25 transition-colors min-h-[36px]"

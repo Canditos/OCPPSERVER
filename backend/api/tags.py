@@ -94,4 +94,4 @@ async def get_default_tag() -> str | None:
             select(AuthToken).where(AuthToken.status == "Accepted").order_by(AuthToken.id).limit(1)
         )
         t2 = r2.scalar_one_or_none()
-        return t2.id_tag if t2 else "VERSICHARGE_TAG"
+        return t2.id_tag if t2 else "ADMIN_TAG"

@@ -76,12 +76,17 @@ async def _add_missing_columns(conn) -> None:
 
 async def _seed_default_tags(session: AsyncSession) -> None:
     from models.authorized_tag import AuthorizedTag
-    from sqlalchemy import select
+    from sqlalchemy import select, delete
     try:
+        # Purge any legacy VERSICHARGE tag from the database
+        await session.execute(
+            delete(AuthorizedTag).where(AuthorizedTag.id_tag.ilike("%VERSICHARGE%"))
+        )
+        await session.commit()
+
         result = await session.execute(select(AuthorizedTag))
         if not result.scalars().first():
             defaults = [
-                AuthorizedTag(id_tag="VERSICHARGE_TAG", description="Tag Padrão Siemens VersiCharge", is_active=True),
                 AuthorizedTag(id_tag="ADMIN_TAG", description="Tag Administrador", is_active=True),
                 AuthorizedTag(id_tag="MASTER_RFID", description="Tag Mestre RFID", is_active=True),
             ]

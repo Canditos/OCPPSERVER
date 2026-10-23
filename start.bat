@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo  OCPP 1.6 Dashboard - Siemens VersiCharge
+echo  OCPP 1.6 & 2.0.1 Central System Dashboard
 echo ============================================
 
 echo.

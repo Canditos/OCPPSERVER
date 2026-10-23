@@ -795,7 +795,7 @@ export function UsersManagement() {
                   type="text"
                   value={approveRfid}
                   onChange={(e) => setApproveRfid(e.target.value)}
-                  placeholder="ex: 9F13FB29 ou VERSICHARGE_TAG"
+                  placeholder="ex: 9F13FB29 ou ADMIN_TAG"
                   className="input w-full text-xs font-mono font-bold"
                   required
                 />
@@ -947,7 +947,7 @@ export function UsersManagement() {
                     type="text"
                     value={rfidTag}
                     onChange={(e) => setRfidTag(e.target.value)}
-                    placeholder="ex: VERSICHARGE_TAG ou 9F13FB29"
+                    placeholder="ex: ADMIN_TAG ou 9F13FB29"
                     className="input w-full text-xs font-mono"
                   />
                   {tags.length > 0 && (

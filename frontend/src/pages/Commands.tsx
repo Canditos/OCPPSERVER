@@ -303,7 +303,7 @@ export function Commands() {
       {/* charger selector */}
       <ChargerSelector chargers={chargers} value={cpId} onChange={setCpId} />
 
-      {/* Siemens VersiCharge Presets Toolbar */}
+      {/* Quick Presets Toolbar */}
       {cpId && !offline && (
         <div className="card border border-blue-500/20 bg-gradient-to-r from-blue-950/40 via-slate-900/60 to-gray-900/40 p-4 mb-6 animate-fade-up">
           <div className="flex items-center justify-between mb-3">
@@ -387,7 +387,7 @@ export function Commands() {
           <CmdCard anchorId="start-card" icon={<Zap className="w-5 h-5" fill="currentColor" />} title="Remote Start" description={t('commands.remoteStartDesc')} color="blue" disabled={noTarget} result={start.result}>
             <div>
               <label className="label">ID Tag</label>
-              <input className="input" value={idTag} onChange={(e) => setIdTag(e.target.value)} placeholder="ex: VERSICHARGE_TAG" />
+              <input className="input" value={idTag} onChange={(e) => setIdTag(e.target.value)} placeholder="ex: ADMIN_TAG" />
             </div>
             <div>
               <label className="label">{t('commands.connectorLabel')}</label>
