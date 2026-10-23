@@ -52,6 +52,7 @@ class TestOfflineChargerFilter(unittest.TestCase):
             {"id": 3, "charge_point_id": "charger-03", "is_online": False, "connectors": [{"status": "Unavailable"}]},
             {"id": 4, "charge_point_id": "charger-04", "is_online": False, "connectors": [{"status": "Offline"}]},
             {"id": 5, "charge_point_id": "charger-05", "is_online": True, "connectors": [{"status": "Faulted"}]},
+            {"id": 6, "charge_point_id": "charger-aio-offline-fault", "is_online": False, "connectors": [{"status": "Faulted"}]},
         ]
 
     def filter_chargers(self, chargers, status_filter='all', show_offline=False, search_query=''):
@@ -60,10 +61,19 @@ class TestOfflineChargerFilter(unittest.TestCase):
             return c.get("is_online", False)
 
         def is_charging(c):
+            if not is_online(c):
+                return False
             return any(conn.get("status") == "Charging" for conn in c.get("connectors", []))
 
         def is_faulted(c):
+            if not is_online(c):
+                return False
             return any(conn.get("status") == "Faulted" for conn in c.get("connectors", []))
+
+        def is_available(c):
+            if not is_online(c):
+                return False
+            return not is_charging(c) and not is_faulted(c)
 
         result = []
         for c in chargers:
@@ -77,9 +87,8 @@ class TestOfflineChargerFilter(unittest.TestCase):
                 continue
             if status_filter == 'charging' and not is_charging(c):
                 continue
-            if status_filter == 'available':
-                if not online or is_charging(c) or is_faulted(c):
-                    continue
+            if status_filter == 'available' and not is_available(c):
+                continue
             if status_filter == 'faulted' and not is_faulted(c):
                 continue
             if status_filter == 'offline' and online:
@@ -99,18 +108,19 @@ class TestOfflineChargerFilter(unittest.TestCase):
         ids = [c["charge_point_id"] for c in filtered]
         self.assertNotIn("charger-03", ids, "charger-03 is offline and should NOT appear by default")
         self.assertNotIn("charger-04", ids, "charger-04 is offline and should NOT appear by default")
+        self.assertNotIn("charger-aio-offline-fault", ids, "charger-aio-offline-fault is offline and should NOT appear by default")
         self.assertEqual(len(filtered), 3, "Only the 3 online chargers should appear")
 
     def test_toggle_show_offline(self):
         """Clicking 'Ver Offline' (show_offline=True) must display both online and offline chargers"""
         filtered = self.filter_chargers(self.mock_chargers, status_filter='all', show_offline=True)
-        self.assertEqual(len(filtered), 5, "All 5 chargers should appear when show_offline=True")
+        self.assertEqual(len(filtered), 6, "All 6 chargers should appear when show_offline=True")
 
     def test_filter_offline_only(self):
         """Selecting 'offline' filter must display ONLY offline chargers"""
         filtered = self.filter_chargers(self.mock_chargers, status_filter='offline', show_offline=False)
         ids = [c["charge_point_id"] for c in filtered]
-        self.assertEqual(ids, ["charger-03", "charger-04"])
+        self.assertEqual(ids, ["charger-03", "charger-04", "charger-aio-offline-fault"])
 
     def test_filter_available_only(self):
         """Selecting 'available' filter must display only available online charger"""
@@ -123,6 +133,44 @@ class TestOfflineChargerFilter(unittest.TestCase):
         filtered = self.filter_chargers(self.mock_chargers, status_filter='charging', show_offline=False)
         ids = [c["charge_point_id"] for c in filtered]
         self.assertEqual(ids, ["charger-02"])
+
+    def test_offline_fault_does_not_corrupt_fleet_metrics(self):
+        """An offline charger with a stale fault status in DB must not corrupt online availability or fault count"""
+        def is_online(c):
+            return c.get("is_online", False)
+
+        def is_charging(c):
+            if not is_online(c):
+                return False
+            return any(conn.get("status") == "Charging" for conn in c.get("connectors", []))
+
+        def is_faulted(c):
+            if not is_online(c):
+                return False
+            return any(conn.get("status") == "Faulted" for conn in c.get("connectors", []))
+
+        def is_available(c):
+            if not is_online(c):
+                return False
+            return not is_charging(c) and not is_faulted(c)
+
+        online_count = len([c for c in self.mock_chargers if is_online(c)])
+        charging_count = len([c for c in self.mock_chargers if is_charging(c)])
+        faulted_count = len([c for c in self.mock_chargers if is_faulted(c)])
+        available_count = len([c for c in self.mock_chargers if is_available(c)])
+        offline_count = len([c for c in self.mock_chargers if not is_online(c)])
+
+        # 3 online (charger-01, charger-02, charger-05), 3 offline (charger-03, charger-04, charger-aio-offline-fault)
+        self.assertEqual(online_count, 3)
+        self.assertEqual(charging_count, 1) # charger-02
+        self.assertEqual(faulted_count, 1)  # only charger-05, NOT charger-aio-offline-fault!
+        self.assertEqual(available_count, 1) # charger-01 (must NOT be zero!)
+        self.assertEqual(offline_count, 3)
+        self.assertEqual(available_count + charging_count + faulted_count + offline_count, len(self.mock_chargers))
+
+        # Fault filter must only return the active online faulted charger
+        faulted_filtered = self.filter_chargers(self.mock_chargers, status_filter='faulted', show_offline=False)
+        self.assertEqual([c["charge_point_id"] for c in faulted_filtered], ["charger-05"])
 
 
 class TestThemeCssTokensAndContrast(unittest.TestCase):

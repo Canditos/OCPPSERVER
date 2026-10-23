@@ -180,6 +180,7 @@ export function Dashboard() {
   }
 
   const isChargerCharging = (c: Charger) => {
+    if (!isChargerOnline(c)) return false
     const live = liveState[c.charge_point_id]
     if (live?.connectors && Object.keys(live.connectors).length > 0) {
       return Object.values(live.connectors).some((cc) => cc.status === 'Charging')
@@ -188,6 +189,7 @@ export function Dashboard() {
   }
 
   const isChargerFaulted = (c: Charger) => {
+    if (!isChargerOnline(c)) return false
     const live = liveState[c.charge_point_id]
     if (live?.connectors && Object.keys(live.connectors).length > 0) {
       return Object.values(live.connectors).some((cc) => cc.status === 'Faulted')
@@ -195,10 +197,15 @@ export function Dashboard() {
     return (c.connectors ?? []).some((cc) => cc.status === 'Faulted') || c.status === 'Faulted'
   }
 
+  const isChargerAvailable = (c: Charger) => {
+    if (!isChargerOnline(c)) return false
+    return !isChargerCharging(c) && !isChargerFaulted(c)
+  }
+
   const online   = chargers.filter(isChargerOnline).length
   const charging = chargers.filter(isChargerCharging).length
   const faulted  = chargers.filter(isChargerFaulted).length
-  const available = Math.max(0, online - charging - faulted)
+  const available = chargers.filter(isChargerAvailable).length
 
   const totalChargingWatts = Object.values(liveState)
     .flatMap((s) => Object.entries(s.meters ?? {}))
@@ -236,9 +243,7 @@ export function Dashboard() {
 
       if (statusFilter === 'online' && !isOnline) return false
       if (statusFilter === 'charging' && !isChargerCharging(c)) return false
-      if (statusFilter === 'available') {
-        if (!isOnline || isChargerCharging(c) || isChargerFaulted(c)) return false
-      }
+      if (statusFilter === 'available' && !isChargerAvailable(c)) return false
       if (statusFilter === 'faulted' && !isChargerFaulted(c)) return false
       if (statusFilter === 'offline' && isOnline) return false
 
