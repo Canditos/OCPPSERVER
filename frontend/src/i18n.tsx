@@ -36,6 +36,7 @@ const translations = {
       myCharging: 'Minhas Cargas',
       logs: 'Logs OCPP',
       firmwareTesting: 'Teste Firmware',
+      ocmf: 'Metrologia OCMF',
     },
     shell: {
       overview: 'Resumo Geral',
@@ -630,6 +631,7 @@ const translations = {
       myCharging: 'My Charging',
       logs: 'OCPP Logs',
       firmwareTesting: 'Firmware Testing',
+      ocmf: 'Eichrecht (OCMF)',
     },
     shell: {
       overview: 'Overview',

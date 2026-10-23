@@ -154,11 +154,11 @@ export function AvailabilityMonitor({ chargePointId, compact = false }: Availabi
           <span className="text-[11px] text-gray-500 font-mono">100% Operacional</span>
         </div>
 
-        <div className="grid grid-cols-24 gap-1 h-8 p-1.5 rounded-xl bg-gray-950/80 border border-white/10">
+        <div className="flex gap-1 h-8 p-1.5 rounded-xl bg-gray-950/80 border border-white/10 w-full">
           {avail.hourly_timeline.map((item, idx) => (
             <div
               key={idx}
-              className={`h-full rounded-sm transition-all cursor-pointer hover:scale-110 ${
+              className={`flex-1 h-full rounded-sm transition-all cursor-pointer hover:scale-110 ${
                 item.is_operational
                   ? item.status === 'Charging'
                     ? 'bg-blue-500 shadow-sm shadow-blue-500/30'
