@@ -71,7 +71,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                Norma <strong>S.A.F.E. e.V. v2.0.2 (PTB-A 50.7)</strong> · Open Charge Metering Format (OCMF V1.0 – V1.4.1) · Medidores LEM DCBM & Bauer
+                Norma <strong>S.A.F.E. e.V. v1.4.1 (PTB-A 50.7)</strong> · Open Charge Metering Format (OCMF V1.0 – V1.4.1) · Medidores LEM DCBM & Bauer
               </p>
             </div>
           </div>

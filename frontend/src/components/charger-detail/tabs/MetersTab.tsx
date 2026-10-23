@@ -137,7 +137,7 @@ export function MetersTab({
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 Metrologia Legal & Medidores Eichrecht (OCMF)
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-300 font-mono font-bold">
-                  S.A.F.E. v2.0.2 · PTB-A 50.7
+                  S.A.F.E. v1.4.1 · PTB-A 50.7
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
