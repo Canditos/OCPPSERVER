@@ -44,5 +44,22 @@ cleaned_res4 = '\n'.join([l for l in res4.split('\n') if not l.startswith('[sudo
 assert cleaned_res4 == "", f"VersiCharge found in bundle: {cleaned_res4}"
 print("-> PASS: 0 occurrences of 'versicharge' in deployed frontend bundle!")
 
+# Check English translations in deployed assets
+cmd = f"echo canditos | sudo -S docker exec {frontend_container} grep -rn 'Fiscal & Metrological Audit' /usr/share/nginx/html/assets/"
+stdin, stdout, stderr = ssh.exec_command(cmd)
+stdin.write("canditos\n")
+stdin.flush()
+res5 = stdout.read().decode('utf-8', errors='ignore')
+assert "Fiscal & Metrological Audit" in res5, "English OCMF audit strings not found in bundle!"
+print("-> PASS: English OCMF Audit translations present in bundle!")
+
+cmd = f"echo canditos | sudo -S docker exec {frontend_container} grep -rn 'A temporary UI error occurred' /usr/share/nginx/html/assets/"
+stdin, stdout, stderr = ssh.exec_command(cmd)
+stdin.write("canditos\n")
+stdin.flush()
+res6 = stdout.read().decode('utf-8', errors='ignore')
+assert "A temporary UI error occurred" in res6, "English ErrorBoundary strings not found in bundle!"
+print("-> PASS: English ErrorBoundary translations present in bundle!")
+
 ssh.close()
-print("\nALL LIVE ASSET CHECKS PASSED!")
+print("\nALL LIVE ASSET & LOCALIZATION CHECKS PASSED!")
