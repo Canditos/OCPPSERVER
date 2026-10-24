@@ -105,7 +105,7 @@ export function SimulatorModal({ isOpen, onClose }: SimulatorModalProps) {
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
                 </span>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                  {t('simulatorModal.running', { station: status?.station_id, version: status?.ocpp_version })}
+                  {t('simulatorModal.running', { station: status?.station_id || '', version: status?.ocpp_version || '' })}
                 </span>
               </div>
               <button

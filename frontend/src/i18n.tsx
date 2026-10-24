@@ -322,6 +322,11 @@ const translations = {
       chargingNow: 'A Carregar',
       completed: 'Concluído',
     },
+    driver: {
+      tabCharge: 'Carga',
+      tabStations: 'Postos',
+      tabPass: 'Passe',
+    },
     remoteStart: {
       title: 'Iniciar carga',
       subtitle: 'Usa o teu RFID',
@@ -1516,6 +1521,11 @@ const translations = {
       inProgress: 'In progress…',
       chargingNow: 'Charging',
       completed: 'Completed',
+    },
+    driver: {
+      tabCharge: 'Charge',
+      tabStations: 'Stations',
+      tabPass: 'Pass',
     },
     remoteStart: {
       title: 'Start charging',

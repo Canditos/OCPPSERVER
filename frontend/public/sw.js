@@ -1,5 +1,11 @@
-const CACHE_NAME = 'ocpp-central-v1'
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/pwa-icon.svg']
+﻿const CACHE_NAME = 'canditos-driver-v2'
+const SHELL = [
+  '/',
+  '/my-charging',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/pwa-icon.svg',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -23,7 +29,8 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
-  if (url.pathname.startsWith('/api/')) return
+  // Never cache API or WS calls
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws')) return
 
   if (request.mode === 'navigate') {
     event.respondWith(

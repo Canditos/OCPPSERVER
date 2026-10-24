@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">@Canditos Condutor</string>
+    <string name="title_activity_main">@Canditos Condutor</string>
+    <string name="package_name">com.canditos.condutor</string>
+    <string name="custom_url_scheme">com.canditos.condutor</string>
+</resources>

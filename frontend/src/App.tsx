@@ -11,11 +11,11 @@ import Authentication from './pages/Authentication'
 import { SmartCharging } from './pages/SmartCharging'
 import { FirmwareTesting } from './pages/FirmwareTesting'
 import { UsersManagement } from './pages/UsersManagement'
-import { UserPortal } from './pages/UserPortal'
 import { Logs } from './pages/Logs'
 import { Login } from './pages/Login'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useOcppEvents } from './hooks/useOcppEvents'
+import { DriverPage } from './pages/driver/DriverPage'
 
 function AppInner() {
   useOcppEvents()
@@ -24,14 +24,12 @@ function AppInner() {
       {/* Public Login Route */}
       <Route path="/login" element={<Login />} />
 
-      {/* Regular User & Admin Portal */}
+      {/* Driver Portal — own mobile shell, no admin sidebar */}
       <Route
         path="/my-charging"
         element={
           <ProtectedRoute>
-            <AppShell>
-              <UserPortal />
-            </AppShell>
+            <DriverPage />
           </ProtectedRoute>
         }
       />

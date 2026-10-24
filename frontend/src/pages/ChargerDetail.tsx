@@ -295,7 +295,7 @@ export function ChargerDetail() {
           {/* Tab 3: Device Model (OCPP 2.0.1) */}
           {activeTab === 'devicemodel' && charger.ocpp_version === '2.0.1' && (
             <div className="space-y-4 animate-fade-in">
-              <DeviceModelTab chargerId={charger.charge_point_id} />
+              <DeviceModelTab chargerId={charger.charge_point_id} isOnline={isOnline} />
             </div>
           )}
 
