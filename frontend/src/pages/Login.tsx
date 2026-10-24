@@ -444,15 +444,15 @@ export function Login() {
                     <CheckCircle2 className="w-8 h-8" />
                   </div>
                   <h3 className="text-lg font-bold text-white">
-                    Pedido Enviado com Sucesso!
+                    {t('login.orderSuccessTitle')}
                   </h3>
                   <p className="text-xs leading-relaxed" style={{ color: '#cbd5e1' }}>
                     {regSuccess}
                   </p>
                   <div className="p-3.5 rounded-xl text-left text-xs space-y-1.5" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div className="text-slate-400">👤 Nome Completo: <strong className="text-white">{firstName} {lastName}</strong></div>
-                    <div className="text-slate-400">📧 Email de Login: <strong className="text-emerald-400 font-mono">{regEmail}</strong></div>
-                    <div className="text-slate-400">⏳ Estado: <strong className="text-amber-400">Aguardando Validação do Admin</strong></div>
+                    <div className="text-slate-400">👤 {t('login.fullNameLabel')} <strong className="text-white">{firstName} {lastName}</strong></div>
+                    <div className="text-slate-400">📧 {t('login.loginEmailLabel')} <strong className="text-emerald-400 font-mono">{regEmail}</strong></div>
+                    <div className="text-slate-400">⏳ {t('login.status')}: <strong className="text-amber-400">{t('login.statusPendingAdmin')}</strong></div>
                   </div>
                   <button
                     type="button"
@@ -460,17 +460,17 @@ export function Login() {
                     className="w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                     style={{ background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: '#ffffff' }}
                   >
-                    Ir para o Login
+                    {t('login.goToLogin')}
                   </button>
                 </div>
               ) : (
                 <div>
                   <div className="mb-5">
                     <h2 className="text-2xl font-bold tracking-tight" style={{ color: '#ffffff' }}>
-                      Criar Conta de Condutor
+                      {t('login.createAccount')}
                     </h2>
                     <p className="text-sm mt-1" style={{ color: '#94a3b8' }}>
-                      Regista os teus dados para aprovação e atribuição de chave RFID
+                      {t('login.registerSubtitle')}
                     </p>
                   </div>
 
@@ -480,7 +480,7 @@ export function Login() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                          Nome *
+                          {t('login.firstName')} *
                         </label>
                         <div className="relative">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#475569' }}>
@@ -504,7 +504,7 @@ export function Login() {
 
                       <div>
                         <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                          Apelido *
+                          {t('login.lastName')} *
                         </label>
                         <input
                           type="text"
@@ -525,7 +525,7 @@ export function Login() {
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                          Email (Usado para Login & Avisos) *
+                          {t('login.emailLoginNote')}
                         </label>
                       </div>
                       <div className="relative">
@@ -550,7 +550,7 @@ export function Login() {
 
                     <div>
                       <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                        Palavra-passe *
+                        {t('login.password')} *
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#475569' }}>
@@ -560,7 +560,7 @@ export function Login() {
                           type="password"
                           value={regPassword}
                           onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="Mínimo 4 caracteres"
+                          placeholder={t('login.min4Chars')}
                           required
                           style={{
                             width: '100%', paddingLeft: '2.2rem', paddingRight: '0.75rem', paddingTop: '0.6rem', paddingBottom: '0.6rem',
@@ -574,7 +574,7 @@ export function Login() {
 
                     <div>
                       <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                        Cartão / Chave RFID Físico (Opcional)
+                        {t('login.physicalCardOptional')}
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#475569' }}>
@@ -584,7 +584,7 @@ export function Login() {
                           type="text"
                           value={regRfid}
                           onChange={(e) => setRegRfid(e.target.value)}
-                          placeholder="Se já tiveres um cartão da empresa (ex: 9F13FB29)"
+                          placeholder={t('login.physicalCardPlaceholder')}
                           style={{
                             width: '100%', paddingLeft: '2.2rem', paddingRight: '0.75rem', paddingTop: '0.6rem', paddingBottom: '0.6rem',
                             borderRadius: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -594,7 +594,7 @@ export function Login() {
                         />
                       </div>
                       <p className="text-[10px] mt-1" style={{ color: '#64748b' }}>
-                        Caso não tenhas cartão, o Administrador irá atribuir-te uma chave RFID.
+                        {t('login.noCardNote')}
                       </p>
                     </div>
 

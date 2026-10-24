@@ -7,6 +7,7 @@ import {
   Download, ArrowRight, Sparkles, Database
 } from 'lucide-react'
 import { api, OcmfVerificationResponse } from '../api'
+import { useI18n } from '../i18n'
 import type { Transaction, Charger } from '../types'
 import { safeFormatDate } from '../utils/date'
 
@@ -15,6 +16,7 @@ const SAMPLE_LEM_PUBKEY = '046b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a
 const SAMPLE_OCMF_PAYLOAD = 'OCMF|{"FV":"1.4.0","GI":"LEM_DCBM_400_SN123456","ST":"T","IS":true,"t":"2026-08-27T11:00:00.000Z","RV":[{"t":"1-0:1.8.0","v":15849800,"u":"Wh","l":200},{"t":"1-0:1.4.0","v":27400,"u":"W"},{"t":"1-0:31.7.0","v":74.8,"u":"A"},{"t":"1-0:32.7.0","v":366.0,"u":"V"}]}|{"SA":"ECDSA-secp256r1-SHA256","SD":"MEYCIQCveUK7hw9Mcb/oJJvvsaa9LdPJF/bSpmD20wJQ3qsQJAIhAJ5ONXguXMjUYPk8Vm38VeNv0DtaHk6Q19k3acW+7WCc"}'
 
 export function OcmfTool() {
+  const { t } = useI18n()
   const [ocmfData, setOcmfData] = useState<string>(SAMPLE_OCMF_PAYLOAD)
   const [publicKey, setPublicKey] = useState<string>(SAMPLE_LEM_PUBKEY)
   const [curveName, setCurveName] = useState<string>('secp256r1')
@@ -81,7 +83,7 @@ export function OcmfTool() {
   const handleImportTransaction = async (txIdStr: string) => {
     if (!txIdStr) return
     setSelectedTxId(txIdStr)
-    setImportStatus({ type: 'info', message: 'A importar dados OCMF e chave pública da transação…' })
+    setImportStatus({ type: 'info', message: t('ocmf.importingData') })
     try {
       const rep = await api.getTransactionOcmf(Number(txIdStr))
       const ocmfToLoad = rep.ocmf_stop_raw || rep.ocmf_start_raw || ''
@@ -106,7 +108,7 @@ export function OcmfTool() {
 
       setImportStatus({
         type: 'success',
-        message: `Dados da TX #${txIdStr} (${rep.charge_point_id} · ${rep.meter_model}) importados com sucesso!`,
+        message: t('ocmf.importSuccess', { id: txIdStr, cp: rep.charge_point_id, meter: rep.meter_model }),
       })
 
       // Run verification
@@ -114,7 +116,7 @@ export function OcmfTool() {
     } catch (err: any) {
       setImportStatus({
         type: 'error',
-        message: err?.response?.data?.detail || err?.message || 'Erro ao importar dados da transação',
+        message: err?.response?.data?.detail || err?.message || t('ocmf.importError'),
       })
     } finally {
       setTimeout(() => setImportStatus(null), 6000)
@@ -150,21 +152,21 @@ export function OcmfTool() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-                  Validador & Inspetor OCMF (Eichrecht / S.A.F.E.)
+                  {t('ocmf.title')}
                 </h1>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono font-bold flex items-center gap-1 shadow-sm">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  S.A.F.E. Transparenzsoftware v1.4.1
+                  {t('ocmf.safeBadge')}
                 </span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-mono font-bold">
-                  PTB-A 50.7 / MessEG
+                  {t('ocmf.ptbBadge')}
                 </span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-mono font-bold">
-                  LEM DCBM Compliant
+                  {t('ocmf.lemBadge')}
                 </span>
               </div>
               <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
-                Conformidade oficial com a norma alemã Eichrecht (MessEG / MessEV), especificação <strong>S.A.F.E. e.V. v1.4.1</strong> e <strong>OCMF v1.0–v1.4.1</strong>.
+                {t('ocmf.subtitle')}
               </p>
             </div>
           </div>
@@ -177,14 +179,14 @@ export function OcmfTool() {
             className="btn-secondary text-xs py-2 px-3.5 rounded-xl font-bold flex items-center gap-1.5"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Carregar Exemplo LEM DCBM</span>
+            <span>{t('ocmf.loadSample')}</span>
           </button>
           <button
             type="button"
             onClick={handleClear}
             className="btn-ghost text-xs py-2 px-3.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
           >
-            Limpar
+            {t('ocmf.clear')}
           </button>
         </div>
       </div>
@@ -197,13 +199,13 @@ export function OcmfTool() {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-              Importar Automaticamente de Transação Real
+              {t('ocmf.autoImportTitle')}
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                Auto-Preenchimento
+                {t('ocmf.autoImportTag')}
               </span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-              Escolhe uma transação recente para carregar instantaneamente o payload OCMF e a chave pública do medidor
+              {t('ocmf.autoImportDesc')}
             </p>
           </div>
         </div>
@@ -216,7 +218,7 @@ export function OcmfTool() {
             className="select text-xs py-2 px-3 bg-white dark:bg-gray-900 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono font-bold cursor-pointer max-w-xs shadow-sm"
           >
             <option value="">
-              {erkTransactions.length > 0 ? '⚡ Selecionar Transação ERK Recente...' : 'Nenhuma Transação ERK Encontrada'}
+              {erkTransactions.length > 0 ? t('ocmf.selectTxPlaceholder') : t('ocmf.noTxFound')}
             </option>
             {erkTransactions.map((t) => (
               <option key={t.id} value={t.transaction_id}>
@@ -230,10 +232,10 @@ export function OcmfTool() {
               type="button"
               onClick={() => handleImportTransaction(String(erkTransactions[0].transaction_id))}
               className="btn bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 px-3 rounded-xl font-bold flex items-center gap-1.5 whitespace-nowrap shadow-sm"
-              title="Importar a última transação ERK registada no sistema"
+              title={t('ocmf.latestErkTooltip')}
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Última Sessão ERK</span>
+              <span>{t('ocmf.latestErkSession')}</span>
             </button>
           )}
         </div>
@@ -259,12 +261,12 @@ export function OcmfTool() {
           <div className="card p-5 space-y-4 border border-slate-200 dark:border-white/10">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
               <Code className="w-4 h-4 text-blue-500" />
-              1. Payload OCMF Assinado
+              {t('ocmf.payloadTitle')}
             </h3>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                String OCMF (Formato S.A.F.E. standard `OCMF|&lt;DATA&gt;|&lt;SIG&gt;` ou JSON):
+                {t('ocmf.ocmfStringLabel')}
               </label>
               <textarea
                 rows={7}
@@ -278,7 +280,7 @@ export function OcmfTool() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Chave Pública do Medidor LEM (Hex ou PEM):
+                  {t('ocmf.publicKeyLabel')}
                 </label>
                 <input
                   type="text"
@@ -291,7 +293,7 @@ export function OcmfTool() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  Curva ECDSA:
+                  {t('ocmf.curveLabel')}
                 </label>
                 <select
                   value={curveName}
@@ -307,7 +309,7 @@ export function OcmfTool() {
             {/* S.A.F.E. Version Profile Selector */}
             <div className="space-y-1.5 pt-1">
               <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">
-                Perfil de Validação S.A.F.E. (Eichrecht):
+                {t('ocmf.validationProfileLabel')}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <button
@@ -324,9 +326,9 @@ export function OcmfTool() {
                 >
                   <span className="font-bold flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-amber-300" />
-                    Modo Dual
+                    {t('ocmf.dualMode')}
                   </span>
-                  <span className="text-[10px] opacity-85">v1.3.0 + v1.4.1</span>
+                  <span className="text-[10px] opacity-85">{t('ocmf.dualModeSub')}</span>
                 </button>
                 <button
                   type="button"
@@ -340,8 +342,8 @@ export function OcmfTool() {
                       : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:border-emerald-500/40'
                   }`}
                 >
-                  <span className="font-bold">v1.4.1 (Última)</span>
-                  <span className="text-[10px] opacity-85">Mais Recente</span>
+                  <span className="font-bold">{t('ocmf.latest141')}</span>
+                  <span className="text-[10px] opacity-85">{t('ocmf.latest141Sub')}</span>
                 </button>
                 <button
                   type="button"
@@ -355,8 +357,8 @@ export function OcmfTool() {
                       : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:border-amber-500/40'
                   }`}
                 >
-                  <span className="font-bold">v1.3.0 (Base)</span>
-                  <span className="text-[10px] opacity-85">PTB Permanente</span>
+                  <span className="font-bold">{t('ocmf.base130')}</span>
+                  <span className="text-[10px] opacity-85">{t('ocmf.base130Sub')}</span>
                 </button>
               </div>
             </div>
@@ -370,12 +372,12 @@ export function OcmfTool() {
               {isLoading ? (
                 <>
                   <Activity className="w-4 h-4 animate-spin" />
-                  <span>A processar verificação criptográfica…</span>
+                  <span>{t('ocmf.verifying')}</span>
                 </>
               ) : (
                 <>
                   <Play className="w-4 h-4" />
-                  <span>Validar Assinatura & Decodificar OCMF</span>
+                  <span>{t('ocmf.verifyBtn')}</span>
                 </>
               )}
             </button>
@@ -386,7 +388,7 @@ export function OcmfTool() {
             <h4 className="font-bold text-slate-800 dark:text-gray-200 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <HelpCircle className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-                Especificações S.A.F.E. e.V. & Medidores LEM DCBM:
+                {t('ocmf.specsTitle')}
               </span>
               <a
                 href="https://safe-ev.org/en/"
@@ -398,13 +400,13 @@ export function OcmfTool() {
               </a>
             </h4>
             <p className="text-slate-600 dark:text-gray-400 text-[11px] leading-relaxed">
-              O nosso motor criptográfico nativo implementa fielmente o algoritmo matemático e envelope da especificação <strong>S.A.F.E. Transparenzsoftware v1.4.1 (Versão Mais Recente Oficial)</strong>, em conformidade com a <strong>Physikalisch-Technische Bundesanstalt (PTB-A 50.7)</strong> e o <strong>Mess- und Eichgesetz (MessEG)</strong>.
+              {t('ocmf.specsDesc')}
             </p>
             <div className="pt-2 border-t border-slate-200 dark:border-white/5 grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600 dark:text-gray-400">
-              <div>• Transparenzsoftware: <strong className="text-emerald-600 dark:text-emerald-400">v1.4.1 (Oficial)</strong></div>
-              <div>• Formato OCMF: <strong className="text-blue-600 dark:text-blue-400">v1.0 – v1.4.1</strong></div>
-              <div>• Curvas Suportadas: <strong className="text-purple-600 dark:text-purple-400">secp256r1 / brainpool</strong></div>
-              <div>• Hardware Suportado: <strong className="text-slate-800 dark:text-slate-200">LEM DCBM 400/600 · Bauer</strong></div>
+              <div>• {t('ocmf.transparenzsoftwareVer')}</div>
+              <div>• {t('ocmf.ocmfFormat')}</div>
+              <div>• {t('ocmf.curvesSupported')}</div>
+              <div>• {t('ocmf.hardwareSupported')}</div>
             </div>
             <div className="pt-2 border-t border-slate-200 dark:border-white/5 flex flex-wrap gap-2 text-[10px]">
               <a
@@ -414,7 +416,7 @@ export function OcmfTool() {
                 className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono flex items-center gap-1 transition-colors"
               >
                 <Download className="w-3 h-3" />
-                Descarregar S.A.F.E. JAR (v1.4.1)
+                {t('ocmf.downloadJar141')}
               </a>
               <a
                 href="https://safe-ev.org/files/software/manuals/EN%201.4.1%20End_User_Manual%20for%20the%20Transparency%20Software.pdf"
@@ -423,7 +425,7 @@ export function OcmfTool() {
                 className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-mono flex items-center gap-1 transition-colors"
               >
                 <FileText className="w-3 h-3" />
-                Manual do Utilizador (PDF)
+                {t('ocmf.userManualPdf')}
               </a>
             </div>
           </div>
@@ -447,13 +449,13 @@ export function OcmfTool() {
                 <div>
                   <h3 className="text-base font-bold">
                     {result.verified
-                      ? 'Assinatura ECDSA Válida & Autêntica ✅'
-                      : 'Falha na Verificação Criptográfica ❌'}
+                      ? t('ocmf.validVerdict')
+                      : t('ocmf.invalidVerdict')}
                   </h3>
                   <p className="text-xs mt-0.5 opacity-90">
                     {result.verified
-                      ? 'A assinatura confere com o medidor LEM e os dados de medição não sofreram adulteração.'
-                      : (result.error || 'A assinatura digital não confere com os dados ou com a chave pública fornecida.')}
+                      ? t('ocmf.validVerdictDesc')
+                      : (result.error || t('ocmf.invalidVerdictDesc'))}
                   </p>
                 </div>
               </div>
@@ -472,14 +474,14 @@ export function OcmfTool() {
                         <div className="flex items-center justify-between gap-1.5 mb-1.5">
                           <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                            S.A.F.E. v1.4.1 (Última)
+                            {t('ocmf.safe141Title')}
                           </span>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold border ${
                             result.profiles.v141.compliant
                               ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
                               : 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30'
                           }`}>
-                            {result.profiles.v141.compliant ? 'Conforme ✅' : 'Não Conforme ❌'}
+                            {result.profiles.v141.compliant ? t('ocmf.compliant') : t('ocmf.nonCompliant')}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-600 dark:text-gray-300 leading-relaxed">
@@ -490,7 +492,7 @@ export function OcmfTool() {
                         </div>
                       </div>
                       <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[11px]">
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Versão Ativa Oficial</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{t('ocmf.activeOfficialVer')}</span>
                         <a
                           href={result.profiles.v141.download_url}
                           target="_blank"
@@ -516,7 +518,7 @@ export function OcmfTool() {
                         <div className="flex items-center justify-between gap-1.5 mb-1.5">
                           <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                             <Shield className="w-4 h-4 text-amber-500" />
-                            S.A.F.E. v1.3.0 (Base PTB)
+                            {t('ocmf.safe130Title')}
                           </span>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold border ${
                             result.profiles.v130.compliant
@@ -526,10 +528,10 @@ export function OcmfTool() {
                               : 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30'
                           }`}>
                             {result.profiles.v130.compliant
-                              ? 'Conforme ✅'
+                              ? t('ocmf.compliant')
                               : result.verified
-                              ? 'Compatível c/ Alertas ⚠️'
-                              : 'Não Conforme ❌'}
+                              ? t('ocmf.compatibleWithWarnings')
+                              : t('ocmf.nonCompliant')}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-600 dark:text-gray-300 leading-relaxed">
@@ -550,7 +552,7 @@ export function OcmfTool() {
                         </div>
                       </div>
                       <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[11px]">
-                        <span className="text-amber-600 dark:text-amber-400 font-semibold">Base Permanente</span>
+                        <span className="text-amber-600 dark:text-amber-400 font-semibold">{t('ocmf.permanentPtbBase')}</span>
                         <a
                           href={result.profiles.v130.download_url}
                           target="_blank"
@@ -568,22 +570,22 @@ export function OcmfTool() {
               {/* Meter & Compliance Specs Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Norma S.A.F.E. e.V.</span>
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">{t('ocmf.safeNorm')}</span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm block">v1.4.1</span>
                   <span className="text-[10px] text-slate-400">PTB-A 50.7 / Eichrecht</span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Versão OCMF</span>
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">{t('ocmf.ocmfVer')}</span>
                   <span className="font-bold text-slate-900 dark:text-white font-mono text-sm block">{result.ocmf_version ? `v${result.ocmf_version}` : 'v1.4.0'}</span>
                   <span className="text-[10px] text-slate-400">Open Charge Metering</span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Identificador Medidor</span>
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">{t('ocmf.meterId')}</span>
                   <span className="font-bold text-slate-900 dark:text-white font-mono truncate block">{result.meter_serial || '—'}</span>
                   <span className="text-[10px] text-slate-400 font-mono">Gateway ID / Serial</span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">Tipo de Registo</span>
+                  <span className="text-slate-500 dark:text-gray-400 text-[10px] block font-semibold">{t('ocmf.recordType')}</span>
                   <span className="font-bold text-blue-500 font-mono block">{result.parsed?.status_label || result.status || '—'}</span>
                   <span className="text-[10px] text-slate-400 font-mono">{result.algorithm || 'ECDSA-secp256r1'}</span>
                 </div>
@@ -593,17 +595,17 @@ export function OcmfTool() {
               {result.readings && result.readings.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                    Leituras Decodificadas (Códigos OBIS)
+                    {t('ocmf.decodedReadingsTitle')}
                   </h4>
                   <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-950/60">
                     <table className="w-full text-xs font-mono">
                       <thead className="bg-slate-100 dark:bg-gray-950 text-left text-[11px] text-slate-500 uppercase">
                         <tr>
-                          <th className="p-2.5">OBIS</th>
-                          <th className="p-2.5">Descrição</th>
-                          <th className="p-2.5">Valor</th>
-                          <th className="p-2.5">Unidade</th>
-                          <th className="p-2.5">Perda Cabo</th>
+                          <th className="p-2.5">{t('ocmf.obisCol')}</th>
+                          <th className="p-2.5">{t('ocmf.descCol')}</th>
+                          <th className="p-2.5">{t('ocmf.valCol')}</th>
+                          <th className="p-2.5">{t('ocmf.unitCol')}</th>
+                          <th className="p-2.5">{t('ocmf.lossCol')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-white/10">
@@ -636,9 +638,9 @@ export function OcmfTool() {
           ) : (
             <div className="card p-12 text-center text-slate-400 dark:text-gray-500 text-xs border border-slate-200 dark:border-white/10 flex flex-col items-center justify-center gap-3">
               <Shield className="w-12 h-12 opacity-30 text-blue-500" />
-              <p className="font-semibold text-slate-600 dark:text-gray-300">Nenhum resultado de validação para apresentar</p>
+              <p className="font-semibold text-slate-600 dark:text-gray-300">{t('ocmf.noResultTitle')}</p>
               <p className="text-[11px] max-w-sm">
-                Seleciona uma transação no seletor acima ou introduz uma string OCMF e prime "Validar Assinatura".
+                {t('ocmf.noResultDesc')}
               </p>
             </div>
           )}

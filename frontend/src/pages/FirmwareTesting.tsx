@@ -32,7 +32,7 @@ const STEP_ICONS: Record<string, React.ReactNode> = {
 }
 
 const STEP_COLORS: Record<string, string> = {
-  pending:  'border-white/5 bg-white/2',
+  pending:  'border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.02]',
   running:  'border-blue-500/30 bg-blue-500/5',
   passed:   'border-emerald-500/20 bg-emerald-500/5',
   failed:   'border-red-500/20 bg-red-500/5',
@@ -58,7 +58,7 @@ function ChargerSelector({
   const offline = chargers.filter((c) => !c.is_online)
 
   return (
-    <div className="card border border-white/8 mb-6">
+    <div className="card border border-slate-200 dark:border-white/10 mb-6">
       <div className="flex items-center gap-3 mb-3">
         <div className="p-2 rounded-xl bg-gray-700/40">
           <Terminal className="w-4 h-4 text-gray-400" />
@@ -97,7 +97,7 @@ function ChargerSelector({
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
                 value === c.charge_point_id
                   ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
-                  : 'bg-white/4 border-white/8 text-gray-400 hover:border-white/20 hover:text-gray-200'
+                  : 'bg-slate-100 dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-white/20 hover:text-gray-200'
               }`}
             >
               <Wifi className="w-3 h-3" />

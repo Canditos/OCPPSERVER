@@ -149,7 +149,7 @@ export function OcppLogsTab({ cpId, messages }: OcppLogsTabProps) {
                     onChange={(e) => setMsgFilterTx(e.target.value)}
                     className="text-xs py-1.5 px-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-blue-600 dark:text-blue-400 font-mono font-bold cursor-pointer focus:outline-none focus:border-blue-500"
                   >
-                    <option value="all">⚡ Todas as TX</option>
+                    <option value="all">{t('chargerDetail.logsAllTx')}</option>
                     {availableTransactions.map((tx) => (
                       <option key={tx} value={tx}>TX #{tx}</option>
                     ))}
@@ -182,7 +182,7 @@ export function OcppLogsTab({ cpId, messages }: OcppLogsTabProps) {
                 type="button"
                 onClick={() => setIsLogExpanded(true)}
                 className="btn-ghost p-1.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
-                title="Modo Zen / Expandir Log em Ecrã Inteiro"
+                title={t('chargerDetail.zenModeTooltip')}
               >
                 <Maximize2 className="w-4 h-4" />
               </button>
@@ -352,7 +352,7 @@ export function OcppLogsTab({ cpId, messages }: OcppLogsTabProps) {
                       onChange={(e) => setMsgFilterTx(e.target.value)}
                       className="text-xs py-1.5 px-2.5 rounded-xl bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-blue-600 dark:text-blue-400 font-mono font-bold cursor-pointer focus:outline-none focus:border-blue-500"
                     >
-                      <option value="all">⚡ Todas as TX</option>
+                      <option value="all">{t('chargerDetail.logsAllTx')}</option>
                       {availableTransactions.map((tx) => (
                         <option key={tx} value={tx}>TX #{tx}</option>
                       ))}
@@ -367,7 +367,7 @@ export function OcppLogsTab({ cpId, messages }: OcppLogsTabProps) {
                     type="text"
                     value={msgSearch}
                     onChange={(e) => setMsgSearch(e.target.value)}
-                    placeholder="Pesquisar payload ou ação..."
+                    placeholder={t('chargerDetail.filterPlaceholder')}
                     className="text-xs pl-8 pr-6 py-1.5 rounded-xl bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 w-56 sm:w-72"
                   />
                   {msgSearch && (
@@ -516,7 +516,7 @@ export function OcppLogsTab({ cpId, messages }: OcppLogsTabProps) {
                   }}
                   className="btn bg-blue-600 hover:bg-blue-500 text-white text-xs py-1.5 px-3 rounded-xl flex items-center gap-1.5"
                 >
-                  <Download className="w-3.5 h-3.5" /> Descarregar (.json)
+                  <Download className="w-3.5 h-3.5" /> {t('chargerDetail.downloadJsonBtn')}
                 </button>
 
                 <button
@@ -538,13 +538,13 @@ export function OcppLogsTab({ cpId, messages }: OcppLogsTabProps) {
 
             {/* Modal Footer */}
             <div className="flex items-center justify-between p-3 px-4 border-t border-slate-800 bg-slate-900 text-xs text-gray-400">
-              <span>Formato: JSON Formatado (Indentação de 2 espaços)</span>
+              <span>{t('chargerDetail.jsonFormat')}</span>
               <button
                 type="button"
                 onClick={() => setInspectMessage(null)}
                 className="px-4 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium"
               >
-                Fechar
+                {t('common.close')}
               </button>
             </div>
           </div>

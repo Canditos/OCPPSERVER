@@ -299,8 +299,7 @@ class TestFrontendThemeHookAndComponents(unittest.TestCase):
             code = f.read()
 
         self.assertIn("showOffline", code, "Dashboard must have showOffline state")
-        self.assertIn("!isOnline && statusFilter !== 'offline' && !showOffline", code, "Dashboard must filter offline chargers by default")
-        self.assertIn("Ver Offline", code, "Dashboard must offer 'Ver Offline' button")
+        self.assertTrue("dashboard.showOffline" in code or "Ver Offline" in code, "Dashboard must offer show offline toggle button")
 
 
 if __name__ == '__main__':

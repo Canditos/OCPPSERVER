@@ -1,5 +1,6 @@
 import React, { useId } from 'react'
 import { Zap } from 'lucide-react'
+import { useI18n } from '../i18n'
 
 interface BatteryIndicatorProps {
   soc: number | null       // 0-100 or null when unknown
@@ -16,7 +17,6 @@ type ColorConfig = {
   subtext: string
   border: string
   bg: string
-  label: string
 }
 
 function getBatteryColor(soc: number | null): ColorConfig {
@@ -27,7 +27,6 @@ function getBatteryColor(soc: number | null): ColorConfig {
     subtext: 'text-blue-900 dark:text-blue-300',
     border: 'border-blue-200 dark:border-blue-500/40',
     bg: 'bg-blue-50/90 dark:bg-blue-500/10',
-    label: 'Carga Rápida DC',
   }
   if (soc < 20) return {
     start: '#dc2626', end: '#f43f5e',
@@ -36,7 +35,6 @@ function getBatteryColor(soc: number | null): ColorConfig {
     subtext: 'text-red-900 dark:text-red-300',
     border: 'border-red-200 dark:border-red-500/40',
     bg: 'bg-red-50/90 dark:bg-red-500/10',
-    label: 'Bateria Crítica',
   }
   if (soc < 50) return {
     start: '#d97706', end: '#f59e0b',
@@ -45,7 +43,6 @@ function getBatteryColor(soc: number | null): ColorConfig {
     subtext: 'text-amber-900 dark:text-amber-300',
     border: 'border-amber-200 dark:border-amber-500/40',
     bg: 'bg-amber-50/90 dark:bg-amber-500/10',
-    label: 'Carga Baixa',
   }
   if (soc < 80) return {
     start: '#059669', end: '#10b981',
@@ -54,7 +51,6 @@ function getBatteryColor(soc: number | null): ColorConfig {
     subtext: 'text-emerald-900 dark:text-emerald-300',
     border: 'border-emerald-200 dark:border-emerald-500/40',
     bg: 'bg-emerald-50/90 dark:bg-emerald-500/10',
-    label: 'A Carregar',
   }
   return {
     start: '#0284c7', end: '#2563eb',
@@ -63,11 +59,11 @@ function getBatteryColor(soc: number | null): ColorConfig {
     subtext: 'text-cyan-900 dark:text-cyan-300',
     border: 'border-cyan-200 dark:border-cyan-400/40',
     bg: 'bg-cyan-50/90 dark:bg-cyan-500/10',
-    label: 'Bateria Cheia',
   }
 }
 
 export function BatteryIndicator({ soc, isCharging, powerKw, className = '' }: BatteryIndicatorProps) {
+  const { t } = useI18n()
   const uid = useId().replace(/:/g, '')
   
   // Handle NaN or invalid soc values
@@ -75,6 +71,16 @@ export function BatteryIndicator({ soc, isCharging, powerKw, className = '' }: B
   const color = getBatteryColor(validSoC)
   const fillPct = validSoC !== null ? Math.max(validSoC, 4) : 0
   const fillWidth = (fillPct / 100) * 34
+
+  const label = validSoC === null
+    ? t('batteryIndicator.fastDc')
+    : validSoC < 20
+      ? t('batteryIndicator.critical')
+      : validSoC < 50
+        ? t('batteryIndicator.low')
+        : validSoC < 80
+          ? t('batteryIndicator.charging')
+          : t('batteryIndicator.full')
 
   return (
     <div className={`flex items-center gap-3 px-3.5 py-3 rounded-2xl border ${color.border} ${color.bg} shadow-md ${color.glow} ${className}`}>
@@ -164,7 +170,7 @@ export function BatteryIndicator({ soc, isCharging, powerKw, className = '' }: B
           )}
         </div>
         <p className={`text-[11px] font-bold uppercase tracking-widest mt-0.5 ${color.subtext}`}>
-          {color.label}
+          {label}
         </p>
         {powerKw !== null && powerKw !== undefined && powerKw > 0 && (
           <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-amber-500/15 dark:bg-yellow-400/10 border border-amber-500/25 dark:border-yellow-400/20 w-fit">

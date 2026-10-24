@@ -5,6 +5,7 @@ import {
   CheckCircle2, AlertTriangle
 } from 'lucide-react'
 import { api } from '../../api'
+import { useI18n } from '../../i18n'
 import type { Charger } from '../../types'
 
 interface ChargerHeaderProps {
@@ -24,16 +25,17 @@ export function ChargerHeader({
   onSelectTab,
   onRefreshData,
 }: ChargerHeaderProps) {
+  const { t } = useI18n()
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionToast, setActionToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const handleQuickReset = async (type: 'Soft' | 'Hard' = 'Soft') => {
     if (!charger.charge_point_id) return
-    if (!confirm(`Deseja enviar comando de Reset (${type}) ao posto ${charger.charge_point_id}?`)) return
+    if (!confirm(t('chargerDetail.header.resetConfirm', { type, id: charger.charge_point_id }))) return
     setActionLoading('reset')
     try {
       const res = await api.reset(charger.charge_point_id, type)
-      setActionToast({ type: 'success', message: `Comando Reset (${type}) aceite pelo posto: ${res.status || 'OK'}` })
+      setActionToast({ type: 'success', message: t('chargerDetail.header.resetAccepted', { type, status: res.status || 'OK' }) })
       onRefreshData?.()
     } catch (err: any) {
       setActionToast({ type: 'error', message: err?.response?.data?.detail || err.message })
@@ -48,7 +50,7 @@ export function ChargerHeader({
     setActionLoading('unlock')
     try {
       const res = await api.unlockConnector(charger.charge_point_id, selectedConnectorId)
-      setActionToast({ type: 'success', message: `Desbloqueio da Tomada #${selectedConnectorId}: ${res.status || 'OK'}` })
+      setActionToast({ type: 'success', message: t('chargerDetail.header.unlockSuccess', { id: selectedConnectorId, status: res.status || 'OK' }) })
       onRefreshData?.()
     } catch (err: any) {
       setActionToast({ type: 'error', message: err?.response?.data?.detail || err.message })
@@ -63,7 +65,7 @@ export function ChargerHeader({
     setActionLoading('heal')
     try {
       const res = await api.selfHealCharger(charger.charge_point_id)
-      setActionToast({ type: 'success', message: `Auto-cura concluída: ${res.actions_taken?.join(' · ') || 'Sincronizado com sucesso'}` })
+      setActionToast({ type: 'success', message: t('chargerDetail.header.selfHealSuccess', { actions: res.actions_taken?.join(' · ') || 'OK' }) })
       onRefreshData?.()
     } catch (err: any) {
       setActionToast({ type: 'error', message: err?.response?.data?.detail || err.message })
@@ -76,7 +78,7 @@ export function ChargerHeader({
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-4">
-        <Link to="/" className="btn-ghost p-2 mt-0.5 shrink-0" title="Voltar aos postos">
+        <Link to="/" className="btn-ghost p-2 mt-0.5 shrink-0" title={t('chargerDetail.header.back')}>
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div className="flex-1">
@@ -111,7 +113,7 @@ export function ChargerHeader({
                     ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
                     : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
                 }`}
-                title="Clique para gerir Certificados & Segurança"
+                title={t('chargerDetail.manageSecurityTooltip')}
               >
                 <Shield className="w-3.5 h-3.5" />
                 {(charger.security_profile ?? 0) === 3
@@ -120,7 +122,7 @@ export function ChargerHeader({
                   ? 'Profile 2 (TLS+Basic)'
                   : (charger.security_profile ?? 0) === 1
                   ? 'Profile 1 (Basic Auth)'
-                  : 'Profile 0 (Aberto)'}
+                  : t('chargerDetail.profile0Open')}
               </button>
 
               {/* OCPP Version Pill */}
@@ -155,10 +157,10 @@ export function ChargerHeader({
                   onClick={() => handleQuickReset('Soft')}
                   disabled={actionLoading !== null || !isOnline}
                   className="px-2.5 py-1.5 rounded-xl border border-white/10 hover:bg-white/10 text-gray-300 text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-all"
-                  title="Enviar comando Reset (Soft) ao posto via OCPP"
+                  title="Reset (Soft)"
                 >
                   <RotateCcw className={`w-3.5 h-3.5 ${actionLoading === 'reset' ? 'animate-spin' : ''}`} />
-                  <span>Soft Reset</span>
+                  <span>{t('chargerDetail.header.softReset')}</span>
                 </button>
 
                 <button
@@ -166,10 +168,10 @@ export function ChargerHeader({
                   onClick={handleQuickUnlock}
                   disabled={actionLoading !== null || !isOnline}
                   className="px-2.5 py-1.5 rounded-xl border border-white/10 hover:bg-white/10 text-gray-300 text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-all"
-                  title={`Desbloquear Conector #${selectedConnectorId}`}
+                  title={`Unlock #${selectedConnectorId}`}
                 >
                   <Unlock className={`w-3.5 h-3.5 ${actionLoading === 'unlock' ? 'animate-spin' : ''}`} />
-                  <span>Desbloquear #{selectedConnectorId}</span>
+                  <span>{t('chargerDetail.header.unlock', { id: selectedConnectorId })}</span>
                 </button>
 
                 <button
@@ -177,10 +179,10 @@ export function ChargerHeader({
                   onClick={handleQuickSelfHeal}
                   disabled={actionLoading !== null}
                   className="px-2.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-all"
-                  title="Executar auto-cura e sincronização deste posto"
+                  title="Self-Heal"
                 >
                   <Sparkles className={`w-3.5 h-3.5 ${actionLoading === 'heal' ? 'animate-spin' : ''}`} />
-                  <span>Auto-Cura</span>
+                  <span>{t('chargerDetail.header.selfHeal')}</span>
                 </button>
               </div>
             </div>

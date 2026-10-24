@@ -8,11 +8,12 @@ import { api } from '../../api'
 import { ConnectorBadge } from '../ConnectorBadge'
 import { safeFormatDate, safeFormatDistance } from '../../utils/date'
 import type { Charger } from '../../types'
+import { useI18n } from '../../i18n'
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null
   return (
-    <div className="flex items-start justify-between py-2 border-b border-white/5 last:border-0">
+    <div className="flex items-start justify-between py-2 border-b border-slate-100 dark:border-white/5 last:border-0">
       <span className="text-xs text-slate-500 dark:text-gray-400 font-medium">{label}</span>
       <span className="text-xs text-slate-700 dark:text-gray-300 font-mono text-right max-w-[60%] break-all">{value}</span>
     </div>
@@ -51,6 +52,7 @@ export function ChargerInfoSidebar({
   onOpenMetersTab,
   onRefreshCharger,
 }: ChargerInfoSidebarProps) {
+  const { t } = useI18n()
   // Security Management State
   const [showSecurityCard, setShowSecurityCard] = useState<boolean>(false)
   const [secProfile, setSecProfile] = useState<number>(0)
@@ -79,10 +81,10 @@ export function ChargerInfoSidebar({
         auth_password: authKey,
         auth_enabled: authEnabled || secProfile >= 1,
       })
-      setSecFeedback({ type: 'success', message: 'Configurações de segurança guardadas com sucesso!' })
+      setSecFeedback({ type: 'success', message: t('chargerDetail.sidebar.secSaved') })
       onRefreshCharger?.()
     } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro ao guardar: ${err?.response?.data?.detail || err.message}` })
+      setSecFeedback({ type: 'error', message: t('chargerDetail.sidebar.secSaveError', { error: err?.response?.data?.detail || err.message }) })
     } finally {
       setSavingSec(false)
       setTimeout(() => setSecFeedback(null), 4000)
@@ -94,10 +96,10 @@ export function ChargerInfoSidebar({
     try {
       const res = await api.generateChargerKey(charger.charge_point_id)
       setAuthKey(res.authorization_key)
-      setSecFeedback({ type: 'success', message: 'Nova AuthorizationKey gerada e associada!' })
+      setSecFeedback({ type: 'success', message: t('chargerDetail.sidebar.keyGenerated') })
       onRefreshCharger?.()
     } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro ao gerar chave: ${err?.response?.data?.detail || err.message}` })
+      setSecFeedback({ type: 'error', message: t('chargerDetail.sidebar.keyGenError', { error: err?.response?.data?.detail || err.message }) })
     } finally {
       setSavingSec(false)
       setTimeout(() => setSecFeedback(null), 4000)
@@ -108,9 +110,9 @@ export function ChargerInfoSidebar({
     setSavingSec(true)
     try {
       const res = await api.syncChargerKey(charger.charge_point_id)
-      setSecFeedback({ type: 'success', message: `Comando ChangeConfiguration(AuthorizationKey) aceite: ${res.status}` })
+      setSecFeedback({ type: 'success', message: t('chargerDetail.sidebar.keySynced', { status: res.status }) })
     } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Falha ao sincronizar: ${err?.response?.data?.detail || err.message}` })
+      setSecFeedback({ type: 'error', message: t('chargerDetail.sidebar.keySyncError', { error: err?.response?.data?.detail || err.message }) })
     } finally {
       setSavingSec(false)
       setTimeout(() => setSecFeedback(null), 5000)
@@ -130,19 +132,19 @@ export function ChargerInfoSidebar({
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
           <Cpu className="w-4 h-4 text-slate-400 dark:text-gray-500" />
-          <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Dispositivo</h3>
+          <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">{t('chargerDetail.sidebar.device')}</h3>
         </div>
-        <InfoRow label="Charge Point ID" value={charger.charge_point_id} />
-        <InfoRow label="Fabricante" value={charger.vendor} />
-        <InfoRow label="Modelo" value={charger.model} />
-        <InfoRow label="Firmware" value={charger.firmware_version} />
-        <InfoRow label="Nº Série" value={charger.serial_number} />
-        <InfoRow label="ICCID" value={charger.iccid} />
-        <InfoRow label="IMSI" value={charger.imsi} />
-        <InfoRow label="IP" value={charger.client_ip} />
-        <InfoRow label="Fuso Horário" value={charger.timezone || 'Europe/Lisbon'} />
-        <InfoRow label="Registado" value={safeFormatDate(charger.registered_at)} />
-        <InfoRow label="Último sinal" value={safeFormatDistance(charger.last_seen)} />
+        <InfoRow label={t('chargerDetail.sidebar.chargePointId')} value={charger.charge_point_id} />
+        <InfoRow label={t('chargerDetail.sidebar.vendor')} value={charger.vendor} />
+        <InfoRow label={t('chargerDetail.sidebar.model')} value={charger.model} />
+        <InfoRow label={t('chargerDetail.sidebar.firmware')} value={charger.firmware_version} />
+        <InfoRow label={t('chargerDetail.sidebar.serialNumber')} value={charger.serial_number} />
+        <InfoRow label={t('chargerDetail.sidebar.iccid')} value={charger.iccid} />
+        <InfoRow label={t('chargerDetail.sidebar.imsi')} value={charger.imsi} />
+        <InfoRow label={t('chargerDetail.sidebar.ip')} value={charger.client_ip} />
+        <InfoRow label={t('chargerDetail.sidebar.timezone')} value={charger.timezone || 'Europe/Lisbon'} />
+        <InfoRow label={t('chargerDetail.sidebar.registered')} value={safeFormatDate(charger.registered_at)} />
+        <InfoRow label={t('chargerDetail.sidebar.lastSeen')} value={safeFormatDistance(charger.last_seen)} />
       </div>
 
       {/* Security Management Card (Collapsible) */}
@@ -154,7 +156,7 @@ export function ChargerInfoSidebar({
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-blue-400" />
             <h3 className="text-xs font-semibold text-slate-700 dark:text-gray-300 uppercase tracking-wider">
-              Segurança & Autenticação
+              {t('chargerDetail.sidebar.securityTitle')}
             </h3>
           </div>
           <div className="flex items-center gap-2">
@@ -173,7 +175,7 @@ export function ChargerInfoSidebar({
         </div>
 
         {showSecurityCard && (
-          <div className="space-y-4 pt-3 border-t border-white/6 animate-fade-in">
+          <div className="space-y-4 pt-3 border-t border-slate-200 dark:border-white/10 animate-fade-in">
             {secFeedback && (
               <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
                 secFeedback.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
@@ -184,7 +186,7 @@ export function ChargerInfoSidebar({
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs text-gray-400 font-medium">Perfil de Segurança (OCPP 1.6)</label>
+              <label className="text-xs text-gray-400 font-medium">{t('chargerDetail.sidebar.secProfileLabel')}</label>
               <select
                 value={secProfile}
                 onChange={(e) => {
@@ -192,25 +194,25 @@ export function ChargerInfoSidebar({
                   setSecProfile(val)
                   if (val >= 1) setAuthEnabled(true)
                 }}
-                className="select w-full text-xs py-2 bg-gray-900/90 border-white/10"
+                className="select w-full text-xs py-2 bg-white dark:bg-gray-900/90 border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
               >
-                <option value={0}>Profile 0 — Não seguro / Aberto (ws:// sem password)</option>
-                <option value={1}>Profile 1 — HTTP Basic Auth (ws:// com password)</option>
-                <option value={2}>Profile 2 — TLS + Basic Auth (wss:// com password)</option>
-                <option value={3}>Profile 3 — mTLS (Certificados X.509)</option>
+                <option value={0}>{t('chargerDetail.sidebar.profile0')}</option>
+                <option value={1}>{t('chargerDetail.sidebar.profile1')}</option>
+                <option value={2}>{t('chargerDetail.sidebar.profile2')}</option>
+                <option value={3}>{t('chargerDetail.sidebar.profile3')}</option>
               </select>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-gray-400 font-medium">AuthorizationKey (Password)</label>
+                <label className="text-xs text-gray-400 font-medium">{t('chargerDetail.sidebar.authKeyLabel')}</label>
                 <button
                   type="button"
                   onClick={handleGenerateKey}
                   disabled={savingSec}
                   className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors cursor-pointer"
                 >
-                  <Sparkles className="w-3 h-3" /> Gerar Chave Segura
+                  <Sparkles className="w-3 h-3" /> {t('chargerDetail.sidebar.genKeyBtn')}
                 </button>
               </div>
 
@@ -219,15 +221,15 @@ export function ChargerInfoSidebar({
                   type={showKey ? 'text' : 'password'}
                   value={authKey}
                   onChange={(e) => setAuthKey(e.target.value)}
-                  placeholder="Password do posto"
-                  className="input pr-20 text-xs font-mono bg-gray-900/90 border-white/10 w-full"
+                  placeholder={t('chargerDetail.sidebar.passwordPlaceholder')}
+                  className="input pr-20 text-xs font-mono bg-white dark:bg-gray-900/90 border-slate-300 dark:border-white/10 text-slate-900 dark:text-white w-full"
                 />
                 <div className="absolute right-1.5 flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => setShowKey(!showKey)}
                     className="p-1 text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
-                    title={showKey ? 'Ocultar' : 'Mostrar'}
+                    title={showKey ? t('chargerDetail.sidebar.hide') : t('chargerDetail.sidebar.show')}
                   >
                     {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
@@ -236,7 +238,7 @@ export function ChargerInfoSidebar({
                     onClick={handleCopyKey}
                     disabled={!authKey}
                     className="p-1 text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
-                    title="Copiar Chave"
+                    title={t('chargerDetail.sidebar.copyKey')}
                   >
                     {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
@@ -252,7 +254,7 @@ export function ChargerInfoSidebar({
                 className="btn-primary flex-1 text-xs py-2 rounded-lg flex items-center justify-center gap-1.5"
               >
                 <Lock className="w-3.5 h-3.5" />
-                <span>{savingSec ? 'A guardar...' : 'Guardar Segurança'}</span>
+                <span>{savingSec ? t('chargerDetail.sidebar.saving') : t('chargerDetail.sidebar.saveSecBtn')}</span>
               </button>
 
               <button
@@ -260,28 +262,28 @@ export function ChargerInfoSidebar({
                 onClick={handleSyncKey}
                 disabled={savingSec || !isOnline || !authKey}
                 className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-2 px-3 rounded-lg flex items-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer"
-                title={isOnline ? 'Enviar chave ao posto via OCPP ChangeConfiguration' : 'Posto offline'}
+                title={isOnline ? t('chargerDetail.sidebar.syncKeyBtn') : t('common.offline')}
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>Sincronizar no Posto</span>
+                <span>{t('chargerDetail.sidebar.syncKeyBtn')}</span>
               </button>
             </div>
 
             {authKey && secProfile >= 1 && (
-              <div className="rounded-lg bg-white/4 border border-white/8 overflow-hidden text-xs">
+              <div className="rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 overflow-hidden text-xs">
                 <button
                   type="button"
                   onClick={() => setShowHttpHeader(!showHttpHeader)}
                   className="w-full p-2.5 flex items-center justify-between text-gray-400 hover:text-gray-200 transition-colors text-[11px] font-medium cursor-pointer"
                 >
-                  <span>Cabeçalho HTTP Basic</span>
+                  <span>{t('chargerDetail.sidebar.httpBasicHeader')}</span>
                   <span className="flex items-center gap-1 text-[10px] text-blue-400">
-                    {showHttpHeader ? 'Ocultar' : 'Ver cabeçalho'}
+                    {showHttpHeader ? t('chargerDetail.sidebar.hide') : t('chargerDetail.sidebar.viewHeader')}
                     {showHttpHeader ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   </span>
                 </button>
                 {showHttpHeader && (
-                  <div className="p-2.5 pt-0 border-t border-white/5 space-y-1">
+                  <div className="p-2.5 pt-0 border-t border-slate-200 dark:border-white/5 space-y-1">
                     <p className="text-[10px] font-mono text-gray-300 break-all bg-gray-900/90 p-2 rounded border border-white/5 select-all">
                       Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
                     </p>
@@ -305,20 +307,20 @@ export function ChargerInfoSidebar({
             </div>
             <div>
               <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                Metrologia Eichrecht (OCMF)
+                {t('chargerDetail.sidebar.eichrechtTitle')}
                 {charger.is_eichrecht_compliant && (
                   <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded font-bold border border-emerald-500/30">
-                    ERK Ativo
+                    {t('chargerDetail.sidebar.erkActive')}
                   </span>
                 )}
               </h4>
               <p className="text-[10px] text-slate-500 dark:text-gray-400">
-                {meterKeysCount} medidor(es) calibrado(s) configurado(s)
+                {t('chargerDetail.sidebar.calibratedMetersCount', { count: meterKeysCount })}
               </p>
             </div>
           </div>
           <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
-            Gerir <ChevronRight className="w-3.5 h-3.5" />
+            {t('chargerDetail.sidebar.manage')} <ChevronRight className="w-3.5 h-3.5" />
           </span>
         </div>
       </div>
@@ -327,10 +329,10 @@ export function ChargerInfoSidebar({
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
           <Wifi className="w-4 h-4 text-slate-400 dark:text-gray-500" />
-          <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Conectores</h3>
+          <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">{t('chargerDetail.sidebar.connectors')}</h3>
         </div>
         {connectors.length === 0 ? (
-          <p className="text-xs text-gray-500">Sem dados de conector</p>
+          <p className="text-xs text-gray-500">{t('chargerDetail.sidebar.noConnectors')}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {connectors.map((c) => (
@@ -351,7 +353,7 @@ export function ChargerInfoSidebar({
                 />
                 {successRates[String(c.connector_id)] && (
                   <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-gray-900/95 text-gray-200 px-2 py-1 rounded whitespace-nowrap border border-gray-700/50 pointer-events-none z-10">
-                    {successRates[String(c.connector_id)].success_rate.toFixed(1)}% sucesso
+                    {successRates[String(c.connector_id)].success_rate.toFixed(1)}% {t('common.success') || 'sucesso'}
                   </div>
                 )}
               </button>
@@ -366,7 +368,7 @@ export function ChargerInfoSidebar({
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
-              Taxa de Sucesso por Tomada
+              {t('chargerDetail.sidebar.successRateTitle')}
             </h3>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -376,7 +378,7 @@ export function ChargerInfoSidebar({
                 className="p-2.5 rounded-lg bg-slate-100 dark:bg-gray-800/40 border border-slate-200 dark:border-gray-700/50 hover:border-gray-600/50 transition-colors"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-600 dark:text-gray-400">Tomada {connectorId}</span>
+                  <span className="text-xs text-slate-600 dark:text-gray-400">{t('chargerDetail.sidebar.socket', { id: connectorId })}</span>
                   <span className={`text-sm font-bold ${
                     data.success_rate >= 90 ? 'text-emerald-500 dark:text-emerald-400'
                     : data.success_rate >= 70 ? 'text-amber-500 dark:text-amber-400'
@@ -399,7 +401,7 @@ export function ChargerInfoSidebar({
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
             <Activity className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Leituras live</h3>
+            <h3 className="text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">{t('chargerDetail.sidebar.liveReadings')}</h3>
             <span className="live-pill ml-auto">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -410,7 +412,7 @@ export function ChargerInfoSidebar({
           </div>
           <div className="space-y-2">
             {displayedLiveMeters.map((m) => (
-              <div key={m.key} className="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
+              <div key={m.key} className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-white/5 last:border-0">
                 <span className="text-xs text-slate-600 dark:text-gray-400 font-medium truncate max-w-[55%]">{m.label}</span>
                 <span className="text-xs font-mono text-amber-500 dark:text-amber-300 font-bold">{m.value} {m.unit}</span>
               </div>

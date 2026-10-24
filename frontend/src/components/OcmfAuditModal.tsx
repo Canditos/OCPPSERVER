@@ -5,6 +5,7 @@ import {
   ShieldCheck, ShieldAlert, Download, Cpu, Key, FileCode, CheckCircle2, XCircle, Clock
 } from 'lucide-react'
 import { api } from '../api'
+import { useI18n } from '../i18n'
 import type { OcmfAuditReport } from '../types'
 
 interface OcmfAuditModalProps {
@@ -13,6 +14,7 @@ interface OcmfAuditModalProps {
 }
 
 export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) {
+  const { t } = useI18n()
   const { data: audit, isLoading, error } = useQuery<OcmfAuditReport>({
     queryKey: ['ocmf-audit', transactionId],
     queryFn: () => api.getTransactionOcmf(transactionId),
@@ -44,10 +46,10 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Auditoria Fiscal & Metrológica (Eichrecht / OCMF)
+                {t('ocmfAuditModal.title')}
               </h2>
               <p className="text-xs text-slate-500 dark:text-gray-400">
-                Transação #{transactionId} · Medidor Legal LEM DCBM
+                {t('ocmfAuditModal.subtitle', { tx: transactionId })}
               </p>
             </div>
           </div>
@@ -64,13 +66,13 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-12 text-slate-400">
               <Clock className="w-8 h-8 animate-spin mb-2 text-blue-500" />
-              <p className="text-sm">A carregar registos criptográficos do medidor…</p>
+              <p className="text-sm">{t('ocmfAuditModal.loading')}</p>
             </div>
           )}
 
           {error && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
-              Não foi possível carregar a auditoria OCMF desta transação.
+              {t('ocmfAuditModal.loadError')}
             </div>
           )}
 
@@ -90,12 +92,12 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                   )}
                   <div>
                     <h4 className="font-bold text-sm">
-                      {audit.ocmf_verified ? 'Assinatura Digital Válida & Autêntica' : 'Verificação OCMF Pendente'}
+                      {audit.ocmf_verified ? t('ocmfAuditModal.validTitle') : t('ocmfAuditModal.pendingTitle')}
                     </h4>
                     <p className="text-xs opacity-80 mt-0.5">
                       {audit.ocmf_verified
-                        ? 'Os dados de energia e tempo foram validados pela chave pública do medidor e não foram adulterados.'
-                        : (audit.ocmf_verification_error || 'A aguardar sincronização da chave pública do medidor.')}
+                        ? t('ocmfAuditModal.validDesc')
+                        : (audit.ocmf_verification_error || t('ocmfAuditModal.pendingDescDefault'))}
                     </p>
                   </div>
                 </div>
@@ -103,23 +105,23 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
 
               {/* Meter Info Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5">
-                  <span className="text-slate-400 text-[10px] uppercase font-semibold block mb-1">Medidor DC</span>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
+                  <span className="text-slate-400 text-[10px] uppercase font-semibold block mb-1">{t('ocmfAuditModal.dcMeter')}</span>
                   <span className="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
                     <Cpu className="w-3.5 h-3.5 text-blue-500" />
                     {audit.meter_model || 'LEM DCBM 400'}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5">
-                  <span className="text-slate-400 text-[10px] uppercase font-semibold block mb-1">Nº Série Medidor</span>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
+                  <span className="text-slate-400 text-[10px] uppercase font-semibold block mb-1">{t('ocmfAuditModal.meterSerial')}</span>
                   <span className="font-mono font-bold text-slate-800 dark:text-white">
                     {audit.meter_serial || '—'}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5">
-                  <span className="text-slate-400 text-[10px] uppercase font-semibold block mb-1">Criptografia</span>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
+                  <span className="text-slate-400 text-[10px] uppercase font-semibold block mb-1">{t('ocmfAuditModal.crypto')}</span>
                   <span className="font-mono text-slate-700 dark:text-gray-300">
                     ECDSA ({audit.curve_name || 'secp256r1'})
                   </span>
@@ -136,7 +138,7 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                       : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                   }`}
                 >
-                  Leituras Assinadas (OBIS)
+                  {t('ocmfAuditModal.tabSignedReadings')}
                 </button>
                 <button
                   onClick={() => setActiveTab('raw')}
@@ -146,7 +148,7 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                       : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                   }`}
                 >
-                  Payload OCMF Bruto
+                  {t('ocmfAuditModal.tabRawPayload')}
                 </button>
               </div>
 
@@ -158,28 +160,28 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                       {/* Total Energy */}
                       <div className="sm:pr-4">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-1">
-                          ⚡ Total de Energia Entregue
+                          {t('ocmfAuditModal.totalEnergyDelivered')}
                         </span>
                         <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
                           {(audit.signed_energy_kwh ?? audit.energy_kwh ?? 0).toFixed(3)}{' '}
                           <span className="text-sm font-normal text-slate-500 dark:text-slate-400">kWh</span>
                         </div>
                         <span className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 block">
-                          Δ Metrológico (Fim - Início)
+                          {t('ocmfAuditModal.deltaMetrological')}
                         </span>
                       </div>
 
                       {/* Total Cost */}
                       <div className="pt-3 sm:pt-0 sm:px-4">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block mb-1">
-                          💶 Valor Total da Transação
+                          {t('ocmfAuditModal.totalTransactionCost')}
                         </span>
                         <div className="text-2xl sm:text-3xl font-black font-mono text-blue-600 dark:text-blue-400">
                           {((audit.signed_energy_kwh ?? audit.energy_kwh ?? 0) * 0.28).toFixed(2)}{' '}
                           <span className="text-sm font-normal text-slate-500 dark:text-slate-400">€</span>
                         </div>
                         <span className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 block">
-                          Tarifa estimada (0.28 €/kWh)
+                          {t('ocmfAuditModal.tariffEstimated')}
                         </span>
                       </div>
 
@@ -187,10 +189,15 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                       <div className="pt-3 sm:pt-0 sm:pl-4 flex flex-col justify-between">
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 block mb-1">
-                            ⏱️ Duração & Identificação
+                            {t('ocmfAuditModal.durationAndId')}
                           </span>
                           <span className="font-mono font-bold text-slate-800 dark:text-gray-200 text-sm block">
-                            {audit.duration_seconds ? `${Math.floor(audit.duration_seconds / 60)} min ${audit.duration_seconds % 60} seg` : '—'}
+                            {audit.duration_seconds
+                              ? t('ocmfAuditModal.durationValue', {
+                                  min: Math.floor(audit.duration_seconds / 60),
+                                  sec: audit.duration_seconds % 60
+                                })
+                              : '—'}
                           </span>
                         </div>
                         <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
@@ -203,20 +210,20 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                   {/* Labeled Readings */}
                   <div className="space-y-2">
                     <h5 className="text-xs font-bold text-slate-700 dark:text-gray-300">
-                      Totalizadores Físicos do Contador (Leituras Absolutas do Medidor LEM):
+                      {t('ocmfAuditModal.physicalAccumulatorsTitle')}
                     </h5>
                     <div className="space-y-2">
                       {audit.stop_report?.readings?.map((r: any, idx: number) => {
                         // Distinguish start vs stop readings
                         const isFirstHalf = idx < Math.ceil((audit.stop_report.readings.length || 1) / 2)
                         const stageLabel = (audit.stop_report.readings.length > 2)
-                          ? (isFirstHalf ? '🟢 Início da Carga (ST=G)' : '🔴 Fim da Carga (ST=T)')
+                          ? (isFirstHalf ? t('ocmfAuditModal.startOfChargeBadge') : t('ocmfAuditModal.endOfChargeBadge'))
                           : null
 
                         return (
                           <div
                             key={idx}
-                            className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 flex items-center justify-between text-xs font-mono hover:border-blue-500/30 transition-colors"
+                            className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 flex items-center justify-between text-xs font-mono hover:border-blue-500/30 transition-colors"
                           >
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -230,17 +237,17 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
                                 )}
                                 {r.obis === '1-0:1.8.0' ? (
                                   <span className="text-[10px] font-sans font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                                    ⚡ Fornecimento à Bateria
+                                    {t('ocmfAuditModal.supplyToBattery')}
                                   </span>
                                 ) : (
                                   <span className="text-[10px] font-sans font-medium px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">
-                                    🔄 V2G / Exportação (Inativo)
+                                    {t('ocmfAuditModal.v2gExportInactive')}
                                   </span>
                                 )}
                               </div>
                               <span className="text-[11px] text-slate-500 font-sans block mt-0.5">
                                 {r.obis === '1-0:2.8.0'
-                                  ? 'Totalizador de Exportação / Injeção Reversa V2G do Carro (Calibração de Fábrica)'
+                                  ? t('ocmfAuditModal.v2gExportDesc')
                                   : r.description}
                               </span>
                             </div>
@@ -260,7 +267,7 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
               {activeTab === 'raw' && (
                 <div className="space-y-2">
                   <div className="p-3 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] overflow-x-auto max-h-60 whitespace-pre-wrap break-all leading-relaxed">
-                    {audit.ocmf_stop_raw || audit.ocmf_start_raw || 'Sem dados brutos disponíveis.'}
+                    {audit.ocmf_stop_raw || audit.ocmf_start_raw || t('ocmfAuditModal.noRawData')}
                   </div>
                 </div>
               )}
@@ -271,7 +278,7 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
         {/* Footer */}
         <div className="p-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02]">
           <span className="text-[11px] text-slate-400">
-            Compatível com S.A.F.E. Transparency Software
+            {t('ocmfAuditModal.safeTransparencyCompliance')}
           </span>
           <div className="flex gap-2">
             <button
@@ -279,10 +286,10 @@ export function OcmfAuditModal({ transactionId, onClose }: OcmfAuditModalProps) 
               className="btn btn-secondary text-xs flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
-              Descarregar .ocmf
+              {t('ocmfAuditModal.downloadOcmfBtn')}
             </button>
             <button onClick={onClose} className="btn btn-primary text-xs">
-              Fechar
+              {t('common.close')}
             </button>
           </div>
         </div>

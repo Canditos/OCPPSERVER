@@ -36,18 +36,18 @@ export function ChargerCard({ charger }: { charger: Charger }) {
     e.preventDefault()
     e.stopPropagation()
     setIsSelfHealing(true)
-    setFeedback({ type: 'info', message: 'A executar auto-diagnóstico e reconciliação…' })
+    setFeedback({ type: 'info', message: t('chargerCard.selfHealRunning') })
     try {
       const resp = await api.selfHealCharger(charger.charge_point_id)
       const actionMsg = resp.actions_taken && resp.actions_taken.length > 0
         ? resp.actions_taken.join(' · ')
-        : 'Estado verificado e sincronizado a 100%!'
+        : t('chargerCard.selfHealSuccessDefault')
       setFeedback({ type: 'success', message: `✅ ${actionMsg}` })
       refetchActiveTx()
       queryClient.invalidateQueries({ queryKey: ['chargers'] })
       queryClient.invalidateQueries({ queryKey: ['activeTransactions', charger.charge_point_id] })
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Erro ao sincronizar posto.'
+      const msg = err?.response?.data?.detail || err?.message || t('chargerCard.selfHealError')
       setFeedback({ type: 'error', message: `⚠️ ${msg}` })
     } finally {
       setIsSelfHealing(false)
@@ -592,7 +592,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               type="button"
               onClick={handleOpenSecModal}
               className="text-[9px] px-1.5 py-0.5 rounded-md font-mono font-semibold border bg-slate-800/80 text-slate-300 border-white/10 hover:border-blue-400 cursor-pointer"
-              title="Perfil de Segurança"
+              title={t('chargerCard.securityProfileTooltip')}
             >
               {(charger.security_profile ?? 0) === 3 ? '🛡️ P3' : (charger.security_profile ?? 0) === 2 ? '🔒 P2' : (charger.security_profile ?? 0) === 1 ? '🔑 P1' : '🔓 P0'}
             </button>
@@ -617,7 +617,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
               onClick={handleSelfHeal}
               disabled={isSelfHealing}
               className="p-1 rounded-lg text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer"
-              title="Auto-Diagnóstico & Sincronização"
+              title={t('chargerCard.selfHealTooltip')}
             >
               <Sparkles className={`w-3.5 h-3.5 ${isSelfHealing ? 'animate-spin text-blue-500' : ''}`} />
             </button>
@@ -636,7 +636,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       <div className="mb-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider">
-            Baias de Carregamento ({rawConnectors.length})
+            {t('chargerCard.chargingBays', { count: rawConnectors.length })}
           </span>
           <span className="text-[11px] text-blue-600 dark:text-blue-400 font-mono font-semibold">
             {t('chargerCard.activePlug', { id: selectedConnectorId })}
@@ -690,7 +690,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                   </span>
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-gray-400 mt-1 font-mono">
-                  {data.completed_transactions}/{data.total_transactions} concluídas
+                  {t('chargerCard.completedCount', { completed: data.completed_transactions, total: data.total_transactions })}
                 </div>
               </div>
             ))}

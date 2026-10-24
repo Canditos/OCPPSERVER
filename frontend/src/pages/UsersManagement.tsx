@@ -1005,7 +1005,7 @@ export function UsersManagement() {
                     {t('users.historyTitle', { username: selectedUserForHistory.username })}
                   </h2>
                   <span className="text-xs text-slate-500 dark:text-gray-400 font-mono">
-                    {t('users.historySubtitle', { tag: selectedUserForHistory.rfid_tag || t('users.noTagRfid') })} {selectedUserForHistory.total_kwh || 0} kWh ({selectedUserForHistory.total_sessions || 0} sessões)
+                    {t('users.historySubtitle', { tag: selectedUserForHistory.rfid_tag || t('users.noTagRfid') })} {selectedUserForHistory.total_kwh || 0} kWh ({t('users.sessionsCount', { count: selectedUserForHistory.total_sessions || 0 })})
                   </span>
                 </div>
               </div>

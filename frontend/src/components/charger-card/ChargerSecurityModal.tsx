@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Shield, Lock, Eye, EyeOff, Copy, Check, Sparkles, Send, X, CheckCircle2, AlertCircle } from 'lucide-react'
 import { api } from '../../api'
 import type { Charger } from '../../types'
+import { useI18n } from '../../i18n'
 
 interface ChargerSecurityModalProps {
   isOpen: boolean
@@ -18,6 +19,7 @@ export function ChargerSecurityModal({
   isOnline,
   onSaved,
 }: ChargerSecurityModalProps) {
+  const { t } = useI18n()
   const [secProfile, setSecProfile] = useState<number>(charger.security_profile ?? 0)
   const [authKey, setAuthKey] = useState<string>(charger.auth_password || '')
   const [authEnabled, setAuthEnabled] = useState<boolean>(charger.auth_enabled ?? false)
@@ -46,14 +48,14 @@ export function ChargerSecurityModal({
         auth_password: authKey,
         auth_enabled: authEnabled || secProfile >= 1,
       })
-      setSecFeedback({ type: 'success', message: 'Segurança guardada com sucesso!' })
+      setSecFeedback({ type: 'success', message: t('chargerSecurityModal.savedSuccess') })
       onSaved?.()
       setTimeout(() => {
         onClose()
         setSecFeedback(null)
       }, 1200)
     } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro: ${err?.response?.data?.detail || err.message}` })
+      setSecFeedback({ type: 'error', message: t('chargerSecurityModal.saveError', { error: err?.response?.data?.detail || err.message }) })
     } finally {
       setIsSavingSec(false)
     }
@@ -64,10 +66,10 @@ export function ChargerSecurityModal({
     try {
       const res = await api.generateChargerKey(charger.charge_point_id)
       setAuthKey(res.authorization_key)
-      setSecFeedback({ type: 'success', message: 'Nova AuthorizationKey gerada!' })
+      setSecFeedback({ type: 'success', message: t('chargerSecurityModal.generatedSuccess') })
       onSaved?.()
     } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro ao gerar: ${err?.response?.data?.detail || err.message}` })
+      setSecFeedback({ type: 'error', message: t('chargerSecurityModal.generateError', { error: err?.response?.data?.detail || err.message }) })
     } finally {
       setIsSavingSec(false)
     }
@@ -77,9 +79,9 @@ export function ChargerSecurityModal({
     setIsSavingSec(true)
     try {
       const res = await api.syncChargerKey(charger.charge_point_id)
-      setSecFeedback({ type: 'success', message: `Chave enviada ao posto via OCPP (${res.status})` })
+      setSecFeedback({ type: 'success', message: t('chargerSecurityModal.syncedSuccess', { status: res.status }) })
     } catch (err: any) {
-      setSecFeedback({ type: 'error', message: `Erro ao sincronizar: ${err?.response?.data?.detail || err.message}` })
+      setSecFeedback({ type: 'error', message: t('chargerSecurityModal.syncError', { error: err?.response?.data?.detail || err.message }) })
     } finally {
       setIsSavingSec(false)
     }
@@ -108,7 +110,7 @@ export function ChargerSecurityModal({
               <Shield className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-gray-100">Segurança & AuthorizationKey</h3>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-gray-100">{t('chargerSecurityModal.title')}</h3>
               <p className="text-xs text-slate-500 dark:text-gray-400 font-mono">{charger.charge_point_id}</p>
             </div>
           </div>
@@ -133,7 +135,7 @@ export function ChargerSecurityModal({
 
         {/* Profile selector */}
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">Perfil de Segurança (OCPP 1.6)</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">{t('chargerSecurityModal.profileLabel')}</label>
           <select
             value={secProfile}
             onChange={(e) => {
@@ -143,24 +145,24 @@ export function ChargerSecurityModal({
             }}
             className="select w-full text-xs py-2 bg-slate-50 dark:bg-gray-800/90 border-slate-200 dark:border-white/10"
           >
-            <option value={0}>Profile 0 — Aberto / Unsecure (ws:// sem password)</option>
-            <option value={1}>Profile 1 — HTTP Basic Auth (ws:// com password)</option>
-            <option value={2}>Profile 2 — TLS + Basic Auth (wss:// encriptado com password)</option>
-            <option value={3}>Profile 3 — mTLS (TLS Mútuo com Certificados Digitais X.509)</option>
+            <option value={0}>{t('chargerSecurityModal.profile0')}</option>
+            <option value={1}>{t('chargerSecurityModal.profile1')}</option>
+            <option value={2}>{t('chargerSecurityModal.profile2')}</option>
+            <option value={3}>{t('chargerSecurityModal.profile3')}</option>
           </select>
         </div>
 
         {/* AuthorizationKey */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">AuthorizationKey (Password do Posto)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">{t('chargerSecurityModal.authKeyLabel')}</label>
             <button
               type="button"
               onClick={handleGenerateKey}
               disabled={isSavingSec}
               className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1 font-medium transition-colors"
             >
-              <Sparkles className="w-3.5 h-3.5" /> Gerar Chave Segura
+              <Sparkles className="w-3.5 h-3.5" /> {t('chargerSecurityModal.generateKeyBtn')}
             </button>
           </div>
 
@@ -169,7 +171,7 @@ export function ChargerSecurityModal({
               type={showKey ? 'text' : 'password'}
               value={authKey}
               onChange={(e) => setAuthKey(e.target.value)}
-              placeholder="Introduza ou gere a password do posto"
+              placeholder={t('chargerSecurityModal.authKeyPlaceholder')}
               className="input pr-20 text-xs font-mono bg-slate-50 dark:bg-gray-800/90 border-slate-200 dark:border-white/10 w-full"
             />
             <div className="absolute right-1.5 flex items-center gap-1">
@@ -177,7 +179,7 @@ export function ChargerSecurityModal({
                 type="button"
                 onClick={() => setShowKey(!showKey)}
                 className="p-1 text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
-                title={showKey ? 'Ocultar' : 'Mostrar'}
+                title={showKey ? t('chargerSecurityModal.hideKey') : t('chargerSecurityModal.showKey')}
               >
                 {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -186,7 +188,7 @@ export function ChargerSecurityModal({
                 onClick={handleCopyKey}
                 disabled={!authKey}
                 className="p-1 text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
-                title="Copiar Chave"
+                title={t('chargerSecurityModal.copyKey')}
               >
                 {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
@@ -196,8 +198,8 @@ export function ChargerSecurityModal({
 
         {/* Header preview if key present */}
         {authKey && secProfile >= 1 && (
-          <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-white/4 border border-slate-200 dark:border-white/8 space-y-1">
-            <span className="text-[10px] text-slate-500 dark:text-gray-400 font-medium">Cabeçalho HTTP Basic para o Carregador:</span>
+          <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 space-y-1">
+            <span className="text-[10px] text-slate-500 dark:text-gray-400 font-medium">{t('chargerSecurityModal.httpHeaderLabel')}</span>
             <p className="text-[10px] font-mono text-slate-700 dark:text-gray-300 break-all bg-white dark:bg-gray-950/80 p-1.5 rounded border border-slate-200 dark:border-white/5 select-all">
               Authorization: Basic {btoa(`${charger.charge_point_id}:${authKey}`)}
             </p>
@@ -211,10 +213,10 @@ export function ChargerSecurityModal({
             onClick={handleSyncKey}
             disabled={isSavingSec || !isOnline || !authKey}
             className="btn bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-xs py-2 px-3 rounded-xl flex items-center gap-1.5 disabled:opacity-40 transition-all"
-            title={isOnline ? 'Enviar chave ao posto via OCPP' : 'Posto offline'}
+            title={isOnline ? t('chargerSecurityModal.syncStationTooltipOnline') : t('chargerSecurityModal.syncStationTooltipOffline')}
           >
             <Send className="w-3.5 h-3.5" />
-            <span>Sincronizar no Posto</span>
+            <span>{t('chargerSecurityModal.syncStationBtn')}</span>
           </button>
 
           <button
@@ -224,7 +226,7 @@ export function ChargerSecurityModal({
             className="flex-1 btn-primary text-xs py-2 rounded-xl flex items-center justify-center gap-1.5 font-semibold"
           >
             <Lock className="w-3.5 h-3.5" />
-            <span>{isSavingSec ? 'A guardar...' : 'Guardar Segurança'}</span>
+            <span>{isSavingSec ? t('chargerSecurityModal.saving') : t('chargerSecurityModal.saveBtn')}</span>
           </button>
         </div>
       </div>

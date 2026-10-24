@@ -31,7 +31,7 @@ const C = {
   amber:   { ring: 'border-amber-500/20',  icon: 'bg-amber-500/15 text-amber-400',  title: 'text-amber-400',   badge: 'bg-amber-500/10 border-amber-500/20' },
   emerald: { ring: 'border-emerald-500/20',icon: 'bg-emerald-500/15 text-emerald-400', title: 'text-emerald-400', badge: 'bg-emerald-500/10 border-emerald-500/20' },
   violet:  { ring: 'border-violet-500/20', icon: 'bg-violet-500/15 text-violet-400', title: 'text-violet-400',  badge: 'bg-violet-500/10 border-violet-500/20' },
-  gray:    { ring: 'border-white/8',       icon: 'bg-gray-700/50 text-gray-400',    title: 'text-gray-400',    badge: 'bg-gray-700/20 border-gray-700/30' },
+  gray:    { ring: 'border-slate-200 dark:border-white/10', icon: 'bg-slate-200 dark:bg-gray-700/50 text-slate-600 dark:text-gray-400', title: 'text-slate-700 dark:text-gray-400', badge: 'bg-slate-100 dark:bg-gray-700/20 border-slate-200 dark:border-gray-700/30' },
 }
 
 function ResultBadge({ result }: { result: Result | undefined }) {
@@ -114,7 +114,7 @@ function ChargerSelector({
   const offline = chargers.filter((c) => !c.is_online)
 
   return (
-    <div className="card border border-white/8 mb-6">
+    <div className="card border border-slate-200 dark:border-white/10 mb-6">
       <div className="flex items-center gap-3 mb-3">
         <div className="p-2 rounded-xl bg-gray-700/40">
           <Terminal className="w-4 h-4 text-gray-400" />
@@ -178,7 +178,7 @@ function ChargerSelector({
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
                 value === c.charge_point_id
                   ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
-                  : 'bg-white/4 border-white/8 text-gray-400 hover:border-white/20 hover:text-gray-200'
+                  : 'bg-slate-100 dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-white/20 hover:text-gray-200'
               }`}
             >
               <Wifi className="w-3 h-3" />
@@ -274,7 +274,7 @@ export function Commands() {
         )}
       </div>
 
-      <div className="card border border-white/8">
+      <div className="card border border-slate-200 dark:border-white/10">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-gray-500 mr-1">{t('commands.shortcuts')}</span>
           {[
@@ -413,7 +413,7 @@ export function Commands() {
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 pointer-events-none" />
                 </div>
               ) : (
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-800/40 border border-white/6 text-xs text-gray-600">
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-gray-800/40 border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-gray-400">
                   <Square className="w-3.5 h-3.5" />
                   {t('commands.noActiveTransactions')}
                 </div>
@@ -436,7 +436,7 @@ export function Commands() {
                         ? typ === 'Hard'
                           ? 'bg-red-500/20 border-red-500/40 text-red-400'
                           : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                        : 'bg-white/4 border-white/8 text-gray-500 hover:text-gray-300'
+                        : 'bg-slate-100 dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-200'
                     }`}
                   >
                     {typ === 'Soft' ? '↻ Soft' : '⚡ Hard'}
@@ -475,7 +475,7 @@ export function Commands() {
                           ? typ === 'Operative'
                             ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
                             : 'bg-red-500/20 border-red-500/40 text-red-400'
-                          : 'bg-white/4 border-white/8 text-gray-500 hover:text-gray-300'
+                          : 'bg-slate-100 dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-200'
                       }`}
                     >{typ}</button>
                   ))}
@@ -524,7 +524,7 @@ export function Commands() {
 
           {/* get configuration */}
           <CmdCard anchorId="config-get-card" icon={<FileSearch className="w-5 h-5" />} title="Get Configuration" description={t('commands.getConfigDesc')} color="gray" disabled={noTarget} result={getcfg.result}>
-            <p className="text-xs text-gray-600 bg-gray-700/20 border border-white/6 rounded-xl p-3">
+            <p className="text-xs text-slate-600 dark:text-gray-400 bg-slate-100 dark:bg-gray-700/20 border border-slate-200 dark:border-white/10 rounded-xl p-3">
               {t('commands.getConfigInfo')}
             </p>
             <RunBtn label="Get Configuration" onClick={getcfg.run} loading={getcfg.loading} variant="secondary" />

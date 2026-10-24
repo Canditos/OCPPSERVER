@@ -113,7 +113,7 @@ export function Logs() {
       ) : (
         <div className="card flex flex-col items-center justify-center py-16 text-center gap-4">
           <ScrollText className="w-8 h-8 text-gray-600" />
-          <p className="text-gray-400 font-medium">Sem chargers ligados</p>
+          <p className="text-gray-400 font-medium">{t('logs.noConnectedChargers')}</p>
         </div>
       )}
 

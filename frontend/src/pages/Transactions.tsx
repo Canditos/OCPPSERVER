@@ -8,11 +8,13 @@ import {
 } from 'lucide-react'
 import { safeFormatDate } from '../utils/date'
 import { api } from '../api'
+import { useI18n } from '../i18n'
 import { MeterChart } from '../components/MeterChart'
 import { OcmfAuditModal } from '../components/OcmfAuditModal'
 import type { Charger, MeterKeyData, Transaction } from '../types'
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n()
   const cls = status === 'Active'
     ? 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse flex items-center gap-1.5'
     : 'px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-gray-700'
@@ -20,12 +22,13 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={cls}>
       {status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />}
-      {status === 'Active' ? 'A Carregar' : 'Concluído'}
+      {status === 'Active' ? t('transactions.charging') : t('transactions.completed')}
     </span>
   )
 }
 
 export function Transactions() {
+  const { t } = useI18n()
   const { data: chargers = [] } = useQuery<Charger[]>({ queryKey: ['chargers'], queryFn: api.getChargers })
   const { data: meterKeys = [] } = useQuery<MeterKeyData[]>({
     queryKey: ['ocmf-meter-keys'],
@@ -66,11 +69,11 @@ export function Transactions() {
           <div className="flex items-center gap-2">
             <ArrowLeftRight className="w-6 h-6 text-blue-500" />
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Transações e Consumos
+              {t('transactions.title')}
             </h1>
           </div>
           <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
-            Histórico completo com conformidade metrológica legal (Eichrecht / OCMF)
+            {t('transactions.subtitle')}
           </p>
         </div>
 
@@ -79,15 +82,15 @@ export function Transactions() {
             onClick={handleReverifyOcmf}
             disabled={isRevalidating}
             className="btn btn-secondary text-xs flex items-center gap-1.5"
-            title="Revalidar assinaturas dos medidores LEM DCBM"
+            title={t('transactions.reverifyTooltip')}
           >
             <RefreshCw className={`w-3.5 h-3.5 text-blue-500 ${isRevalidating ? 'animate-spin' : ''}`} />
-            <span>Revalidar OCMF</span>
+            <span>{t('transactions.reverifyOcmf')}</span>
           </button>
 
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-gray-800/80 border border-slate-200 dark:border-gray-700 text-xs font-mono text-slate-700 dark:text-gray-300">
             <Activity className="w-3.5 h-3.5 text-blue-500" />
-            <span>{txs.length} registadas</span>
+            <span>{t('transactions.registered', { count: txs.length })}</span>
           </div>
         </div>
       </div>
@@ -95,13 +98,13 @@ export function Transactions() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <select className="select max-w-[220px] text-xs" value={filterCp} onChange={(e) => setFilterCp(e.target.value)}>
-          <option value="">Todos os Postos</option>
+          <option value="">{t('transactions.allStations')}</option>
           {chargers.map((c) => <option key={c.id} value={c.charge_point_id}>{c.charge_point_id}</option>)}
         </select>
         <select className="select max-w-[180px] text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="">Todos os Estados</option>
-          <option value="Active">Apenas Ativas (A carregar)</option>
-          <option value="Completed">Apenas Concluídas</option>
+          <option value="">{t('transactions.allStatuses')}</option>
+          <option value="Active">{t('transactions.activeOnly')}</option>
+          <option value="Completed">{t('transactions.completedOnly')}</option>
         </select>
       </div>
 
@@ -110,14 +113,14 @@ export function Transactions() {
         {txs.length === 0 && (
           <div className="card flex flex-col items-center justify-center py-16 text-slate-400 dark:text-gray-500 text-sm border border-slate-200 dark:border-white/5 space-y-2">
             <Clock className="w-8 h-8 opacity-40" />
-            <p>Nenhuma transação encontrada com os filtros selecionados.</p>
+            <p>{t('transactions.noneFound')}</p>
           </div>
         )}
 
         {txs.map((tx) => {
           const duration = tx.stop_time
             ? formatDuration(intervalToDuration({ start: new Date(tx.start_time), end: new Date(tx.stop_time) }), { format: ['hours', 'minutes', 'seconds'] })
-            : tx.status === 'Active' ? 'Em curso…' : null
+            : tx.status === 'Active' ? t('transactions.inProgress') : null
 
           const isOpen = expanded === tx.id
           const charger = chargers.find((item) => item.charge_point_id === tx.charge_point_id)
@@ -176,7 +179,7 @@ export function Transactions() {
                       <div className="flex items-center gap-1.5">
                         <CreditCard className="w-3.5 h-3.5 text-slate-400" />
                         <span className="font-mono text-slate-700 dark:text-gray-300 text-xs">
-                          {tx.id_tag || 'Sem Tag'}
+                          {tx.id_tag || t('transactions.noTag')}
                         </span>
                       </div>
                     )}
@@ -188,7 +191,7 @@ export function Transactions() {
                       {safeFormatDate(tx.start_time, 'dd/MM HH:mm')}
                     </span>
                     <span className="text-[10px] text-slate-500 dark:text-gray-400">
-                      {tx.stop_time ? safeFormatDate(tx.stop_time, 'dd/MM HH:mm') : 'Em curso…'}
+                      {tx.stop_time ? safeFormatDate(tx.stop_time, 'dd/MM HH:mm') : t('transactions.inProgress')}
                     </span>
                   </div>
 
@@ -222,34 +225,34 @@ export function Transactions() {
                           setSelectedOcmfTx(tx.transaction_id)
                         }}
                         className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 hover:bg-emerald-500/25 transition-colors"
-                        title="Assinatura Legal Eichrecht / OCMF Válida"
+                        title={t('transactions.validOcmfTooltip')}
                       >
                         <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                        <span>OCMF Válido</span>
+                        <span>{t('transactions.ocmfValid')}</span>
                       </button>
                     ) : tx.status === 'Active' && isErkCompliant ? (
                       <span
                         className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center gap-1"
-                        title="Carregador Eichrecht com ERK ativa. A assinatura OCMF final será validada no fim da carga."
+                        title={t('transactions.erkCompliantTooltip')}
                       >
                         <ShieldCheck className="w-3 h-3 text-blue-500" />
-                        <span>ERK Compliance</span>
+                        <span>{t('transactions.erkCompliance')}</span>
                       </span>
                     ) : tx.status === 'Active' && isErkMissingKey ? (
                       <span
                         className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1"
-                        title="O carregador está marcado como Eichrecht, mas não existe uma ERK ativa para este conector."
+                        title={t('transactions.erkMissingTooltip')}
                       >
                         <ShieldAlert className="w-3 h-3 text-amber-500" />
-                        <span>ERK por configurar</span>
+                        <span>{t('transactions.erkMissingKey')}</span>
                       </span>
                     ) : tx.status !== 'Active' && isErkCompliant && !tx.ocmf_start_raw && !tx.ocmf_stop_raw ? (
                       <span
                         className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25 flex items-center gap-1"
-                        title="A ERK está configurada, mas o carregador não enviou o documento OCMF desta sessão."
+                        title={t('transactions.ocmfNotReceivedTooltip')}
                       >
                         <ShieldAlert className="w-3 h-3 text-red-500" />
-                        <span>OCMF não recebido</span>
+                        <span>{t('transactions.ocmfNotReceived')}</span>
                       </span>
                     ) : (tx.ocmf_stop_raw || tx.ocmf_start_raw) ? (
                       <button
@@ -258,10 +261,10 @@ export function Transactions() {
                           setSelectedOcmfTx(tx.transaction_id)
                         }}
                         className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1 hover:bg-amber-500/25 transition-colors"
-                        title="Clique para inspecionar OCMF"
+                        title={t('transactions.inspectOcmfTooltip')}
                       >
                         <ShieldAlert className="w-3 h-3 text-amber-500" />
-                        <span>OCMF</span>
+                        <span>{t('transactions.ocmfBadge')}</span>
                       </button>
                     ) : null}
                   </div>
@@ -274,27 +277,27 @@ export function Transactions() {
                   {/* Detailed summary pills */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3 text-xs mb-3">
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Utilizador</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.user')}</span>
                       <span className="font-bold text-slate-900 dark:text-white">
-                        {tx.user_username ? `${tx.user_username} (${tx.user_role || 'user'})` : 'Não registado'}
+                        {tx.user_username ? `${tx.user_username} (${tx.user_role || 'user'})` : t('transactions.notRegistered')}
                       </span>
                       {tx.user_email && <span className="text-[10px] text-slate-400 block">{tx.user_email}</span>}
                     </div>
 
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Início / Fim</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.startEnd')}</span>
                       <span className="font-mono text-slate-800 dark:text-gray-200 text-[11px] block">
-                        Início: {safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm:ss')}
+                        {t('transactions.start')}: {safeFormatDate(tx.start_time, 'dd/MM/yyyy HH:mm:ss')}
                       </span>
                       {tx.stop_time && (
                         <span className="font-mono text-slate-500 text-[11px] block">
-                          Fim: {safeFormatDate(tx.stop_time, 'dd/MM/yyyy HH:mm:ss')}
+                          {t('transactions.stop')}: {safeFormatDate(tx.stop_time, 'dd/MM/yyyy HH:mm:ss')}
                         </span>
                       )}
                     </div>
 
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Leitura Contadores</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.meterReadings')}</span>
                       <span className="font-mono text-slate-800 dark:text-gray-200 text-[11px] block">
                         Start: {tx.meter_start} Wh
                       </span>
@@ -306,34 +309,34 @@ export function Transactions() {
                     </div>
 
                     <div className="p-3 rounded-xl bg-white dark:bg-gray-800/60 border border-slate-200 dark:border-white/5">
-                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">Metrologia Legal (OCMF)</span>
+                      <span className="text-slate-500 dark:text-gray-400 text-[10px] uppercase font-semibold block mb-0.5">{t('transactions.legalMetrology')}</span>
                       <div className="flex items-center justify-between mt-0.5">
                         <span className="font-bold text-xs flex items-center gap-1">
                           {tx.ocmf_verified ? (
                             <span className="text-emerald-500 flex items-center gap-1">
-                              <ShieldCheck className="w-3.5 h-3.5" /> Assinado & Válido
+                              <ShieldCheck className="w-3.5 h-3.5" /> {t('transactions.signedValid')}
                             </span>
                           ) : tx.status === 'Active' && isErkCompliant ? (
                             <span
                               className="text-blue-500 flex items-center gap-1"
-                              title="A validação da assinatura OCMF é concluída no fim da carga."
+                              title={t('transactions.erkCompliantTooltip')}
                             >
-                              <ShieldCheck className="w-3.5 h-3.5" /> ERK ativa · validação no fim
+                              <ShieldCheck className="w-3.5 h-3.5" /> {t('transactions.erkActiveValidationEnd')}
                             </span>
                           ) : tx.status === 'Active' && isErkMissingKey ? (
                             <span className="text-amber-500 flex items-center gap-1">
-                              <ShieldAlert className="w-3.5 h-3.5" /> ERK por configurar
+                              <ShieldAlert className="w-3.5 h-3.5" /> {t('transactions.erkMissingKey')}
                             </span>
                           ) : tx.status !== 'Active' && isErkCompliant && !tx.ocmf_start_raw && !tx.ocmf_stop_raw ? (
                             <span className="text-red-500 flex items-center gap-1">
-                              <ShieldAlert className="w-3.5 h-3.5" /> OCMF final não recebido
+                              <ShieldAlert className="w-3.5 h-3.5" /> {t('transactions.ocmfFinalNotReceived')}
                             </span>
                           ) : tx.ocmf_stop_raw ? (
                             <span className="text-amber-500 flex items-center gap-1">
-                              <ShieldAlert className="w-3.5 h-3.5" /> Registado
+                              <ShieldAlert className="w-3.5 h-3.5" /> {t('transactions.recorded')}
                             </span>
                           ) : (
-                            <span className="text-slate-400">Padrão</span>
+                            <span className="text-slate-400">{t('transactions.standard')}</span>
                           )}
                         </span>
                         {(tx.ocmf_stop_raw || tx.ocmf_start_raw) && (
@@ -341,7 +344,7 @@ export function Transactions() {
                             onClick={() => setSelectedOcmfTx(tx.transaction_id)}
                             className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
                           >
-                            Auditar
+                            {t('transactions.audit')}
                           </button>
                         )}
                       </div>
@@ -351,7 +354,7 @@ export function Transactions() {
                   {/* MeterValues Chart */}
                   <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
                     <span className="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-2 block">
-                      Curva de Telemetria e Potência da Sessão
+                      {t('transactions.telemetryCurve')}
                     </span>
                     <MeterChart cpId={tx.charge_point_id} transactionId={tx.id} />
                   </div>

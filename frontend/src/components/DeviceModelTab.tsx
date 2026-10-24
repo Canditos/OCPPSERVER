@@ -151,21 +151,21 @@ export function DeviceModelTab({ chargerId, isOnline, ocppVersion }: DeviceModel
 
         {/* Issued Contract Result */}
         {issuedContract && (
-          <div className="mt-4 p-3.5 rounded-xl bg-gray-900/90 border border-purple-500/30 text-xs space-y-2">
-            <div className="flex items-center justify-between text-emerald-400 font-semibold">
+          <div className="mt-4 p-3.5 rounded-xl bg-slate-50 dark:bg-gray-900/90 border border-slate-200 dark:border-purple-500/30 text-xs space-y-2">
+            <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
               <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" /> Certificado de Contrato ISO 15118 Emitido!
+                <CheckCircle2 className="w-4 h-4" /> {t('chargerDetail.deviceModel.contractIssued')}
               </span>
-              <span className="text-[11px] font-mono text-gray-400">Validade: 365 dias</span>
+              <span className="text-[11px] font-mono text-slate-500 dark:text-gray-400">{t('chargerDetail.deviceModel.validityDays')}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
-              <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                <span className="text-gray-500 block text-[10px]">eMAID Sujeito:</span>
-                <span className="text-purple-300 font-bold">{issuedContract.emaid}</span>
+              <div className="p-2 rounded-lg bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/5">
+                <span className="text-slate-500 dark:text-gray-500 block text-[10px]">{t('chargerDetail.deviceModel.emaidSubject')}</span>
+                <span className="text-purple-600 dark:text-purple-300 font-bold">{issuedContract.emaid}</span>
               </div>
-              <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                <span className="text-gray-500 block text-[10px]">Número de Série:</span>
-                <span className="text-gray-300 truncate block">{issuedContract.serial_number}</span>
+              <div className="p-2 rounded-lg bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/5">
+                <span className="text-slate-500 dark:text-gray-500 block text-[10px]">{t('chargerDetail.deviceModel.serialNumber')}</span>
+                <span className="text-slate-700 dark:text-gray-300 truncate block">{issuedContract.serial_number}</span>
               </div>
             </div>
           </div>
@@ -214,24 +214,24 @@ export function DeviceModelTab({ chargerId, isOnline, ocppVersion }: DeviceModel
       {/* Components List */}
       <div className="space-y-4">
         {filteredComponents.map((comp) => (
-          <div key={comp.id} className="card p-0 overflow-hidden border-white/10 bg-white/4">
+          <div key={comp.id} className="card p-0 overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900/60">
             {/* Component Header */}
-            <div className="px-4 py-3 bg-white/5 border-b border-white/8 flex items-center justify-between">
+            <div className="px-4 py-3 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-blue-400" />
-                <span className="text-xs font-bold text-white font-mono">{comp.name}</span>
+                <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">{comp.name}</span>
                 {comp.instance && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 font-mono">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-300 border border-blue-500/20 font-mono">
                     inst: {comp.instance}
                   </span>
                 )}
                 {comp.evse_id && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/20 font-mono">
                     EVSE #{comp.evse_id}
                   </span>
                 )}
               </div>
-              <span className="text-[11px] font-mono text-gray-500">
+              <span className="text-[11px] font-mono text-slate-500 dark:text-gray-400">
                 {comp.variables.length} var(s)
               </span>
             </div>
@@ -240,12 +240,12 @@ export function DeviceModelTab({ chargerId, isOnline, ocppVersion }: DeviceModel
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-white/5 text-[10px] uppercase text-gray-500 bg-black/20 font-mono">
-                    <th className="text-left px-4 py-2">Variável</th>
-                    <th className="text-left px-4 py-2">Tipo / Unidade</th>
-                    <th className="text-left px-4 py-2">Acesso</th>
-                    <th className="text-left px-4 py-2">Valor Atual</th>
-                    <th className="text-right px-4 py-2">Ações</th>
+                  <tr className="border-b border-slate-200 dark:border-white/10 text-[10px] uppercase text-slate-500 dark:text-gray-400 bg-slate-50 dark:bg-black/20 font-mono">
+                    <th className="text-left px-4 py-2">{t('chargerDetail.deviceModel.colVariable')}</th>
+                    <th className="text-left px-4 py-2">{t('chargerDetail.deviceModel.colTypeUnit')}</th>
+                    <th className="text-left px-4 py-2">{t('chargerDetail.deviceModel.colAccess')}</th>
+                    <th className="text-left px-4 py-2">{t('chargerDetail.deviceModel.colCurrentVal')}</th>
+                    <th className="text-right px-4 py-2">{t('chargerDetail.deviceModel.colActions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">

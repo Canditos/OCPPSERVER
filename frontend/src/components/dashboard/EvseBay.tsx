@@ -1,5 +1,6 @@
 import React from 'react'
 import { Zap, Plug, AlertCircle, Clock, Tag, Unlock, Mail, CheckCircle2, WifiOff } from 'lucide-react'
+import { useI18n } from '../../i18n'
 
 interface EvseBayProps {
   connectorId: number
@@ -28,6 +29,7 @@ export function EvseBay({
   onUnlock,
   onNotifyDriver,
 }: EvseBayProps) {
+  const { t } = useI18n()
   const isCharging = status === 'Charging'
   const isPreparing = status === 'Preparing'
   const isFaulted = status === 'Faulted'
@@ -36,8 +38,8 @@ export function EvseBay({
   const isOffline = status === 'Offline' || status === 'Unavailable'
 
   // Plug type heuristic: DC is CCS2 Combo, AC is Type 2 Mennekes
-  const plugLabel = isDC ? 'CCS2 Combo (DC)' : 'Tipo 2 Mennekes (AC)'
-  const maxPowerLabel = isDC ? 'Até 150 kW DC' : 'Até 22 kW AC'
+  const plugLabel = isDC ? t('evseBay.plugTypeDC') : t('evseBay.plugTypeAC')
+  const maxPowerLabel = isDC ? t('evseBay.maxPowerDC') : t('evseBay.maxPowerAC')
 
   return (
     <div
@@ -83,7 +85,17 @@ export function EvseBay({
             isCharging ? 'bg-blue-500 animate-ping' : isFaulted ? 'bg-red-500' : isOffline ? 'bg-slate-400' : isAvailable ? 'bg-emerald-500' : 'bg-amber-500'
           }`} />
           <span>
-            {isCharging ? 'A Carregar' : isPreparing ? 'A Preparar' : isFaulted ? 'Com Falha' : isSuspended ? 'Suspenso' : isOffline ? 'Desconectado' : 'Disponível'}
+            {isCharging
+              ? t('evseBay.statusCharging')
+              : isPreparing
+              ? t('evseBay.statusPreparing')
+              : isFaulted
+              ? t('evseBay.statusFaulted')
+              : isSuspended
+              ? t('evseBay.statusSuspended')
+              : isOffline
+              ? t('evseBay.statusDisconnected')
+              : t('evseBay.statusAvailable')}
           </span>
         </span>
       </div>
@@ -99,7 +111,7 @@ export function EvseBay({
               </div>
               <div>
                 <span className="text-[10px] text-slate-500 dark:text-gray-400 block font-semibold uppercase tracking-wider">
-                  Potência Instantânea
+                  {t('evseBay.instantPower')}
                 </span>
                 <div className="flex items-baseline gap-1">
                   <span className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-cyan-300">
@@ -113,7 +125,7 @@ export function EvseBay({
             {/* Energy delivered so far */}
             <div className="text-right">
               <span className="text-[10px] text-slate-500 dark:text-gray-400 block font-semibold uppercase tracking-wider">
-                Energia Entregue
+                {t('evseBay.deliveredEnergy')}
               </span>
               <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
                 {activeTx?.energy_kwh !== undefined && activeTx?.energy_kwh !== null
@@ -129,7 +141,7 @@ export function EvseBay({
           {soc !== null && soc !== undefined && (
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[11px] font-mono">
-                <span className="text-slate-500 dark:text-gray-400">Bateria do Veículo (SoC):</span>
+                <span className="text-slate-500 dark:text-gray-400">{t('evseBay.batterySoc')}</span>
                 <span className="font-bold text-slate-900 dark:text-white">{Math.round(soc)}%</span>
               </div>
               <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
@@ -147,7 +159,7 @@ export function EvseBay({
               <div className="flex items-center gap-1.5 truncate">
                 <Tag className="w-3 h-3 text-blue-500 shrink-0" />
                 <span className="font-mono truncate">
-                  {activeTx.user_username || activeTx.id_tag || 'Condutor'}
+                  {activeTx.user_username || activeTx.id_tag || t('evseBay.driverFallback')}
                 </span>
                 <span className="text-slate-400 dark:text-gray-500 text-[10px]">
                   (TX #{activeTx.transaction_id})
@@ -161,9 +173,9 @@ export function EvseBay({
                     onNotifyDriver()
                   }}
                   className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                  title="Enviar notificação ao condutor"
+                  title={t('evseBay.notifyDriverTooltip')}
                 >
-                  <Mail className="w-3 h-3" /> Avisar
+                  <Mail className="w-3 h-3" /> {t('evseBay.notifyDriver')}
                 </button>
               )}
             </div>
@@ -174,7 +186,7 @@ export function EvseBay({
         <div className="py-2.5 px-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 space-y-2">
           <div className="flex items-center justify-between">
             <span className="font-bold flex items-center gap-1">
-              <AlertCircle className="w-4 h-4 shrink-0" /> Baia Inoperacional
+              <AlertCircle className="w-4 h-4 shrink-0" /> {t('evseBay.bayInoperative')}
             </span>
             {onUnlock && (
               <button
@@ -185,18 +197,18 @@ export function EvseBay({
                 }}
                 className="px-2 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
               >
-                <Unlock className="w-3 h-3" /> Desbloquear
+                <Unlock className="w-3 h-3" /> {t('evseBay.unlock')}
               </button>
             )}
           </div>
-          <p className="text-[11px] opacity-90">Tomada bloqueada ou cabo preso. Clique para destravar solenóide.</p>
+          <p className="text-[11px] opacity-90">{t('evseBay.cableLockedWarning')}</p>
         </div>
       ) : isOffline ? (
         /* When Offline / Unavailable */
         <div className="flex items-center justify-between py-2 text-xs text-slate-500 dark:text-gray-400">
           <div className="flex items-center gap-1.5">
             <WifiOff className="w-4 h-4 text-slate-400" />
-            <span className="font-medium">Posto Desconectado</span>
+            <span className="font-medium">{t('evseBay.stationDisconnected')}</span>
           </div>
           <span className="text-[11px] font-mono text-slate-400 dark:text-gray-500">
             Offline
@@ -208,7 +220,7 @@ export function EvseBay({
           <div className="flex items-center gap-1.5">
             <Plug className="w-4 h-4 text-emerald-500" />
             <span className="font-medium">
-              {isPreparing ? 'Veículo Conectado · A Iniciar…' : 'Pronto para Carregar'}
+              {isPreparing ? t('evseBay.vehicleConnectedStarting') : t('evseBay.readyToCharge')}
             </span>
           </div>
           <span className="text-[11px] font-mono text-slate-500 dark:text-gray-400">

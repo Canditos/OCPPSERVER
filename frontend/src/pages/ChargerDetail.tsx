@@ -206,7 +206,7 @@ export function ChargerDetail() {
               }`}
             >
               <ShieldCheck className={`w-4 h-4 ${activeTab === 'meters' ? 'text-white' : 'text-purple-500 dark:text-purple-400'}`} />
-              <span>Eichrecht & Medidores</span>
+              <span>{t('chargerDetail.tabs.meters')}</span>
               {meterKeys.length > 0 && (
                 <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold ${
                   activeTab === 'meters' ? 'bg-white/20 text-white' : 'bg-purple-500/15 text-purple-600 dark:text-purple-400'
@@ -227,7 +227,7 @@ export function ChargerDetail() {
                 }`}
               >
                 <Layers className={`w-4 h-4 ${activeTab === 'devicemodel' ? 'text-white' : 'text-indigo-500 dark:text-indigo-400'}`} />
-                <span>Modelo Dispositivo</span>
+                <span>{t('chargerDetail.tabs.deviceModel')}</span>
               </button>
             )}
 
@@ -241,7 +241,7 @@ export function ChargerDetail() {
               }`}
             >
               <Award className={`w-4 h-4 ${activeTab === 'security' ? 'text-white' : 'text-purple-500 dark:text-purple-400'}`} />
-              <span>Certificados mTLS</span>
+              <span>{t('chargerDetail.tabs.certificates')}</span>
               {certs.length > 0 && (
                 <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold ${
                   activeTab === 'security' ? 'bg-white/20 text-white' : 'bg-purple-500/15 text-purple-600 dark:text-purple-400'

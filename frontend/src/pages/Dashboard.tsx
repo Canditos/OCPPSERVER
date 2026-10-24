@@ -132,14 +132,14 @@ export function Dashboard() {
 
   const handleFleetSelfHeal = async () => {
     setIsFleetHealing(true)
-    setFleetFeedback('A executar auto-diagnóstico e sincronização em todos os postos…')
+    setFleetFeedback(t('dashboard.fleetHealingRunning'))
     try {
       await Promise.all(chargers.map((c) => api.selfHealCharger(c.charge_point_id).catch(() => null)))
       await queryClient.invalidateQueries({ queryKey: ['chargers'] })
       await queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      setFleetFeedback('Frota 100% sincronizada e verificada com sucesso!')
+      setFleetFeedback(t('dashboard.fleetHealingSuccess'))
     } catch {
-      setFleetFeedback('Concluída a verificação da frota.')
+      setFleetFeedback(t('dashboard.fleetHealingDone'))
     } finally {
       setIsFleetHealing(false)
       setTimeout(() => setFleetFeedback(null), 5000)
@@ -292,10 +292,10 @@ export function Dashboard() {
             onClick={handleFleetSelfHeal}
             disabled={isFleetHealing || chargers.length === 0}
             className="btn-secondary text-xs py-1.5 px-3 rounded-full flex items-center gap-1.5 font-bold cursor-pointer transition-all shadow-sm"
-            title="Executar auto-diagnóstico e reconciliação em toda a frota"
+            title={t('dashboard.fleetDiagnoseTooltip')}
           >
             <Sparkles className={`w-3.5 h-3.5 text-blue-500 ${isFleetHealing ? 'animate-spin' : ''}`} />
-            <span>{isFleetHealing ? 'A sincronizar frota…' : 'Diagnóstico de Frota'}</span>
+            <span>{isFleetHealing ? t('dashboard.fleetDiagnoseSyncing') : t('dashboard.fleetDiagnoseBtn')}</span>
           </button>
           <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-sm w-fit">
             <Activity className="w-4 h-4 text-emerald-500 dark:text-emerald-400 animate-pulse-slow" />
@@ -323,14 +323,14 @@ export function Dashboard() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-slate-900 dark:text-white">
-                  Simulação Virtual em Curso: <span className="font-mono text-purple-600 dark:text-purple-400">{simStatus.station_id}</span>
+                  {t('dashboard.simRunningTitle')} <span className="font-mono text-purple-600 dark:text-purple-400">{simStatus.station_id}</span>
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-300 font-mono">
                   {simStatus.ocpp_version}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                A transmitir pacotes OCPP em tempo real para os cartões abaixo.
+                {t('dashboard.simRunningSub')}
               </p>
             </div>
           </div>
@@ -340,7 +340,7 @@ export function Dashboard() {
             className="btn text-xs px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-red-600/20"
           >
             <Square className="w-3.5 h-3.5" />
-            <span>Parar Simulação</span>
+            <span>{t('dashboard.simStopBtn')}</span>
           </button>
         </div>
       )}
@@ -495,7 +495,7 @@ export function Dashboard() {
                     ? 'bg-slate-700 text-white shadow-sm'
                     : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
-                title="Postos offline são ocultados por padrão"
+                title={t('dashboard.hideOfflineTooltip')}
               >
                 {showOffline || statusFilter === 'offline' ? (
                   <EyeOff className="w-3.5 h-3.5" />
@@ -503,7 +503,7 @@ export function Dashboard() {
                   <Eye className="w-3.5 h-3.5" />
                 )}
                 <span>
-                  {showOffline || statusFilter === 'offline' ? 'Ocultar Offline' : `Ver Offline (${total - online})`}
+                  {showOffline || statusFilter === 'offline' ? t('dashboard.hideOffline') : t('dashboard.showOffline', { count: total - online })}
                 </span>
               </button>
             )}
@@ -515,10 +515,10 @@ export function Dashboard() {
               type="button"
               onClick={() => setIsSimulatorOpen(true)}
               className="btn text-xs px-3.5 py-2 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-500/20 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-              title="Abrir painel do Simulador Virtual OCPP 1.6 / 2.0.1"
+              title={t('dashboard.virtualSimTooltip')}
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>Simulador Virtual</span>
+              <span>{t('dashboard.virtualSimBtn')}</span>
             </button>
 
             {/* View Mode Toggle (Studio Grid vs Table) */}
@@ -531,10 +531,10 @@ export function Dashboard() {
                     ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'
                 }`}
-                title="Grelha Studio"
+                title={t('dashboard.viewGridTooltip')}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Grelha</span>
+                <span className="hidden sm:inline">{t('dashboard.viewGrid')}</span>
               </button>
               <button
                 type="button"
@@ -544,10 +544,10 @@ export function Dashboard() {
                     ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'
                 }`}
-                title="Tabela Operacional da Frota"
+                title={t('dashboard.viewTableTooltip')}
               >
                 <List className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Tabela</span>
+                <span className="hidden sm:inline">{t('dashboard.viewTable')}</span>
               </button>
             </div>
 

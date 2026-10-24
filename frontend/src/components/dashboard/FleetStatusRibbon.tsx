@@ -1,5 +1,6 @@
 import React from 'react'
 import { Zap, WifiOff, AlertTriangle, CheckCircle2, RotateCw } from 'lucide-react'
+import { useI18n } from '../../i18n'
 
 export type StatusFilterType = 'all' | 'online' | 'charging' | 'available' | 'faulted' | 'offline'
 
@@ -22,6 +23,7 @@ export function FleetStatusRibbon({
   activeFilter,
   onSelectFilter,
 }: FleetStatusRibbonProps) {
+  const { t } = useI18n()
   if (total === 0) return null
 
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0)
@@ -29,7 +31,7 @@ export function FleetStatusRibbon({
   const items = [
     {
       key: 'available' as StatusFilterType,
-      label: 'Disponível',
+      label: t('dashboard.statusAvailable'),
       count: available,
       percentage: pct(available),
       color: 'bg-emerald-500',
@@ -40,7 +42,7 @@ export function FleetStatusRibbon({
     },
     {
       key: 'charging' as StatusFilterType,
-      label: 'Em Carga',
+      label: t('dashboard.statusCharging'),
       count: charging,
       percentage: pct(charging),
       color: 'bg-blue-500',
@@ -51,7 +53,7 @@ export function FleetStatusRibbon({
     },
     {
       key: 'faulted' as StatusFilterType,
-      label: 'Avaria / Falha',
+      label: t('dashboard.statusFaulted'),
       count: faulted,
       percentage: pct(faulted),
       color: 'bg-red-500',
@@ -62,7 +64,7 @@ export function FleetStatusRibbon({
     },
     {
       key: 'offline' as StatusFilterType,
-      label: 'Desconectado',
+      label: t('dashboard.statusOffline'),
       count: offline,
       percentage: pct(offline),
       color: 'bg-slate-400 dark:bg-slate-600',
@@ -80,10 +82,13 @@ export function FleetStatusRibbon({
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse-slow" />
           <span className="font-bold text-slate-800 dark:text-gray-200 uppercase tracking-wider text-[11px]">
-            Estado Operacional da Frota (Tempo Real)
+            {t('dashboard.ribbonTitle')}
           </span>
           <span className="text-slate-400 dark:text-gray-500 font-mono text-[10px]">
-            · {total} {total === 1 ? 'Posto' : 'Postos'} Registados
+            {t('dashboard.registeredStations', {
+              count: total,
+              word: total === 1 ? t('dashboard.stationWordSingular') : t('dashboard.stationWordPlural')
+            })}
           </span>
         </div>
 
@@ -94,7 +99,7 @@ export function FleetStatusRibbon({
             className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 self-start sm:self-auto"
           >
             <RotateCw className="w-3 h-3" />
-            <span>Limpar Filtro ({activeFilter})</span>
+            <span>{t('dashboard.clearFilter', { filter: activeFilter })}</span>
           </button>
         )}
       </div>
@@ -110,7 +115,7 @@ export function FleetStatusRibbon({
               key={item.key}
               type="button"
               onClick={() => onSelectFilter(activeFilter === item.key ? 'all' : item.key)}
-              title={`${item.label}: ${item.count} (${item.percentage}%) - Clique para filtrar`}
+              title={`${item.label}: ${item.count} (${item.percentage}%)`}
               style={{ width: `${widthPct}%` }}
               className={`h-full rounded-sm transition-all duration-300 cursor-pointer ${item.barColor} ${
                 activeFilter !== 'all' && !isFilterMatch ? 'opacity-30' : 'opacity-100 shadow-sm'
@@ -132,7 +137,7 @@ export function FleetStatusRibbon({
               className={`p-2 rounded-xl text-left transition-all border cursor-pointer ${
                 isSelected
                   ? item.activeRing
-                  : 'border-slate-100 dark:border-white/5 bg-slate-50/60 dark:bg-white/2 hover:bg-slate-100 dark:hover:bg-white/5'
+                  : 'border-slate-100 dark:border-white/5 bg-slate-50/60 dark:bg-white/[0.02] hover:bg-slate-100 dark:hover:bg-white/5'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -151,7 +156,7 @@ export function FleetStatusRibbon({
                   {item.count}
                 </span>
                 <span className="text-[10px] text-slate-400">
-                  {item.count === 1 ? 'posto' : 'postos'}
+                  {item.count === 1 ? t('dashboard.stationWordSingular').toLowerCase() : t('dashboard.stationWordPlural').toLowerCase()}
                 </span>
               </div>
             </button>

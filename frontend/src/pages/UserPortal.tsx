@@ -55,14 +55,14 @@ export function UserPortal() {
     setStopFeedback(null)
     try {
       const resp = await api.remoteStop(activeCharge.charge_point_id, activeCharge.transaction_id)
-      setStopFeedback({ type: 'success', message: resp?.message || 'Carga terminada com sucesso!' })
+      setStopFeedback({ type: 'success', message: resp?.message || t('userPortal.stopSuccess') })
       setTimeout(() => {
         handleRefresh()
         setIsStopping(false)
         setStopFeedback(null)
       }, 1200)
     } catch (err: any) {
-      setStopFeedback({ type: 'error', message: err?.response?.data?.detail || 'Erro ao parar sessão.' })
+      setStopFeedback({ type: 'error', message: err?.response?.data?.detail || t('userPortal.stopError') })
       setIsStopping(false)
       setTimeout(() => setStopFeedback(null), 4000)
     }
@@ -314,8 +314,8 @@ export function UserPortal() {
                   <th className="py-3 px-3">{t('userPortal.table.end')}</th>
                   <th className="py-3 px-3">{t('userPortal.table.duration')}</th>
                   <th className="py-3 px-3">{t('userPortal.table.consumption')}</th>
-                  <th className="py-3 px-3">Custo Estimado</th>
-                  <th className="py-3 px-3">Medição Legal</th>
+                  <th className="py-3 px-3">{t('userPortal.table.cost')}</th>
+                  <th className="py-3 px-3">{t('userPortal.table.legalMetrology')}</th>
                   <th className="py-3 px-3 text-right">{t('userPortal.table.status')}</th>
                 </tr>
               </thead>

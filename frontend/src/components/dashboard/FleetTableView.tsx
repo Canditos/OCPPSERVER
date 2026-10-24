@@ -9,6 +9,7 @@ import { useChargerStore } from '../../store/chargerStore'
 import { useChargerUiStore } from '../../store/chargerUiStore'
 import { safeFormatDistance } from '../../utils/date'
 import { api } from '../../api'
+import { useI18n } from '../../i18n'
 
 interface FleetTableViewProps {
   chargers: Charger[]
@@ -16,6 +17,7 @@ interface FleetTableViewProps {
 }
 
 export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewProps) {
+  const { t } = useI18n()
   const liveState = useChargerStore((s) => s.liveState)
   const { displayNames, groups } = useChargerUiStore()
   const [healingId, setHealingId] = React.useState<string | null>(null)
@@ -40,13 +42,13 @@ export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewPr
         <table className="w-full text-xs text-left">
           <thead className="bg-slate-100/80 dark:bg-gray-950/80 text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
             <tr>
-              <th className="py-3 px-4">Posto (EVSE)</th>
-              <th className="py-3 px-4">Estado Operacional</th>
-              <th className="py-3 px-4">Tomadas / Conectores</th>
-              <th className="py-3 px-4">Potência Live</th>
-              <th className="py-3 px-4">Sessão / Condutor</th>
-              <th className="py-3 px-4">Último Sinal</th>
-              <th className="py-3 px-4 text-right">Ações</th>
+              <th className="py-3 px-4">{t('dashboard.tableColStation')}</th>
+              <th className="py-3 px-4">{t('dashboard.tableColStatus')}</th>
+              <th className="py-3 px-4">{t('dashboard.tableColSockets')}</th>
+              <th className="py-3 px-4">{t('dashboard.tableColLivePower')}</th>
+              <th className="py-3 px-4">{t('dashboard.tableColSession')}</th>
+              <th className="py-3 px-4">{t('dashboard.tableColLastSeen')}</th>
+              <th className="py-3 px-4 text-right">{t('dashboard.tableColActions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-sans">
@@ -65,7 +67,13 @@ export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewPr
                 connectors.some((cc) => cc.status === 'Faulted') ||
                 c.status === 'Faulted'
 
-              const statusLabel = !isOnline ? 'Offline' : isCharging ? 'A Carregar' : isFaulted ? 'Avaria' : 'Disponível'
+              const statusLabel = !isOnline
+                ? t('dashboard.statusOffline')
+                : isCharging
+                ? t('dashboard.statusCharging')
+                : isFaulted
+                ? t('dashboard.statusFaulted')
+                : t('dashboard.statusAvailable')
               const statusPillColor = !isOnline
                 ? 'bg-slate-200 text-slate-600 dark:bg-gray-800 dark:text-gray-400'
                 : isCharging
@@ -100,7 +108,7 @@ export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewPr
               return (
                 <tr
                   key={c.id}
-                  className="hover:bg-slate-50/80 dark:hover:bg-white/3 transition-colors group"
+                  className="hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors group"
                 >
                   {/* EVSE Name & Meta */}
                   <td className="py-3 px-4">
@@ -235,7 +243,7 @@ export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewPr
                         onClick={(e) => handleQuickHeal(e, c.charge_point_id)}
                         disabled={healingId === c.charge_point_id}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                        title="Auto-Diagnóstico & Sincronização"
+                        title={t('dashboard.tableSelfHealTooltip')}
                       >
                         <Sparkles className={`w-3.5 h-3.5 ${healingId === c.charge_point_id ? 'animate-spin text-blue-500' : ''}`} />
                       </button>
@@ -244,7 +252,7 @@ export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewPr
                         to={`/chargers/${c.charge_point_id}`}
                         className="btn-secondary text-[11px] py-1 px-2.5 rounded-lg font-bold flex items-center gap-1 group-hover:border-blue-500/40"
                       >
-                        <span>Gerir</span>
+                        <span>{t('dashboard.tableManage')}</span>
                         <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                       </Link>
                     </div>

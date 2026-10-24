@@ -7,6 +7,7 @@ import {
   Cpu, ArrowRight, ExternalLink, X, AlertTriangle
 } from 'lucide-react'
 import { api, TransactionOcmfReport } from '../api'
+import { useI18n } from '../i18n'
 
 interface OcmfValidationModalProps {
   transactionId: number
@@ -14,6 +15,7 @@ interface OcmfValidationModalProps {
 }
 
 export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationModalProps) {
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<'summary' | 'start' | 'stop' | 'raw'>('summary')
   const [copied, setCopied] = useState(false)
 
@@ -46,7 +48,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
       onClick={onClose}
     >
       <div
-        className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -61,17 +63,17 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Conformidade Legal Eichrecht & OCMF · <span className="font-mono text-blue-600 dark:text-blue-400">TX #{transactionId}</span>
+                {t('ocmfValidationModal.title', { tx: transactionId })}
                 <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
                   isFullyVerified
                     ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                     : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
                 }`}>
-                  {isFullyVerified ? 'Assinatura ECDSA Válida ✅' : 'Validação OCMF / S.A.F.E.'}
+                  {isFullyVerified ? t('ocmfValidationModal.badgeVerified') : t('ocmfValidationModal.badgeSafe')}
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                Norma <strong>S.A.F.E. e.V. (v1.4.1 Atual / v1.3.0 Base PTB-A 50.7)</strong> · Open Charge Metering Format (OCMF V1.0 – V1.4.1) · Medidores LEM DCBM & Bauer
+                {t('ocmfValidationModal.standardInfo')}
               </p>
             </div>
           </div>
@@ -82,10 +84,10 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
               target="_blank"
               rel="noreferrer"
               className="btn bg-blue-600 hover:bg-blue-500 text-white text-xs py-1.5 px-3 rounded-xl flex items-center gap-1.5 shadow-sm"
-              title="Descarregar ficheiro .ocmf para carregar no S.A.F.E. Transparency Software"
+              title={t('ocmfValidationModal.downloadTooltip')}
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Descarregar .ocmf</span>
+              <span>{t('ocmfValidationModal.downloadBtn')}</span>
             </a>
             <button
               type="button"
@@ -100,10 +102,10 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
         {/* Tab Navigation */}
         <div className="flex items-center gap-1.5 p-2 px-4 border-b border-slate-200 dark:border-white/10 bg-slate-100/60 dark:bg-gray-950/40 text-xs font-semibold">
           {[
-            { id: 'summary', label: '📊 Resumo & Auditoria Legal' },
-            { id: 'start', label: '🟢 Leitura Inicial (ST=G)' },
-            { id: 'stop', label: '🔴 Leitura Final (ST=T)' },
-            { id: 'raw', label: '📜 Payloads OCMF em Bruto' },
+            { id: 'summary', label: t('ocmfValidationModal.tabSummary') },
+            { id: 'start', label: t('ocmfValidationModal.tabStart') },
+            { id: 'stop', label: t('ocmfValidationModal.tabStop') },
+            { id: 'raw', label: t('ocmfValidationModal.tabRaw') },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -112,7 +114,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
               className={`px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
                 activeTab === tab.id
                   ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-400 dark:border-white/5'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-400 dark:border-white/10'
               }`}
             >
               {tab.label}
@@ -125,13 +127,13 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
           {isLoading && (
             <div className="p-12 text-center text-slate-500 dark:text-gray-400 text-xs flex flex-col items-center gap-2">
               <Activity className="w-6 h-6 animate-spin text-blue-500" />
-              <span>A verificar assinaturas criptográficas ECDSA e dados do medidor…</span>
+              <span>{t('ocmfValidationModal.loading')}</span>
             </div>
           )}
 
           {error && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
-              Erro ao obter relatório OCMF da transação: {(error as any)?.message}
+              {t('ocmfValidationModal.loadError', { error: (error as any)?.message })}
             </div>
           )}
 
@@ -152,13 +154,13 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                   <div>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                       {isFullyVerified
-                        ? 'Medição Assinada e Criptograficamente Válida (Eichrecht MID Compliant)'
-                        : 'Aguardando Associação de Chave Pública ou Verificação Manual'}
+                        ? t('ocmfValidationModal.bannerValidTitle')
+                        : t('ocmfValidationModal.bannerPendingTitle')}
                     </h4>
                     <p className="text-xs text-slate-600 dark:text-gray-300 mt-1">
                       {isFullyVerified
-                        ? 'Todas as assinaturas ECDSA do medidor LEM foram validadas com sucesso através da curva secp256r1/NIST P-256 e hash SHA-256.'
-                        : (report.ocmf_verification_error || 'Para validar esta transação, certifique-se que a chave pública do medidor LEM está configurada no posto.')}
+                        ? t('ocmfValidationModal.bannerValidDesc')
+                        : (report.ocmf_verification_error || t('ocmfValidationModal.bannerPendingDescDefault'))}
                     </p>
                   </div>
                 </div>
@@ -171,34 +173,34 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
               {/* Hardware & Crypto Specs Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 space-y-1">
-                  <span className="text-slate-500 dark:text-gray-400 block text-[11px]">Medidor Certificado</span>
+                  <span className="text-slate-500 dark:text-gray-400 block text-[11px]">{t('ocmfValidationModal.certifiedMeter')}</span>
                   <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     <Cpu className="w-4 h-4 text-blue-500" />
                     {report.meter_model || 'LEM DCBM'}
                   </p>
                   <span className="text-[10px] font-mono text-slate-500 dark:text-gray-400">
-                    S/N: {report.meter_serial || 'Detectado no OCMF'}
+                    S/N: {report.meter_serial || t('ocmfValidationModal.detectedInOcmf')}
                   </span>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 space-y-1">
-                  <span className="text-slate-500 dark:text-gray-400 block text-[11px]">Algoritmo Criptográfico</span>
+                  <span className="text-slate-500 dark:text-gray-400 block text-[11px]">{t('ocmfValidationModal.cryptoAlgorithm')}</span>
                   <p className="font-bold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
                     <Shield className="w-4 h-4 text-purple-500" />
                     ECDSA-SHA256
                   </p>
                   <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400">
-                    Curva: {report.curve_name}
+                    {t('ocmfValidationModal.curveLabel', { curve: report.curve_name })}
                   </span>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 space-y-1">
-                  <span className="text-slate-500 dark:text-gray-400 block text-[11px]">Chave Pública LEM</span>
+                  <span className="text-slate-500 dark:text-gray-400 block text-[11px]">{t('ocmfValidationModal.publicKeyLem')}</span>
                   <p className="font-bold text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
-                    {report.has_meter_key ? '✅ Configurada' : '⚠️ Não Registada'}
+                    {report.has_meter_key ? t('ocmfValidationModal.configured') : t('ocmfValidationModal.notRegistered')}
                   </p>
                   <span className="text-[10px] font-mono text-slate-500 dark:text-gray-400 truncate block">
-                    {report.public_key_hex ? `${report.public_key_hex.slice(0, 16)}…` : 'Introduzir na Configuração'}
+                    {report.public_key_hex ? `${report.public_key_hex.slice(0, 16)}…` : t('ocmfValidationModal.enterInConfig')}
                   </span>
                 </div>
               </div>
@@ -207,13 +209,13 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
               <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs space-y-2">
                 <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold">
                   <ExternalLink className="w-4 h-4" />
-                  <span>Como validar no S.A.F.E. Transparency Software (Transparenzsoftware):</span>
+                  <span>{t('ocmfValidationModal.safeGuideTitle')}</span>
                 </div>
                 <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-gray-300 text-[11px]">
-                  <li>Clica no botão <strong>"Descarregar .ocmf"</strong> no topo deste modal.</li>
-                  <li>Abre o <strong>S.A.F.E. Transparency Software</strong> oficial ou a ferramenta <strong>Chargy</strong>.</li>
-                  <li>Importa o ficheiro descarregado e fornece a Chave Pública do Medidor LEM.</li>
-                  <li>O software confirma a integridade jurídica e conformidade MID dos kWh faturados.</li>
+                  <li>{t('ocmfValidationModal.safeGuideStep1')}</li>
+                  <li>{t('ocmfValidationModal.safeGuideStep2')}</li>
+                  <li>{t('ocmfValidationModal.safeGuideStep3')}</li>
+                  <li>{t('ocmfValidationModal.safeGuideStep4')}</li>
                 </ol>
               </div>
             </div>
@@ -222,23 +224,23 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
           {report && activeTab === 'start' && (
             <div className="space-y-3">
               <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                Leitura de Início de Transação (ST=G / Start)
+                {t('ocmfValidationModal.startReadingTitle')}
               </h4>
               {report.start_report ? (
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs space-y-1">
-                    <p className="font-bold text-slate-900 dark:text-white">Estado: {report.start_report.status}</p>
-                    <p className="text-slate-500 font-mono">Timestamp: {report.start_report.timestamp || 'N/A'}</p>
-                    <p className="text-slate-500 font-mono">Versão OCMF: {report.start_report.ocmf_version}</p>
+                    <p className="font-bold text-slate-900 dark:text-white">{t('ocmfValidationModal.statusLabel', { status: report.start_report.status })}</p>
+                    <p className="text-slate-500 font-mono">{t('ocmfValidationModal.timestampLabel', { time: report.start_report.timestamp || 'N/A' })}</p>
+                    <p className="text-slate-500 font-mono">{t('ocmfValidationModal.versionLabel', { version: report.start_report.ocmf_version })}</p>
                   </div>
 
                   <table className="w-full text-xs font-mono">
                     <thead className="bg-slate-100 dark:bg-gray-950 text-left">
                       <tr>
-                        <th className="p-2.5">Código OBIS</th>
-                        <th className="p-2.5">Descrição</th>
-                        <th className="p-2.5">Valor</th>
-                        <th className="p-2.5">Unidade</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colObis')}</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colDesc')}</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colValue')}</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colUnit')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-white/10">
@@ -254,7 +256,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                   </table>
                 </div>
               ) : (
-                <p className="text-xs text-slate-500 dark:text-gray-400 p-4">Nenhum payload OCMF de início registado nesta sessão.</p>
+                <p className="text-xs text-slate-500 dark:text-gray-400 p-4">{t('ocmfValidationModal.noStartPayload')}</p>
               )}
             </div>
           )}
@@ -262,24 +264,24 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
           {report && activeTab === 'stop' && (
             <div className="space-y-3">
               <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                Leitura Final de Transação (ST=T / Stop)
+                {t('ocmfValidationModal.stopReadingTitle')}
               </h4>
               {report.stop_report ? (
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs space-y-1">
-                    <p className="font-bold text-slate-900 dark:text-white">Estado: {report.stop_report.status}</p>
-                    <p className="text-slate-500 font-mono">Timestamp: {report.stop_report.timestamp || 'N/A'}</p>
-                    <p className="text-slate-500 font-mono">Versão OCMF: {report.stop_report.ocmf_version}</p>
+                    <p className="font-bold text-slate-900 dark:text-white">{t('ocmfValidationModal.statusLabel', { status: report.stop_report.status })}</p>
+                    <p className="text-slate-500 font-mono">{t('ocmfValidationModal.timestampLabel', { time: report.stop_report.timestamp || 'N/A' })}</p>
+                    <p className="text-slate-500 font-mono">{t('ocmfValidationModal.versionLabel', { version: report.stop_report.ocmf_version })}</p>
                   </div>
 
                   <table className="w-full text-xs font-mono">
                     <thead className="bg-slate-100 dark:bg-gray-950 text-left">
                       <tr>
-                        <th className="p-2.5">Código OBIS</th>
-                        <th className="p-2.5">Descrição</th>
-                        <th className="p-2.5">Valor</th>
-                        <th className="p-2.5">Unidade</th>
-                        <th className="p-2.5">Perda de Cabo</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colObis')}</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colDesc')}</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colValue')}</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colUnit')}</th>
+                        <th className="p-2.5">{t('ocmfValidationModal.colCableLoss')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-white/10">
@@ -307,7 +309,7 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
                   </table>
                 </div>
               ) : (
-                <p className="text-xs text-slate-500 dark:text-gray-400 p-4">Nenhum payload OCMF final registado nesta sessão.</p>
+                <p className="text-xs text-slate-500 dark:text-gray-400 p-4">{t('ocmfValidationModal.noStopPayload')}</p>
               )}
             </div>
           )}
@@ -316,14 +318,14 @@ export function OcmfValidationModal({ transactionId, onClose }: OcmfValidationMo
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  Conteúdo OCMF em Bruto
+                  {t('ocmfValidationModal.rawTitle')}
                 </h4>
                 <button
                   type="button"
                   onClick={() => copyText(report.ocmf_stop_raw || report.ocmf_start_raw || '')}
                   className="btn-secondary text-xs py-1 px-2.5 rounded-lg flex items-center gap-1.5"
                 >
-                  {copied ? <><Check className="w-3.5 h-3.5 text-emerald-500" /> Copiado!</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
+                  {copied ? <><Check className="w-3.5 h-3.5 text-emerald-500" /> {t('ocmfValidationModal.copied')}</> : <><Copy className="w-3.5 h-3.5" /> {t('ocmfValidationModal.copy')}</>}
                 </button>
               </div>
 
@@ -338,7 +340,7 @@ ${report.ocmf_stop_raw}
                   {report.ocmf_start_raw
                     ? `[START TX OCMF]:
 ${report.ocmf_start_raw}`
-                    : 'Nenhum payload OCMF em bruto guardado.'}
+                    : t('ocmfValidationModal.noRawPayload')}
                 </code>
               </pre>
             </div>
@@ -348,14 +350,14 @@ ${report.ocmf_start_raw}`
         {/* Footer */}
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 px-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-950 text-xs text-slate-500 dark:text-gray-400">
           <div className="flex flex-wrap items-center gap-2">
-            <span>Padrão S.A.F.E. e.V. (PTB-A 50.7):</span>
+            <span>{t('ocmfValidationModal.safeStandard')}</span>
             <a
               href="https://safe-ev.org/files/software/transparenzsoftware-1.4.1.jar"
               target="_blank"
               rel="noreferrer"
               className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-mono"
             >
-              <Download className="w-3 h-3" /> JAR v1.4.1 (Última)
+              <Download className="w-3 h-3" /> {t('ocmfValidationModal.jarLatest')}
             </a>
             <span>·</span>
             <a
@@ -364,7 +366,7 @@ ${report.ocmf_start_raw}`
               rel="noreferrer"
               className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 font-mono"
             >
-              <Download className="w-3 h-3" /> JAR v1.3.0 (Base PTB)
+              <Download className="w-3 h-3" /> {t('ocmfValidationModal.jarBase')}
             </a>
           </div>
           <button
@@ -372,7 +374,7 @@ ${report.ocmf_start_raw}`
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white font-medium cursor-pointer"
           >
-            Fechar
+            {t('common.close')}
           </button>
         </div>
       </div>

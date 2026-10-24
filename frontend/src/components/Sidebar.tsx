@@ -159,7 +159,7 @@ export function Sidebar({
         {isAdmin && (
           <div className={`rounded-xl p-3 border space-y-2 ${
             resolved === 'dark'
-              ? 'bg-white/3 border-white/5'
+              ? 'bg-white/[0.03] border-white/5'
               : 'bg-slate-100/80 border-slate-200'
           }`}>
             <div className="flex items-center justify-between text-xs">

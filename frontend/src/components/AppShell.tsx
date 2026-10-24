@@ -33,6 +33,8 @@ const TITLE_KEYS: Record<string, string> = {
   '/configuration': 'shell.configuration',
   '/users': 'shell.users',
   '/my-charging': 'shell.driverPortal',
+  '/logs': 'nav.logs',
+  '/ocmf': 'nav.ocmf',
   '/firmware-testing': 'nav.firmwareTesting',
 }
 
@@ -131,7 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {isAdmin && (
           <div className={`mt-2 flex items-center justify-between rounded-2xl px-3 py-2 text-[10px] ${
             resolved === 'dark'
-              ? 'border border-white/5 bg-white/3 text-gray-400'
+              ? 'border border-white/5 bg-white/[0.03] text-gray-400'
               : 'border border-slate-200 bg-slate-50 text-slate-500'
           }`}>
             <span className="inline-flex items-center gap-1.5">
