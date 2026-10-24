@@ -364,6 +364,7 @@ export function MeterChart({ cpId, connectorId = 1, transactionId }: Props) {
               )
             })}
           </AreaChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )

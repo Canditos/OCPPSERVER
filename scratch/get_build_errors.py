@@ -7,7 +7,7 @@ ssh.connect('192.168.0.198', username='canditos', password='canditos')
 
 stdin, stdout, stderr = ssh.exec_command(
     "echo canditos | sudo -S docker exec coolify-db psql -U coolify -d coolify -t -c "
-    "\"SELECT logs FROM application_deployment_queues WHERE deployment_uuid = 'iuwswp78g5q14ndxv1ja7dmm';\""
+    "\"SELECT logs FROM application_deployment_queues ORDER BY id DESC LIMIT 1;\""
 )
 raw = stdout.read().decode('utf-8', errors='replace').strip()
 
