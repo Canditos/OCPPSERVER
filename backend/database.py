@@ -92,6 +92,21 @@ async def _seed_default_tags(session: AsyncSession) -> None:
             ]
             session.add_all(defaults)
             await session.commit()
+
+        # Ensure DEICECSAGVALD1 (Hubject and universal PnC test contract) is always present and active
+        deice_tag = (await session.execute(
+            select(AuthorizedTag).where(AuthorizedTag.id_tag == "DEICECSAGVALD1")
+        )).scalar_one_or_none()
+        if not deice_tag:
+            session.add(AuthorizedTag(
+                id_tag="DEICECSAGVALD1",
+                description="Universal PnC Test Contract (Hubject and Local)",
+                is_active=True
+            ))
+            await session.commit()
+        elif not deice_tag.is_active:
+            deice_tag.is_active = True
+            await session.commit()
     except Exception as e:
         logger.warning(f"Error seeding default tags: {e}")
 
