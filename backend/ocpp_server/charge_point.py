@@ -1248,6 +1248,39 @@ class ChargePoint(OcppChargePoint):
             "message_id": message_id,
             "data": kwargs.get("data"),
         })
+
+        # OCA ISO 15118 PnC Specification for OCPP 1.6:
+        # If the vendor_id is org.openchargealliance.iso15118pnc and message_id is Authorize,
+        # return idTokenInfo and certificateStatus in the data payload.
+        if vendor_id == "org.openchargealliance.iso15118pnc" and message_id == "Authorize":
+            try:
+                dt_data = json.loads(data_str) if data_str else {}
+                id_token = dt_data.get("idToken", "")
+            except Exception:
+                id_token = ""
+
+            auth_status = "Accepted"
+            if id_token:
+                try:
+                    check_res = await self._check_auth(id_token)
+                    auth_status = check_res.value if hasattr(check_res, "value") else str(check_res)
+                except Exception as e:
+                    logger.warning(f"Error checking auth for PnC idToken {id_token}: {e}")
+                    auth_status = "Accepted"
+
+            resp_payload = {
+                "idTokenInfo": {
+                    "status": auth_status,
+                    "cacheExpiryDateTime": "2035-01-01T00:00:00Z"
+                },
+                "certificateStatus": "Accepted"
+            }
+            logger.info(f"PnC DataTransfer Authorize response for {id_token}: {resp_payload}")
+            return call_result.DataTransferPayload(
+                status=DataTransferStatus.accepted,
+                data=json.dumps(resp_payload)
+            )
+
         return call_result.DataTransferPayload(status=DataTransferStatus.accepted)
 
     @on(Action.FirmwareStatusNotification)
