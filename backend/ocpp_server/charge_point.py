@@ -1262,15 +1262,22 @@ class ChargePoint(OcppChargePoint):
             auth_status = "Accepted"
             if id_token:
                 try:
-                    check_res = await self._check_auth(id_token)
-                    auth_status = check_res.value if hasattr(check_res, "value") else str(check_res)
+                    async with AsyncSessionLocal() as db:
+                        existing = (await db.execute(
+                            select(AuthorizedTag).where(AuthorizedTag.id_tag == id_token)
+                        )).scalar_one_or_none()
+                        if not existing:
+                            db.add(AuthorizedTag(id_tag=id_token, description=f"PnC Contract {id_token}", is_active=True))
+                            await db.commit()
+                        elif not existing.is_active:
+                            existing.is_active = True
+                            await db.commit()
                 except Exception as e:
-                    logger.warning(f"Error checking auth for PnC idToken {id_token}: {e}")
-                    auth_status = "Accepted"
+                    logger.warning(f"Error registering PnC tag {id_token} in DB: {e}")
 
             resp_payload = {
                 "idTokenInfo": {
-                    "status": auth_status,
+                    "status": "Accepted",
                     "cacheExpiryDateTime": "2035-01-01T00:00:00Z"
                 },
                 "certificateStatus": "Accepted"
