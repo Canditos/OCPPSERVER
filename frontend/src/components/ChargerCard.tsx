@@ -16,7 +16,7 @@ import { useI18n } from '../i18n'
 import { ChargerTagModal } from './charger-card/ChargerTagModal'
 import { ChargerSecurityModal } from './charger-card/ChargerSecurityModal'
 
-const ACTIVE_STATUSES = ['Charging', 'Preparing', 'SuspendedEVSE', 'SuspendedEV', 'Finishing']
+const ACTIVE_STATUSES = ['Charging', 'SuspendedEVSE', 'SuspendedEV']
 
 export function ChargerCard({ charger }: { charger: Charger }) {
   const queryClient = useQueryClient()
@@ -251,6 +251,7 @@ export function ChargerCard({ charger }: { charger: Charger }) {
   )
   const isSessionActive = isSelectedConnectorActive || Boolean(activeTransactionForSelectedConnector)
   const isPreparing = isOnline && (computedStatus === 'Preparing' || rawConnectors.some((c) => c.status === 'Preparing'))
+  const isFinishing = isOnline && !isSessionActive && (computedStatus === 'Finishing' || rawConnectors.some((c) => c.status === 'Finishing'))
   const isFaulted = isOnline && (computedStatus === 'Faulted' || rawConnectors.some((c) => c.status === 'Faulted'))
 
   const effectiveTag = selectedTag || (authorizedTags.length > 0 ? authorizedTags[0].id_tag : 'ADMIN_TAG')
@@ -553,6 +554,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 ? 'bg-blue-400 animate-ping'
                 : isPreparing
                 ? 'bg-amber-400 animate-pulse'
+                : isFinishing
+                ? 'bg-violet-400'
                 : isFaulted
                 ? 'bg-red-400'
                 : 'bg-emerald-400 shadow-sm shadow-emerald-400'
@@ -564,6 +567,8 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 ? t('common.charging')
                 : isPreparing
                 ? t('chargerCard.preparing')
+                : isFinishing
+                ? (t('connector.finishing') || 'A finalizar')
                 : isFaulted
                 ? t('chargerCard.fault')
                 : t('common.available')}

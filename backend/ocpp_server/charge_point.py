@@ -1312,8 +1312,12 @@ class ChargePoint(OcppChargePoint):
                     # Sync overall charger status
                     r_all_conn = await db.execute(select(Connector).where(Connector.charger_id == charger.id))
                     all_conns = r_all_conn.scalars().all()
-                    if any(c.status in ("Charging", "Preparing", "SuspendedEV", "SuspendedEVSE", "Finishing") for c in all_conns):
+                    if any(c.status in ("Charging", "SuspendedEV", "SuspendedEVSE") for c in all_conns):
                         charger.status = "Charging"
+                    elif any(c.status == "Preparing" for c in all_conns):
+                        charger.status = "Preparing"
+                    elif any(c.status == "Finishing" for c in all_conns):
+                        charger.status = "Finishing"
                     elif any(c.status == "Faulted" for c in all_conns):
                         charger.status = "Faulted"
                     else:

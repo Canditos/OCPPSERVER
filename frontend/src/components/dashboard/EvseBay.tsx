@@ -34,6 +34,7 @@ export function EvseBay({
   const isPreparing = status === 'Preparing'
   const isFaulted = status === 'Faulted'
   const isAvailable = status === 'Available'
+  const isFinishing = status === 'Finishing'
   const isSuspended = status.startsWith('Suspended')
   const isOffline = status === 'Offline' || status === 'Unavailable'
 
@@ -49,6 +50,8 @@ export function EvseBay({
           ? 'ring-2 ring-blue-500 border-blue-500/50 bg-blue-50/70 dark:bg-blue-950/30 shadow-md'
           : isCharging
           ? 'border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 hover:border-blue-500/50'
+          : isFinishing
+          ? 'border-violet-500/30 bg-violet-500/5 dark:bg-violet-500/10 hover:border-violet-500/50'
           : isFaulted
           ? 'border-red-500/30 bg-red-500/5 dark:bg-red-500/10 hover:border-red-500/50'
           : isOffline
@@ -73,6 +76,8 @@ export function EvseBay({
             ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30'
             : isPreparing
             ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse'
+            : isFinishing
+            ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/30'
             : isFaulted
             ? 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'
             : isSuspended
@@ -82,13 +87,15 @@ export function EvseBay({
             : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
         }`}>
           <span className={`w-1.5 h-1.5 rounded-full ${
-            isCharging ? 'bg-blue-500 animate-ping' : isFaulted ? 'bg-red-500' : isOffline ? 'bg-slate-400' : isAvailable ? 'bg-emerald-500' : 'bg-amber-500'
+            isCharging ? 'bg-blue-500 animate-ping' : isFaulted ? 'bg-red-500' : isFinishing ? 'bg-violet-500' : isOffline ? 'bg-slate-400' : isAvailable ? 'bg-emerald-500' : 'bg-amber-500'
           }`} />
           <span>
             {isCharging
               ? t('evseBay.statusCharging')
               : isPreparing
               ? t('evseBay.statusPreparing')
+              : isFinishing
+              ? (t('connector.finishing') || 'A finalizar')
               : isFaulted
               ? t('evseBay.statusFaulted')
               : isSuspended
@@ -202,6 +209,19 @@ export function EvseBay({
             )}
           </div>
           <p className="text-[11px] opacity-90">{t('evseBay.cableLockedWarning')}</p>
+        </div>
+      ) : isFinishing ? (
+        /* When Finishing (cable still connected to EV after charge ended) */
+        <div className="flex items-center justify-between py-2 text-xs text-violet-600 dark:text-violet-400">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-violet-500" />
+            <span className="font-medium">
+              Sessão Concluída — Desconectar Cabo
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-violet-500/80">
+            Aguardar Desconexão
+          </span>
         </div>
       ) : isOffline ? (
         /* When Offline / Unavailable */
