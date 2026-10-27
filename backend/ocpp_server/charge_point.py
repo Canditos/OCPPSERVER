@@ -26,7 +26,7 @@ from models.meter_public_key import MeterPublicKey
 from services.email_service import notify_ac_suspended_ev, notify_dc_charging_completed
 from services.ocmf_service import parse_ocmf, verify_ocmf_signature, extract_ocmf_energy_delta_kwh
 from sqlalchemy import select, update, func
-from energy import to_watt_hours, to_watts
+from energy import to_watt_hours, to_watts, delta_kwh
 
 logger = logging.getLogger(__name__)
 _TX_COUNTER = 100000
@@ -154,11 +154,110 @@ async def reconcile_stale_active_transactions(db, charge_point_id: str | None = 
     return closed
 
 
+async def reconcile_premature_zero_transactions(db, charge_point_id: str | None = None) -> int:
+    """Heal transactions that closed prematurely with 0 Wh (meter_stop == meter_start),
+    where a subsequent session on the same connector proves that energy was physically delivered.
+    Also restores the currently active session if physical charging continues."""
+    q = (
+        select(Transaction)
+        .where(
+            Transaction.meter_start.is_not(None),
+            Transaction.meter_stop.is_not(None),
+            Transaction.meter_stop == Transaction.meter_start,
+        )
+        .order_by(
+            Transaction.charge_point_id.asc(),
+            Transaction.connector_id.asc(),
+            Transaction.start_time.asc(),
+        )
+    )
+    if charge_point_id:
+        q = q.where(Transaction.charge_point_id == charge_point_id)
+
+    result = await db.execute(q)
+    txs = result.scalars().all()
+    healed = 0
+
+    for tx in txs:
+        # Find the next transaction on the same charger and connector
+        r_next = await db.execute(
+            select(Transaction)
+            .where(
+                Transaction.charge_point_id == tx.charge_point_id,
+                Transaction.connector_id == tx.connector_id,
+                Transaction.start_time > tx.start_time,
+                Transaction.meter_start > tx.meter_start,
+            )
+            .order_by(Transaction.start_time.asc())
+            .limit(1)
+        )
+        next_tx = r_next.scalar_one_or_none()
+        if next_tx and next_tx.meter_start and next_tx.meter_start > tx.meter_start:
+            # Reconcile historical session with actual energy delivered
+            tx.meter_stop = next_tx.meter_start
+            tx.stop_time = next_tx.start_time
+            tx.status = "Completed"
+            if tx.stop_reason == "Local" or not tx.stop_reason:
+                tx.stop_reason = "EVDisconnected"
+            tx.signed_energy_kwh = delta_kwh(tx.meter_start, tx.meter_stop)
+            healed += 1
+            logger.info(
+                "%s: healed premature 0 Wh TX #%s on connector %s -> meter_stop=%s (%.3f kWh)",
+                tx.charge_point_id,
+                tx.transaction_id,
+                tx.connector_id,
+                tx.meter_stop,
+                tx.signed_energy_kwh,
+            )
+        elif not next_tx:
+            # Latest transaction on this connector (e.g. current session like #998643)
+            r_conn = await db.execute(
+                select(Connector, Charger)
+                .join(Charger, Charger.id == Connector.charger_id)
+                .where(
+                    Charger.charge_point_id == tx.charge_point_id,
+                    Connector.connector_id == tx.connector_id,
+                )
+            )
+            row = r_conn.first()
+            if row:
+                conn, charger = row
+                if charger.is_online and (
+                    conn.status in ("Charging", "Preparing", "SuspendedEV", "SuspendedEVSE", "Finishing")
+                    or charger.status == "Charging"
+                ):
+                    tx.status = "Active"
+                    tx.stop_time = None
+                    tx.stop_reason = None
+                    conn.status = "Charging"
+                    conn.active_transaction_id = tx.transaction_id
+                    conn.active_id_tag = tx.id_tag
+                    conn.updated_at = _now()
+                    charger.status = "Charging"
+                    healed += 1
+                    logger.info(
+                        "%s: restored latest premature 0 Wh TX #%s as Active on connector %s",
+                        tx.charge_point_id,
+                        tx.transaction_id,
+                        tx.connector_id,
+                    )
+
+    if healed:
+        await db.commit()
+    return healed
+
+
 class ChargePoint(OcppChargePoint):
     def __init__(self, cp_id: str, connection, client_ip: str = "unknown"):
         super().__init__(cp_id, connection)
         self.client_ip = client_ip
         self._polling_tx_ids: set[int] = set()
+        self._start_tx_locks: dict[int, asyncio.Lock] = {}
+
+    def _get_start_tx_lock(self, connector_id: int) -> asyncio.Lock:
+        if connector_id not in self._start_tx_locks:
+            self._start_tx_locks[connector_id] = asyncio.Lock()
+        return self._start_tx_locks[connector_id]
 
     async def _log_message(self, direction: str, action: str, payload: dict):
         try:
@@ -668,125 +767,130 @@ class ChargePoint(OcppChargePoint):
         except Exception:
             start_dt = datetime.utcnow()
 
-        # Idempotency & Deduplication: absorb charger retransmissions for the
-        # same physical session, even if a stale duplicate was already auto-closed.
-        async with AsyncSessionLocal() as db:
-            r_dup = await db.execute(
-                select(Transaction).where(
-                    Transaction.charge_point_id == self.id,
-                    Transaction.connector_id == connector_id,
-                    Transaction.id_tag == id_tag,
-                    Transaction.meter_start == meter_start,
-                ).order_by(Transaction.start_time.desc()).limit(1)
-            )
-            existing_tx = r_dup.scalar_one_or_none()
-            now_dt = datetime.utcnow()
-            is_duplicate = False
-            if existing_tx and existing_tx.start_time:
-                same_start_event = abs((existing_tx.start_time - start_dt).total_seconds()) <= 2
-                recent_active_retry = existing_tx.status == "Active" and (now_dt - existing_tx.start_time).total_seconds() < 120
-                zero_value_replay = (
-                    existing_tx.status == "Completed"
-                    and (existing_tx.meter_stop is None or existing_tx.meter_stop == existing_tx.meter_start)
-                    and same_start_event
-                )
-                is_duplicate = same_start_event or recent_active_retry or zero_value_replay
-
-            if existing_tx and is_duplicate:
-                # A status read can briefly see the connector as Available while the
-                # charger is still completing its start sequence. Recover that session
-                # when the charger retransmits the same StartTransaction.
-                if (
-                    existing_tx.status == "Completed"
-                    and existing_tx.stop_reason == "EVDisconnected"
-                    and existing_tx.meter_stop is None
-                    and same_start_event
-                ):
-                    existing_tx.status = "Active"
-                    existing_tx.stop_time = None
-                    existing_tx.stop_reason = None
-                    await db.commit()
-                    self._start_meter_poll(existing_tx.transaction_id, connector_id)
-                    logger.info(
-                        "%s: restored prematurely closed TX #%s on connector %s",
-                        self.id,
-                        existing_tx.transaction_id,
-                        connector_id,
-                    )
-                logger.info(f"Duplicate StartTransaction detected for {self.id} (connector {connector_id}). Reusing TX #{existing_tx.transaction_id}")
-                await self._log_message("IN", "StartTransaction", {
-                    "connector_id": connector_id,
-                    "id_tag": id_tag,
-                    "meter_start": meter_start,
-                    "transaction_id": existing_tx.transaction_id,
-                    "timestamp": timestamp,
-                    "note": "Duplicate retransmission absorbed",
-                    **kwargs,
-                })
-                await self._log_message("OUT", "StartTransactionResponse", {
-                    "transaction_id": existing_tx.transaction_id,
-                    "id_tag_info": {"status": "Accepted"}
-                })
-                return call_result.StartTransactionPayload(
-                    transaction_id=existing_tx.transaction_id,
-                    id_tag_info={"status": AuthorizationStatus.accepted}
-                )
-
-        tx_id = _next_tx_id()
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
-            charger = result.scalar_one_or_none()
-            if charger:
-                r_previous_active = await db.execute(
+        async with self._get_start_tx_lock(connector_id):
+            # Idempotency & Deduplication: absorb charger retransmissions for the
+            # same physical session, even if a stale duplicate was already auto-closed.
+            async with AsyncSessionLocal() as db:
+                r_dup = await db.execute(
                     select(Transaction).where(
                         Transaction.charge_point_id == self.id,
                         Transaction.connector_id == connector_id,
-                        Transaction.status == "Active",
-                    )
+                        Transaction.id_tag == id_tag,
+                        Transaction.meter_start == meter_start,
+                    ).order_by(Transaction.start_time.desc()).limit(1)
                 )
-                for previous_tx in r_previous_active.scalars().all():
-                    previous_tx.status = "Completed"
-                    previous_tx.stop_time = previous_tx.stop_time or start_dt
-                    previous_tx.stop_reason = previous_tx.stop_reason or "ReplacedByNewStartTransaction"
-                    if previous_tx.meter_stop is None:
-                        previous_tx.meter_stop = meter_start
-                    logger.info(
-                        "%s: auto-completed stale active TX #%s on connector %s before starting TX #%s",
-                        self.id,
-                        previous_tx.transaction_id,
-                        connector_id,
-                        tx_id,
+                existing_tx = r_dup.scalar_one_or_none()
+                now_dt = datetime.utcnow()
+                is_duplicate = False
+                if existing_tx and existing_tx.start_time:
+                    same_start_event = abs((existing_tx.start_time - start_dt).total_seconds()) <= 2
+                    recent_active_retry = existing_tx.status == "Active" and (now_dt - existing_tx.start_time).total_seconds() < 120
+                    zero_value_replay = (
+                        existing_tx.status == "Completed"
+                        and (existing_tx.meter_stop is None or existing_tx.meter_stop == existing_tx.meter_start)
+                        and same_start_event
+                    )
+                    is_duplicate = same_start_event or recent_active_retry or zero_value_replay
+
+                if existing_tx and is_duplicate:
+                    # A status read can briefly see the connector as Available while the
+                    # charger is still completing its start sequence. Recover that session
+                    # when the charger retransmits the same StartTransaction.
+                    if (
+                        existing_tx.status == "Completed"
+                        and existing_tx.stop_reason in ("EVDisconnected", "Local", None)
+                        and (existing_tx.meter_stop is None or existing_tx.meter_stop == existing_tx.meter_start)
+                        and same_start_event
+                    ):
+                        existing_tx.status = "Active"
+                        existing_tx.stop_time = None
+                        existing_tx.stop_reason = None
+                        await db.commit()
+                        self._start_meter_poll(existing_tx.transaction_id, connector_id)
+                        logger.info(
+                            "%s: restored prematurely closed TX #%s on connector %s",
+                            self.id,
+                            existing_tx.transaction_id,
+                            connector_id,
+                        )
+                    logger.info(f"Duplicate StartTransaction detected for {self.id} (connector {connector_id}). Reusing TX #{existing_tx.transaction_id}")
+                    await self._log_message("IN", "StartTransaction", {
+                        "connector_id": connector_id,
+                        "id_tag": id_tag,
+                        "meter_start": meter_start,
+                        "transaction_id": existing_tx.transaction_id,
+                        "timestamp": timestamp,
+                        "note": "Duplicate retransmission absorbed",
+                        **kwargs,
+                    })
+                    await self._log_message("OUT", "StartTransactionResponse", {
+                        "transaction_id": existing_tx.transaction_id,
+                        "id_tag_info": {"status": "Accepted"}
+                    })
+                    return call_result.StartTransactionPayload(
+                        transaction_id=existing_tx.transaction_id,
+                        id_tag_info={"status": AuthorizationStatus.accepted}
                     )
 
-                tx = Transaction(
-                    transaction_id=tx_id,
-                    charger_id=charger.id,
-                    charge_point_id=self.id,
-                    connector_id=connector_id,
-                    id_tag=id_tag,
-                    meter_start=meter_start,
-                    start_time=start_dt,
-                    status="Active",
-                )
-                db.add(tx)
-                charger.status = "Charging"
-                await db.commit()
+            tx_id = _next_tx_id()
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(Charger).where(Charger.charge_point_id == self.id))
+                charger = result.scalar_one_or_none()
+                if charger:
+                    r_previous_active = await db.execute(
+                        select(Transaction).where(
+                            Transaction.charge_point_id == self.id,
+                            Transaction.connector_id == connector_id,
+                            Transaction.status == "Active",
+                        )
+                    )
+                    for previous_tx in r_previous_active.scalars().all():
+                        previous_tx.status = "Completed"
+                        previous_tx.stop_time = previous_tx.stop_time or start_dt
+                        previous_tx.stop_reason = previous_tx.stop_reason or "ReplacedByNewStartTransaction"
+                        if previous_tx.meter_stop is None:
+                            previous_tx.meter_stop = meter_start
+                        logger.info(
+                            "%s: auto-completed stale active TX #%s on connector %s before starting TX #%s",
+                            self.id,
+                            previous_tx.transaction_id,
+                            connector_id,
+                            tx_id,
+                        )
 
-        # This meter model doesn't proactively send periodic MeterValues; actively poll
-        # for them via TriggerMessage so live power/energy isn't stuck at 0 while charging.
-        self._start_meter_poll(tx_id, connector_id)
+                    tx = Transaction(
+                        transaction_id=tx_id,
+                        charger_id=charger.id,
+                        charge_point_id=self.id,
+                        connector_id=connector_id,
+                        id_tag=id_tag,
+                        meter_start=meter_start,
+                        start_time=start_dt,
+                        status="Active",
+                    )
+                    db.add(tx)
+                    charger.status = "Charging"
+                    await db.commit()
 
-        await event_bus.publish("transaction_started", {
-            "charge_point_id": self.id,
-            "transaction_id": tx_id,
-            "connector_id": connector_id,
-            "id_tag": id_tag,
-            "meter_start": meter_start,
-        })
-        return call_result.StartTransactionPayload(
-            transaction_id=tx_id,
-            id_tag_info={"status": AuthorizationStatus.accepted}
-        )
+            # This meter model doesn't proactively send periodic MeterValues; actively poll
+            # for them via TriggerMessage so live power/energy isn't stuck at 0 while charging.
+            self._start_meter_poll(tx_id, connector_id)
+
+            await event_bus.publish("transaction_started", {
+                "charge_point_id": self.id,
+                "transaction_id": tx_id,
+                "connector_id": connector_id,
+                "id_tag": id_tag,
+                "meter_start": meter_start,
+            })
+            await self._log_message("OUT", "StartTransactionResponse", {
+                "transaction_id": tx_id,
+                "id_tag_info": {"status": "Accepted"}
+            })
+            return call_result.StartTransactionPayload(
+                transaction_id=tx_id,
+                id_tag_info={"status": AuthorizationStatus.accepted}
+            )
 
     def _start_meter_poll(self, tx_id: int, connector_id: int):
         """Starts the MeterValues poll task for a transaction, avoiding duplicate loops
@@ -1035,6 +1139,54 @@ class ChargePoint(OcppChargePoint):
                 tx = r_active.scalar_one_or_none()
                 if tx:
                     db_tx_id = tx.id
+
+            if not tx and charger:
+                # Fallback: check if the latest transaction on this connector was prematurely closed (0 Wh delta)
+                # or closed recently (< 4 hours) while meter values are still arriving.
+                r_recent = await db.execute(
+                    select(Transaction)
+                    .where(
+                        Transaction.charge_point_id == self.id,
+                        Transaction.connector_id == connector_id,
+                    )
+                    .order_by(Transaction.start_time.desc())
+                    .limit(1)
+                )
+                recent_tx = r_recent.scalar_one_or_none()
+                if recent_tx:
+                    is_zero_stop = (
+                        recent_tx.status == "Completed"
+                        and recent_tx.meter_stop is not None
+                        and recent_tx.meter_stop == recent_tx.meter_start
+                    )
+                    age_seconds = (_now() - recent_tx.start_time).total_seconds() if recent_tx.start_time else 999999
+                    if is_zero_stop or age_seconds < 14400:
+                        recent_tx.status = "Active"
+                        recent_tx.stop_time = None
+                        recent_tx.stop_reason = None
+                        tx = recent_tx
+                        db_tx_id = tx.id
+                        self._start_meter_poll(tx.transaction_id, connector_id)
+
+                        r_conn = await db.execute(
+                            select(Connector).where(
+                                Connector.charger_id == charger.id,
+                                Connector.connector_id == connector_id,
+                            )
+                        )
+                        conn = r_conn.scalar_one_or_none()
+                        if conn:
+                            conn.status = "Charging"
+                            conn.active_transaction_id = tx.transaction_id
+                            conn.active_id_tag = tx.id_tag
+                            conn.updated_at = _now()
+                        charger.status = "Charging"
+                        logger.info(
+                            "%s: auto-resurrected TX #%s on connector %s upon receiving active MeterValues",
+                            self.id,
+                            tx.transaction_id,
+                            connector_id,
+                        )
 
             meter_data = []
             for mv in meter_value:

@@ -344,3 +344,11 @@ async def get_charging_success_rate(cp_id: str, db: AsyncSession = Depends(get_d
     
     logger.info(f"[SUCCESS_RATE] Result for {cp_id}: {rates}")
     return rates
+
+
+@router.post("/reconcile-zero", response_model=dict)
+async def trigger_reconcile_zero_transactions(db: AsyncSession = Depends(get_db)):
+    """Manually triggers reconciliation of premature 0 Wh transactions."""
+    from ocpp_server.charge_point import reconcile_premature_zero_transactions
+    healed = await reconcile_premature_zero_transactions(db)
+    return {"status": "ok", "healed_transactions": healed}

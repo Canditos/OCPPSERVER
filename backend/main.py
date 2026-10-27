@@ -100,6 +100,7 @@ async def startup():
         _init_tx_counter,
         reconcile_duplicate_active_transactions,
         reconcile_stale_active_transactions,
+        reconcile_premature_zero_transactions,
     )
     await _init_tx_counter()
 
@@ -159,6 +160,17 @@ async def startup():
                 )
     except Exception as e:
         logging.warning(f"Startup connector-state reconciliation failed: {e}")
+
+    try:
+        async with AsyncSessionLocal() as session:
+            healed = await reconcile_premature_zero_transactions(session)
+            if healed:
+                logging.info(
+                    "Startup premature-zero transaction reconciliation: healed "
+                    f"{healed} transaction(s)"
+                )
+    except Exception as e:
+        logging.warning(f"Startup premature-zero transaction reconciliation failed: {e}")
 
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):
