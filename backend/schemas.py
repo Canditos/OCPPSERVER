@@ -7,6 +7,9 @@ class ConnectorOut(BaseModel):
     status: str
     error_code: str | None
     updated_at: datetime | None
+    power_type: str | None = None
+    connector_type: str | None = None
+    max_kw: float | None = None
     active_transaction_id: int | None = None
     active_id_tag: str | None = None
     active_username: str | None = None

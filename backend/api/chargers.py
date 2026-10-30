@@ -41,9 +41,28 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
     r_u = await db.execute(select(User))
     users_by_tag = {u.rfid_tag: u for u in r_u.scalars().all() if u.rfid_tag}
 
+    is_dc_station = bool(
+        ch.model and ("sicharge" in ch.model.lower() or " dc" in ch.model.lower() or ch.model.upper().endswith("-D"))
+        or (ch.vendor and "dc" in ch.vendor.lower())
+    )
+
     enriched = []
     for conn in raw_connectors:
         c_out = ConnectorOut.model_validate(conn)
+        if not c_out.power_type:
+            if is_dc_station:
+                if conn.connector_id == 3:
+                    c_out.power_type = "AC"
+                    c_out.connector_type = "Type2"
+                    c_out.max_kw = 22.0
+                else:
+                    c_out.power_type = "DC"
+                    c_out.connector_type = "CCS2"
+                    c_out.max_kw = 150.0
+            else:
+                c_out.power_type = "AC"
+                c_out.connector_type = "Type2"
+                c_out.max_kw = 22.0
         tx = active_txs.get(conn.connector_id)
         if tx:
             # An active OCPP transaction means the connector is occupied even

@@ -62,6 +62,9 @@ async def _add_missing_columns(conn) -> None:
         ("transactions", "ocmf_verification_error", "VARCHAR(256)"),
         ("transactions", "ocmf_meter_serial", "VARCHAR(64)"),
         ("transactions", "signed_energy_kwh", "FLOAT"),
+        ("connectors", "power_type", "VARCHAR(16)"),
+        ("connectors", "connector_type", "VARCHAR(32)"),
+        ("connectors", "max_kw", "FLOAT"),
     ]
 
     for table, column, col_type in cols_to_add:

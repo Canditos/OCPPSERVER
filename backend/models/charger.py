@@ -57,6 +57,9 @@ class Connector(Base):
     evse_id: Mapped[int | None] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(32), default="Available")
     error_code: Mapped[str | None] = mapped_column(String(64))
+    power_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    connector_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    max_kw: Mapped[float | None] = mapped_column(Float, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     charger: Mapped["Charger"] = relationship(back_populates="connectors")

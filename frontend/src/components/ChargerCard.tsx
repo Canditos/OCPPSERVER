@@ -153,6 +153,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       status: string
       error_code: string | null
       updated_at: string | null
+      power_type?: string | null
+      connector_type?: string | null
+      max_kw?: number | null
     }>()
 
     for (const connector of charger.connectors || []) {
@@ -161,20 +164,27 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         status: connector.status,
         error_code: connector.error_code ?? null,
         updated_at: connector.updated_at ?? null,
+        power_type: connector.power_type ?? null,
+        connector_type: connector.connector_type ?? null,
+        max_kw: connector.max_kw ?? null,
       })
     }
 
     for (const [id, connector] of Object.entries(live?.connectors || {})) {
+      const existing = connectorMap.get(Number(id))
       connectorMap.set(Number(id), {
         connector_id: Number(id),
         status: connector.status,
         error_code: connector.errorCode ?? null,
         updated_at: null,
+        power_type: existing?.power_type ?? null,
+        connector_type: existing?.connector_type ?? null,
+        max_kw: existing?.max_kw ?? null,
       })
     }
 
     if (connectorMap.size === 0) {
-      return [{ connector_id: 1, status: live?.isOnline ?? charger.is_online ? (charger.status || 'Available') : 'Offline', error_code: null, updated_at: null }]
+      return [{ connector_id: 1, status: live?.isOnline ?? charger.is_online ? (charger.status || 'Available') : 'Offline', error_code: null, updated_at: null, power_type: null, connector_type: null, max_kw: null }]
     }
 
     return Array.from(connectorMap.values()).sort((a, b) => a.connector_id - b.connector_id)
@@ -661,6 +671,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
             const finalPowerKw = (isSelected && livePowerKw !== null) ? livePowerKw : telemetry.powerKw
             const activeTx = (allActiveTransactions as any)?.[c.connector_id] || (isSelected ? activeTransactionForSelectedConnector : null)
 
+            const isConnectorDC = Boolean(
+              c.power_type
+                ? c.power_type.toUpperCase() === 'DC'
+                : c.connector_type
+                ? (c.connector_type.toUpperCase().includes('CCS') || c.connector_type.toUpperCase().includes('DC') || c.connector_type.toUpperCase().includes('CHADEMO'))
+                : (isDC && c.connector_id !== 3)
+            )
+
             return (
               <EvseBay
                 key={c.connector_id}
@@ -671,7 +689,9 @@ export function ChargerCard({ charger }: { charger: Charger }) {
                 energyKwh={activeTx?.energy_kwh}
                 activeTx={activeTx}
                 isSelected={isSelected}
-                isDC={isDC}
+                isDC={isConnectorDC}
+                connectorType={c.connector_type}
+                maxKw={c.max_kw}
                 onSelect={() => setSelectedConnectorId(c.connector_id)}
                 onUnlock={() => handleUnlock(c.connector_id)}
                 onNotifyDriver={activeTx ? () => handleNotifyDriver(c.connector_id) : undefined}

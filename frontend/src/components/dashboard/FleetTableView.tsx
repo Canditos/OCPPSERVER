@@ -175,6 +175,13 @@ export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewPr
                         connectors.map((conn) => {
                           const isConnCharging = conn.status === 'Charging'
                           const isConnFaulted = conn.status === 'Faulted'
+                          const isConnDC = Boolean(
+                            conn.power_type
+                              ? conn.power_type.toUpperCase() === 'DC'
+                              : conn.connector_type
+                              ? (conn.connector_type.toUpperCase().includes('CCS') || conn.connector_type.toUpperCase().includes('DC'))
+                              : (isDC && conn.connector_id !== 3)
+                          )
                           return (
                             <span
                               key={conn.connector_id}
@@ -188,7 +195,7 @@ export function FleetTableView({ chargers, onSelfHealSuccess }: FleetTableViewPr
                               title={`Tomada #${conn.connector_id} - ${conn.status}`}
                             >
                               <span>#{conn.connector_id}</span>
-                              <span className="text-[9px] opacity-75">{isDC ? 'CCS2' : 'Type2'}</span>
+                              <span className="text-[9px] opacity-75">{isConnDC ? 'CCS2' : 'Type2'}</span>
                             </span>
                           )
                         })

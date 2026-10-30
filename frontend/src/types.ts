@@ -3,6 +3,9 @@ export interface Connector {
   status: string
   error_code: string | null
   updated_at: string | null
+  power_type?: 'AC' | 'DC' | string | null
+  connector_type?: string | null
+  max_kw?: number | null
   active_transaction_id?: number | null
   active_id_tag?: string | null
   active_username?: string | null

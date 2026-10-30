@@ -11,6 +11,8 @@ interface EvseBayProps {
   activeTx?: any | null
   isSelected: boolean
   isDC: boolean
+  connectorType?: string | null
+  maxKw?: number | null
   onSelect: () => void
   onUnlock?: () => void
   onNotifyDriver?: () => void
@@ -25,6 +27,8 @@ export function EvseBay({
   activeTx,
   isSelected,
   isDC,
+  connectorType,
+  maxKw,
   onSelect,
   onUnlock,
   onNotifyDriver,
@@ -39,8 +43,16 @@ export function EvseBay({
   const isOffline = status === 'Offline' || status === 'Unavailable'
 
   // Plug type heuristic: DC is CCS2 Combo, AC is Type 2 Mennekes
-  const plugLabel = isDC ? t('evseBay.plugTypeDC') : t('evseBay.plugTypeAC')
-  const maxPowerLabel = isDC ? t('evseBay.maxPowerDC') : t('evseBay.maxPowerAC')
+  const plugLabel = connectorType
+    ? (connectorType.toUpperCase() === 'CCS2' ? t('evseBay.plugTypeDC') :
+       connectorType.toUpperCase() === 'TYPE2' ? t('evseBay.plugTypeAC') :
+       connectorType.toUpperCase() === 'CHADEMO' ? 'CHAdeMO (DC)' :
+       isDC ? t('evseBay.plugTypeDC') : t('evseBay.plugTypeAC'))
+    : (isDC ? t('evseBay.plugTypeDC') : t('evseBay.plugTypeAC'))
+
+  const maxPowerLabel = maxKw
+    ? `${t('common.upTo', { defaultValue: 'Até' })} ${maxKw} kW ${isDC ? 'DC' : 'AC'}`
+    : (isDC ? t('evseBay.maxPowerDC') : t('evseBay.maxPowerAC'))
 
   return (
     <div
