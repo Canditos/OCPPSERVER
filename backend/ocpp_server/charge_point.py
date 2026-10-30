@@ -1279,6 +1279,35 @@ class ChargePoint(OcppChargePoint):
                     )
                     active_tx = active_result.scalar_one_or_none()
                     now = _now()
+                    if not active_tx and status in ("Charging", "SuspendedEV", "SuspendedEVSE", "Finishing"):
+                        # Auto-resurrect premature 0 Wh closed transactions (SICHARGE D handshake quirk)
+                        r_recent_zero = await db.execute(
+                            select(Transaction)
+                            .where(
+                                Transaction.charge_point_id == self.id,
+                                Transaction.connector_id == connector_id,
+                                Transaction.status == "Completed",
+                                Transaction.meter_start.is_not(None),
+                                Transaction.meter_stop == Transaction.meter_start,
+                            )
+                            .order_by(Transaction.start_time.desc())
+                            .limit(1)
+                        )
+                        recent_zero_tx = r_recent_zero.scalar_one_or_none()
+                        if recent_zero_tx and (now - (recent_zero_tx.stop_time or now)).total_seconds() < 300:
+                            recent_zero_tx.status = "Active"
+                            recent_zero_tx.stop_time = None
+                            recent_zero_tx.stop_reason = None
+                            active_tx = recent_zero_tx
+                            self._start_meter_poll(recent_zero_tx.transaction_id, connector_id)
+                            logger.info(
+                                "%s: auto-resurrected premature 0 Wh TX #%s on connector %s upon StatusNotification %s",
+                                self.id,
+                                recent_zero_tx.transaction_id,
+                                connector_id,
+                                status,
+                            )
+
                     if active_tx and status in ("Available", "Unavailable"):
                         age_seconds = (
                             (now - active_tx.start_time).total_seconds()
