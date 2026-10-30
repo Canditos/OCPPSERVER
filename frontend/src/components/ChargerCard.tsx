@@ -661,15 +661,18 @@ export function ChargerCard({ charger }: { charger: Charger }) {
         <div className={`grid gap-2.5 ${rawConnectors.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
           {rawConnectors.map((c) => {
             const isSelected = selectedConnectorId === c.connector_id
-            const connectorStatus = !isOnline
-              ? 'Offline'
-              : (isSelected && optimisticStatus)
-              ? optimisticStatus
-              : c.status
             const telemetry = getConnectorTelemetry(c.connector_id)
             const finalSoc = (isSelected && liveSoC !== null) ? liveSoC : telemetry.soc
             const finalPowerKw = (isSelected && livePowerKw !== null) ? livePowerKw : telemetry.powerKw
             const activeTx = (allActiveTransactions as any)?.[c.connector_id] || (isSelected ? activeTransactionForSelectedConnector : null)
+            const hasActiveCharge = Boolean(activeTx || (finalPowerKw !== null && finalPowerKw > 0))
+            const connectorStatus = !isOnline
+              ? 'Offline'
+              : (isSelected && optimisticStatus)
+              ? optimisticStatus
+              : hasActiveCharge
+              ? 'Charging'
+              : c.status
 
             const isConnectorDC = Boolean(
               c.power_type

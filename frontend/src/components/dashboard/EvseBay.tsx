@@ -34,13 +34,14 @@ export function EvseBay({
   onNotifyDriver,
 }: EvseBayProps) {
   const { t } = useI18n()
-  const isCharging = status === 'Charging'
-  const isPreparing = status === 'Preparing'
+  const hasActiveSession = Boolean(activeTx || (powerKw !== null && powerKw > 0))
+  const isCharging = status === 'Charging' || hasActiveSession
+  const isPreparing = status === 'Preparing' && !hasActiveSession
   const isFaulted = status === 'Faulted'
-  const isAvailable = status === 'Available'
-  const isFinishing = status === 'Finishing'
-  const isSuspended = status.startsWith('Suspended')
-  const isOffline = status === 'Offline' || status === 'Unavailable'
+  const isAvailable = status === 'Available' && !hasActiveSession
+  const isFinishing = status === 'Finishing' && !hasActiveSession
+  const isSuspended = status.startsWith('Suspended') && !hasActiveSession
+  const isOffline = (status === 'Offline' || status === 'Unavailable') && !hasActiveSession
 
   // Plug type heuristic: DC is CCS2 Combo, AC is Type 2 Mennekes
   const plugLabel = connectorType
@@ -50,9 +51,11 @@ export function EvseBay({
        isDC ? t('evseBay.plugTypeDC') : t('evseBay.plugTypeAC'))
     : (isDC ? t('evseBay.plugTypeDC') : t('evseBay.plugTypeAC'))
 
+  const defaultDc = t('evseBay.maxPowerDC') || 'Até 150 kW DC'
+  const defaultAc = t('evseBay.maxPowerAC') || 'Até 22 kW AC'
   const maxPowerLabel = maxKw
-    ? `${t('common.upTo', { defaultValue: 'Até' })} ${maxKw} kW ${isDC ? 'DC' : 'AC'}`
-    : (isDC ? t('evseBay.maxPowerDC') : t('evseBay.maxPowerAC'))
+    ? `Até ${maxKw} kW ${isDC ? 'DC' : 'AC'}`
+    : (isDC ? defaultDc : defaultAc)
 
   return (
     <div
