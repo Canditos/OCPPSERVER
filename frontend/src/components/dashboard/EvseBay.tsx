@@ -34,11 +34,14 @@ export function EvseBay({
   onNotifyDriver,
 }: EvseBayProps) {
   const { t } = useI18n()
-  const hasActiveSession = Boolean(activeTx || (powerKw !== null && powerKw > 0))
+  const hasActiveSession = Boolean(
+    activeTx ||
+    (powerKw !== null && powerKw > 0 && status !== 'Available' && status !== 'Offline' && status !== 'Unavailable')
+  )
   const isCharging = status === 'Charging' || hasActiveSession
   const isPreparing = status === 'Preparing' && !hasActiveSession
   const isFaulted = status === 'Faulted'
-  const isAvailable = status === 'Available' && !hasActiveSession
+  const isAvailable = status === 'Available' && !activeTx
   const isFinishing = status === 'Finishing' && !hasActiveSession
   const isSuspended = status.startsWith('Suspended') && !hasActiveSession
   const isOffline = (status === 'Offline' || status === 'Unavailable') && !hasActiveSession

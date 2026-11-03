@@ -295,8 +295,11 @@ export function ChargerCard({ charger }: { charger: Charger }) {
       }
     }
 
-    // Fallback to global live meters ONLY if this is the only active connector
-    if (activeChargingConnectors.length <= 1) {
+    // Fallback to global live meters ONLY for single-connector stations, or if THIS connector is the one actively charging
+    const isThisConnectorActive = activeChargingConnectors.some((c: any) => c.connector_id === connId)
+    const isSingleConnector = rawConnectors.length <= 1
+
+    if (isSingleConnector || (isThisConnectorActive && activeChargingConnectors.length === 1)) {
       if (rawPower === null && live?.meters) {
         const pValues = Object.entries(live.meters)
           .filter(([measurand]) => measurand.toLowerCase().includes('power') || measurand.toLowerCase().includes('active.power'))
@@ -662,10 +665,14 @@ export function ChargerCard({ charger }: { charger: Charger }) {
           {rawConnectors.map((c) => {
             const isSelected = selectedConnectorId === c.connector_id
             const telemetry = getConnectorTelemetry(c.connector_id)
-            const finalSoc = (isSelected && liveSoC !== null) ? liveSoC : telemetry.soc
-            const finalPowerKw = (isSelected && livePowerKw !== null) ? livePowerKw : telemetry.powerKw
+            const finalSoc = telemetry.soc
+            const finalPowerKw = telemetry.powerKw
             const activeTx = (allActiveTransactions as any)?.[c.connector_id] || (isSelected ? activeTransactionForSelectedConnector : null)
-            const hasActiveCharge = Boolean(activeTx || (finalPowerKw !== null && finalPowerKw > 0))
+            const hasActiveCharge = Boolean(
+              activeTx ||
+              c.status === 'Charging' ||
+              (c.status === 'Finishing' && finalPowerKw !== null && finalPowerKw > 0)
+            )
             const connectorStatus = !isOnline
               ? 'Offline'
               : (isSelected && optimisticStatus)

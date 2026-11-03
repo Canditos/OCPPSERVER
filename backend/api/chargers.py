@@ -51,7 +51,20 @@ async def _enrich_connectors(ch: Charger, db: AsyncSession) -> list[ConnectorOut
         c_out = ConnectorOut.model_validate(conn)
         if not c_out.power_type:
             if is_dc_station:
-                if conn.connector_id == 3:
+                # SICHARGE D with 3 connectors (e.g. Corroios1) layout:
+                # Connector 1: DC (CCS2, 150 kW)
+                # Connector 2: AC (Type 2 Mennekes, 22 kW)
+                # Connector 3: DC (CCS2, 150 kW)
+                if "corroios1" in ch.charge_point_id.lower() or len(raw_connectors) == 3:
+                    if conn.connector_id == 2:
+                        c_out.power_type = "AC"
+                        c_out.connector_type = "Type2"
+                        c_out.max_kw = 22.0
+                    else:
+                        c_out.power_type = "DC"
+                        c_out.connector_type = "CCS2"
+                        c_out.max_kw = 150.0
+                elif conn.connector_id == 3:
                     c_out.power_type = "AC"
                     c_out.connector_type = "Type2"
                     c_out.max_kw = 22.0

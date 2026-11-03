@@ -172,6 +172,31 @@ async def startup():
     except Exception as e:
         logging.warning(f"Startup premature-zero transaction reconciliation failed: {e}")
 
+    # Ensure Corroios1 connectors have correct physical layout in database:
+    # Connector 1: DC (CCS2, 150 kW)
+    # Connector 2: AC (Type 2 Mennekes, 22 kW)
+    # Connector 3: DC (CCS2, 150 kW)
+    try:
+        from models.charger import Charger, Connector
+        async with AsyncSessionLocal() as session:
+            c1_res = await session.execute(select(Charger).where(Charger.charge_point_id == "Corroios1"))
+            c1 = c1_res.scalar_one_or_none()
+            if c1:
+                conns_res = await session.execute(select(Connector).where(Connector.charger_id == c1.id))
+                for conn in conns_res.scalars().all():
+                    if conn.connector_id == 2:
+                        conn.power_type = "AC"
+                        conn.connector_type = "Type2"
+                        conn.max_kw = 22.0
+                    elif conn.connector_id in (1, 3):
+                        conn.power_type = "DC"
+                        conn.connector_type = "CCS2"
+                        conn.max_kw = 150.0
+                await session.commit()
+                logging.info("Startup connector layout synced for Corroios1: #1=DC, #2=AC, #3=DC")
+    except Exception as e:
+        logging.warning(f"Startup connector layout sync failed: {e}")
+
     # Optionally still run standalone OCPP server on port 9000 for local dev
     if os.environ.get("OCPP_STANDALONE_PORT"):
         port = int(os.environ["OCPP_STANDALONE_PORT"])
