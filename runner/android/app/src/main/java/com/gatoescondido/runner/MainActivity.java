@@ -37,8 +37,14 @@ public class MainActivity extends BridgeActivity {
         try {
             cleanupPlayer();
 
+            // Crucial: USAGE_ASSISTANCE_SONIFICATION / CONTENT_TYPE_SPEECH
+            // WE DELIBERATELY DO NOT REQUEST AUDIO FOCUS!
+            // When audio focus is NOT requested, Android's AudioService NEVER notifies
+            // background music players (Yuma, Spotify, etc.).
+            // Therefore, Yuma NEVER receives a pause/stop event and NEVER stops playing!
+            // Android hardware mixer seamlessly overlays the voice announcement on top of the music.
             AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build();
 
@@ -49,24 +55,21 @@ public class MainActivity extends BridgeActivity {
             mediaPlayer.setOnPreparedListener(mp -> {
                 try {
                     mp.start();
-                    Log.d(TAG, "TTS playing on notification stream (music keeps playing)");
+                    Log.d(TAG, "Speech playback started seamlessly over music");
                 } catch (Exception e) {
                     Log.e(TAG, "Error starting MediaPlayer", e);
                     cleanupPlayer();
-                    notifyWebViewDone();
                 }
             });
 
             mediaPlayer.setOnCompletionListener(mp -> {
-                Log.d(TAG, "TTS completed");
+                Log.d(TAG, "Speech playback completed cleanly");
                 cleanupPlayer();
-                notifyWebViewDone();
             });
 
             mediaPlayer.setOnErrorListener((mp, what, extra) -> {
                 Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
                 cleanupPlayer();
-                notifyWebViewDone();
                 return true;
             });
 
@@ -90,18 +93,6 @@ public class MainActivity extends BridgeActivity {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error in cleanupPlayer", e);
-        }
-    }
-
-    private void notifyWebViewDone() {
-        try {
-            if (getBridge() != null && getBridge().getWebView() != null) {
-                getBridge().getWebView().post(() ->
-                    getBridge().getWebView().evaluateJavascript(
-                        "if(window._onNativeVoiceDone) window._onNativeVoiceDone();", null));
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to notify WebView", e);
         }
     }
 }

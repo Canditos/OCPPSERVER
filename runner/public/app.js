@@ -452,11 +452,8 @@ function fallbackWebAudio(audioUrl, pulseEl) {
     try {
       audio.pause();
       audio.src = '';
-      audio.load(); // Releases audio track to let background music unpause
+      audio.load();
     } catch (e) {}
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = 'none';
-    }
   };
 
   audio.onended = cleanup;
@@ -464,10 +461,6 @@ function fallbackWebAudio(audioUrl, pulseEl) {
     console.error('Audio stream error loading TTS from server:', e);
     cleanup();
   };
-
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.playbackState = 'playing';
-  }
 
   audio.play().catch(err => {
     console.warn('Audio play prevented', err);
@@ -534,14 +527,10 @@ function toggleLanguage() {
   }
 }
 
-// Media Session Setup (only if earbud shortcuts are enabled, so we do not steal lockscreen from Yuma/music)
+// Media Session Setup (disabled by default so we NEVER steal lockscreen from Yuma/music)
 function updateMediaSession(sgv, direction, carbAdvice) {
+  if (!config.enableEarbudShortcuts) return;
   if (!('mediaSession' in navigator)) return;
-  if (!config.enableEarbudShortcuts) {
-    // If not enabled, make sure we do not hold the playback state
-    navigator.mediaSession.playbackState = 'none';
-    return;
-  }
 
   const lang = config.language || 'en';
   const dirInfo = I18N[lang]?.directions[direction || 'Flat'] || I18N[lang]?.directions.Flat;
