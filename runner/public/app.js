@@ -1,6 +1,12 @@
 // Nightscout Audio Runner & Sports Carb Coach
 // Dynamic Dual-Language Edition: English (EN) and Português (PT-PT)
 
+// Detect if running inside native Android APK (Capacitor/localhost)
+const isNativeApp = window.location.origin.includes('localhost') || 
+                    window.location.protocol === 'capacitor:' || 
+                    window.location.protocol === 'file:';
+const API_BASE = isNativeApp ? 'https://runner.gatoescondido.com' : '';
+
 const CONFIG_KEY = 'ns_runner_config_v4';
 
 const defaultConfig = {
@@ -399,7 +405,7 @@ function playStudioVoice(spokenText) {
 
   const lang = config.language || 'en';
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
-  const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
+  const audioUrl = `${API_BASE}/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
   const audio = new Audio(audioUrl);
   currentAudioPlayer = audio;
@@ -410,13 +416,9 @@ function playStudioVoice(spokenText) {
   };
 
   audio.onerror = (e) => {
-    console.warn('Audio stream error, falling back to WebSpeech', e);
+    console.error('Audio stream error loading RaquelNeural from server:', e);
     if (pulseEl) pulseEl.classList.add('hidden');
-    if ('speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(cleanText);
-      u.lang = lang;
-      window.speechSynthesis.speak(u);
-    }
+    // Do NOT fall back to robotic/Brazilian Android system voice
   };
 
   audio.play().catch(err => {
@@ -512,7 +514,7 @@ function updateMediaSession(sgv, direction, carbAdvice) {
 // Fetch Nightscout Readings
 async function fetchNightscoutEntries() {
   const endpointsToTry = [
-    '/api/entries',
+    `${API_BASE}/api/entries`,
     `${config.nsUrl.replace(/\/+$/, '')}/api/v1/entries.json?count=5`,
     `https://corsproxy.io/?${encodeURIComponent(config.nsUrl.replace(/\/+$/, '') + '/api/v1/entries.json?count=5')}`
   ];
