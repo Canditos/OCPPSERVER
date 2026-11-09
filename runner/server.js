@@ -72,8 +72,25 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // Voice selection: RaquelNeural is the authentic Portugal voice the user approved!
-    const voice = lang === 'pt-PT' ? 'pt-PT-RaquelNeural' : 'en-US-JennyNeural';
+    // Multilingual Neural Voice Map: PT (Raquel), EN (Jenny), ES (Elvira), FR (Denise), DE (Katja)
+    const VOICE_MAP = {
+      'pt-pt': 'pt-PT-RaquelNeural',
+      'pt':    'pt-PT-RaquelNeural',
+      'en-us': 'en-US-JennyNeural',
+      'en':    'en-US-JennyNeural',
+      'es-es': 'es-ES-ElviraNeural',
+      'es':    'es-ES-ElviraNeural',
+      'fr-fr': 'fr-FR-DeniseNeural',
+      'fr':    'fr-FR-DeniseNeural',
+      'de-de': 'de-DE-KatjaNeural',
+      'de':    'de-DE-KatjaNeural'
+    };
+    const langKey = (lang || 'pt-PT').toLowerCase();
+    const voice = VOICE_MAP[langKey] || 
+                  (langKey.startsWith('pt') ? 'pt-PT-RaquelNeural' :
+                   langKey.startsWith('es') ? 'es-ES-ElviraNeural' :
+                   langKey.startsWith('fr') ? 'fr-FR-DeniseNeural' :
+                   langKey.startsWith('de') ? 'de-DE-KatjaNeural' : 'en-US-JennyNeural');
 
     // File cache hash
     const hash = crypto.createHash('md5').update(`${voice}:${text}`).digest('hex');

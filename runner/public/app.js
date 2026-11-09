@@ -36,6 +36,120 @@ let workoutIntervalId = null;
 let announcementCount = 0;
 let currentAudioPlayer = null;
 
+// Background Keep-Alive State
+let lastAnnouncementTimestamp = Date.now();
+let lastHeartbeatProcessTime = 0;
+let silentAudioElement = null;
+let backgroundTimerWorker = null;
+
+// Native Android Foreground Service integration (Capacitor & Android JavascriptInterface)
+function triggerNativeForegroundStart() {
+  if (NativeVoice && typeof NativeVoice.startWorkout === 'function') {
+    NativeVoice.startWorkout().catch(e => console.warn('NativeVoice.startWorkout error:', e));
+  } else if (window.AndroidVoice && typeof window.AndroidVoice.startWorkoutService === 'function') {
+    try { window.AndroidVoice.startWorkoutService(); } catch (e) { console.warn('AndroidVoice.startWorkoutService error:', e); }
+  }
+}
+
+function triggerNativeForegroundStop() {
+  if (NativeVoice && typeof NativeVoice.stopWorkout === 'function') {
+    NativeVoice.stopWorkout().catch(e => console.warn('NativeVoice.stopWorkout error:', e));
+  } else if (window.AndroidVoice && typeof window.AndroidVoice.stopWorkoutService === 'function') {
+    try { window.AndroidVoice.stopWorkoutService(); } catch (e) { console.warn('AndroidVoice.stopWorkoutService error:', e); }
+  }
+}
+
+// 1-second silent WAV data URI for continuous audio session keep-alive
+const SILENT_AUDIO_URI = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhEQAAAP///////////////////w==';
+
+function startSilentAudioKeepAlive() {
+  try {
+    if (!silentAudioElement) {
+      silentAudioElement = new Audio(SILENT_AUDIO_URI);
+      silentAudioElement.loop = true;
+      silentAudioElement.volume = 0.001; // inaudible to avoid interfering with music
+      silentAudioElement.setAttribute('playsinline', 'true');
+      silentAudioElement.setAttribute('webkit-playsinline', 'true');
+    }
+
+    silentAudioElement.ontimeupdate = () => {
+      if (isRunning) {
+        onHeartbeatTick();
+      }
+    };
+
+    silentAudioElement.play().catch(e => {
+      console.warn('Silent audio keep-alive play warning:', e);
+    });
+  } catch (e) {
+    console.warn('Failed to start silent audio keep-alive:', e);
+  }
+}
+
+function stopSilentAudioKeepAlive() {
+  if (silentAudioElement) {
+    try {
+      silentAudioElement.pause();
+      silentAudioElement.currentTime = 0;
+    } catch (e) {}
+  }
+}
+
+function startBackgroundWorker() {
+  if (window.Worker) {
+    try {
+      if (backgroundTimerWorker) {
+        try { backgroundTimerWorker.terminate(); } catch (e) {}
+      }
+      const workerCode = 'let t = null; self.onmessage = function(e) { if (e.data === "start") { if (t) clearInterval(t); t = setInterval(function() { self.postMessage("tick"); }, 1000); } else if (e.data === "stop") { if (t) clearInterval(t); t = null; } };';
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      backgroundTimerWorker = new Worker(URL.createObjectURL(blob));
+      backgroundTimerWorker.onmessage = (e) => {
+        if (e.data === 'tick' && isRunning) {
+          onHeartbeatTick();
+        }
+      };
+      backgroundTimerWorker.postMessage('start');
+    } catch (e) {
+      console.warn('Web Worker creation failed:', e);
+    }
+  }
+}
+
+function stopBackgroundWorker() {
+  if (backgroundTimerWorker) {
+    try {
+      backgroundTimerWorker.postMessage('stop');
+      backgroundTimerWorker.terminate();
+    } catch (e) {}
+    backgroundTimerWorker = null;
+  }
+}
+
+function onHeartbeatTick() {
+  const now = Date.now();
+  if (now - lastHeartbeatProcessTime < 400) return;
+  lastHeartbeatProcessTime = now;
+
+  if (!isRunning) return;
+
+  // 1. Duration display
+  updateWorkoutDuration();
+
+  // 2. Real wall-clock countdown and announcement trigger
+  const targetIntervalMs = (config.intervalMinutes || 2) * 60 * 1000;
+  const timeSinceLast = now - lastAnnouncementTimestamp;
+  const remainingMs = Math.max(0, targetIntervalMs - timeSinceLast);
+  secondsRemaining = Math.ceil(remainingMs / 1000);
+  updateCountdownDisplay();
+
+  if (timeSinceLast >= targetIntervalMs) {
+    console.log('[Timer] interval reached (' + timeSinceLast + 'ms). Polling & announcing.');
+    lastAnnouncementTimestamp = now;
+    performPollAndAnnouncement(false);
+  }
+}
+
 function loadConfig() {
   try {
     const saved = localStorage.getItem(CONFIG_KEY);
@@ -683,8 +797,17 @@ function updateUIWithReading(current, previous, delta, advice) {
 async function startWorkout() {
   isRunning = true;
   workoutStartTime = Date.now();
+  lastAnnouncementTimestamp = Date.now();
   announcementCount = 0;
-  document.getElementById('announcementCount').textContent = '0';
+  const countEl = document.getElementById('announcementCount');
+  if (countEl) countEl.textContent = '0';
+
+  // 1. Start Native Android Foreground Service (for APK background execution)
+  triggerNativeForegroundStart();
+
+  // 2. Start Web Keep-Alive (Silent Audio Loop + Web Worker)
+  startSilentAudioKeepAlive();
+  startBackgroundWorker();
 
   if (config.wakeLockEnabled && 'wakeLock' in navigator) {
     try {
@@ -694,30 +817,36 @@ async function startWorkout() {
     }
   }
 
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
+  }
+
   const lang = config.language || 'en';
   document.getElementById('btnStartWorkout').classList.add('hidden');
   document.getElementById('btnStopWorkout').classList.remove('hidden');
   document.getElementById('workoutStatusBadge').className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5';
   document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> ' + I18N[lang].ui.workoutRunning;
 
-  workoutIntervalId = setInterval(updateWorkoutDuration, 1000);
+  // Main thread backup timer
+  if (workoutIntervalId) clearInterval(workoutIntervalId);
+  workoutIntervalId = setInterval(onHeartbeatTick, 1000);
 
   // Immediate poll and announce
   await performPollAndAnnouncement(false);
-
-  // Interval loop
-  resetCountdown();
-  timerId = setInterval(() => {
-    performPollAndAnnouncement(false);
-    resetCountdown();
-  }, config.intervalMinutes * 60 * 1000);
+  lastAnnouncementTimestamp = Date.now();
+  secondsRemaining = (config.intervalMinutes || 2) * 60;
+  updateCountdownDisplay();
 }
 
 function stopWorkout() {
   isRunning = false;
+  if (workoutIntervalId) clearInterval(workoutIntervalId);
   if (timerId) clearInterval(timerId);
   if (countdownTimerId) clearInterval(countdownTimerId);
-  if (workoutIntervalId) clearInterval(workoutIntervalId);
+
+  triggerNativeForegroundStop();
+  stopSilentAudioKeepAlive();
+  stopBackgroundWorker();
 
   if (currentAudioPlayer) {
     currentAudioPlayer.pause();
@@ -729,6 +858,10 @@ function stopWorkout() {
     wakeLock = null;
   }
 
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {}
+  }
+
   const lang = config.language || 'en';
   document.getElementById('btnStartWorkout').classList.remove('hidden');
   document.getElementById('btnStopWorkout').classList.add('hidden');
@@ -738,14 +871,9 @@ function stopWorkout() {
 }
 
 function resetCountdown() {
-  if (countdownTimerId) clearInterval(countdownTimerId);
-  secondsRemaining = config.intervalMinutes * 60;
+  lastAnnouncementTimestamp = Date.now();
+  secondsRemaining = (config.intervalMinutes || 2) * 60;
   updateCountdownDisplay();
-  countdownTimerId = setInterval(() => {
-    secondsRemaining--;
-    if (secondsRemaining < 0) secondsRemaining = 0;
-    updateCountdownDisplay();
-  }, 1000);
 }
 
 function updateCountdownDisplay() {
@@ -830,6 +958,7 @@ window.addEventListener('DOMContentLoaded', () => {
     settingsModal.classList.add('hidden');
 
     if (isRunning) {
+      lastAnnouncementTimestamp = Date.now();
       clearInterval(timerId);
       timerId = setInterval(() => {
         performPollAndAnnouncement(false);
