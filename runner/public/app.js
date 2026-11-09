@@ -407,9 +407,9 @@ function playStudioVoice(spokenText) {
   if (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function') {
     try {
       window.AndroidVoice.playVoice(audioUrl);
-      setTimeout(() => {
-        if (pulseEl) pulseEl.classList.add('hidden');
-      }, 4500);
+      // Hide pulse when native callback fires, or after 12s safety timeout for long phrases
+      window._onNativeVoiceDone = () => { if (pulseEl) pulseEl.classList.add('hidden'); };
+      setTimeout(() => { if (pulseEl) pulseEl.classList.add('hidden'); }, 12000);
       return;
     } catch (e) {
       console.warn('AndroidVoice failed, falling back:', e);
