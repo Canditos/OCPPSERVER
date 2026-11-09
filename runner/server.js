@@ -1,13 +1,21 @@
-// Lightweight HTTP server for Nightscout Audio Runner with CORS Proxy and High-Quality Neural TTS
+// Lightweight HTTP server for Nightscout Audio Runner with Neural TTS (RaquelNeural PT-PT)
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
+const { execFile } = require('child_process');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const CACHE_DIR = path.join(PUBLIC_DIR, 'audio_cache');
+
+// Ensure cache directory exists
+if (!fs.existsSync(CACHE_DIR)) {
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -19,9 +27,6 @@ const MIME_TYPES = {
   '.mp3': 'audio/mpeg',
   '.ico': 'image/x-icon'
 };
-
-// In-memory audio cache for instant playback
-const audioCache = new Map();
 
 function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
@@ -39,64 +44,66 @@ function getLocalIpAddresses() {
 const server = http.createServer((req, res) => {
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
 
-  // 1. High Quality Studio TTS Route (supports pt-PT and en)
+  // 1. Neural European Portuguese (RaquelNeural) & English TTS Route
   if (parsedUrl.pathname === '/api/tts') {
-    const text = parsedUrl.searchParams.get('text') || '';
+    const text = (parsedUrl.searchParams.get('text') || '').trim();
     const lang = parsedUrl.searchParams.get('lang') || 'pt-PT';
     
-    if (!text.trim()) {
+    if (!text) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Text required' }));
       return;
     }
 
-    const cacheKey = `${lang}:${text}`;
-    if (audioCache.has(cacheKey)) {
-      const cached = audioCache.get(cacheKey);
+    // Voice selection: RaquelNeural is the authentic Portugal voice the user approved!
+    const voice = lang === 'pt-PT' ? 'pt-PT-RaquelNeural' : 'en-US-JennyNeural';
+
+    // File cache hash
+    const hash = crypto.createHash('md5').update(`${voice}:${text}`).digest('hex');
+    const cachedFile = path.join(CACHE_DIR, `${hash}.mp3`);
+
+    if (fs.existsSync(cachedFile)) {
       res.writeHead(200, {
         'Content-Type': 'audio/mpeg',
-        'Content-Length': cached.length,
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=86400'
       });
-      res.end(cached);
+      fs.createReadStream(cachedFile).pipe(res);
       return;
     }
 
-    // Call Google TTS with pt-PT or en
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
-    
-    https.get(ttsUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://translate.google.com/'
-      }
-    }, (ttsRes) => {
-      if (ttsRes.statusCode !== 200) {
-        res.writeHead(ttsRes.statusCode, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify({ error: 'TTS provider error' }));
-        return;
-      }
+    // Generate using python edge-tts worker
+    const workerScript = path.join(__dirname, 'tts_worker.py');
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
 
-      const chunks = [];
-      ttsRes.on('data', (chunk) => chunks.push(chunk));
-      ttsRes.on('end', () => {
-        const fullBuffer = Buffer.concat(chunks);
-        // Cache if under 1MB
-        if (fullBuffer.length < 1000000) {
-          audioCache.set(cacheKey, fullBuffer);
-        }
+    execFile(pythonCmd, [workerScript, text, voice, cachedFile], (error) => {
+      if (!error && fs.existsSync(cachedFile)) {
         res.writeHead(200, {
           'Content-Type': 'audio/mpeg',
-          'Content-Length': fullBuffer.length,
           'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'public, max-age=86400'
         });
-        res.end(fullBuffer);
-      });
-    }).on('error', (err) => {
-      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      res.end(JSON.stringify({ error: 'TTS request failed', details: err.message }));
+        fs.createReadStream(cachedFile).pipe(res);
+      } else {
+        // Fallback to Google Translate TTS if python worker fails
+        console.warn('Python TTS worker error, falling back to Google TTS:', error?.message);
+        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
+        https.get(ttsUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Referer': 'https://translate.google.com/'
+          }
+        }, (ttsRes) => {
+          res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Access-Control-Allow-Origin': '*'
+          });
+          ttsRes.pipe(res);
+        }).on('error', () => {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'TTS failed' }));
+        });
+      }
     });
 
     return;
@@ -189,7 +196,7 @@ server.listen(PORT, '0.0.0.0', () => {
   const localIps = getLocalIpAddresses();
   console.log(`\n======================================================`);
   console.log(`🏃 Nightscout Audio Runner pronto!`);
-  console.log(`🔊 Estúdio TTS ativo (Português de Portugal e English)`);
+  console.log(`🇵🇹 Voz de Portugal RaquelNeural ativa!`);
   console.log(`======================================================`);
   console.log(`No teu computador:   http://localhost:${PORT}`);
   if (localIps.length > 0) {
@@ -197,7 +204,6 @@ server.listen(PORT, '0.0.0.0', () => {
     localIps.forEach(ip => {
       console.log(`  👉 http://${ip}:${PORT}`);
     });
-    console.log(`(Certifica-te de que o telemóvel está no mesmo Wi-Fi)`);
   }
   console.log(`======================================================\n`);
 });

@@ -2,14 +2,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Install Python and edge-tts for RaquelNeural (Authentic Portugal European Portuguese Voice)
+RUN apk add --no-cache python3 py3-pip && \
+    pip install --no-cache-dir --break-system-packages edge-tts
+
 COPY package.json ./
-
-# Install dependencies if needed (none strictly required since server.js uses native http/https)
-# RUN npm install --production
-
-# Copy application files
-COPY server.js ./
+COPY server.js tts_worker.py ./
 COPY public/ ./public/
 
 ENV PORT=3000
