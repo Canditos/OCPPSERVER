@@ -403,31 +403,12 @@ function playStudioVoice(spokenText) {
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
   const audioUrl = `${API_BASE}/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
-  // 1. Native Android Plugin (VoiceAudio: Non-exclusive sonification overlay so Yuma never stops)
-  if (window.Capacitor && (window.Capacitor.isNativePlatform() || window.Capacitor.platform === 'android')) {
-    try {
-      const VoiceAudio = window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin('VoiceAudio') : window.Capacitor.Plugins?.VoiceAudio;
-      if (VoiceAudio && typeof VoiceAudio.play === 'function') {
-        VoiceAudio.play({ url: audioUrl })
-          .then(() => {
-            if (pulseEl) pulseEl.classList.add('hidden');
-          })
-          .catch(e => {
-            console.warn('VoiceAudio play error, falling back:', e);
-            fallbackWebAudio(audioUrl, pulseEl);
-          });
-        return;
-      }
-    } catch (e) {
-      console.warn('VoiceAudio native plugin failed, falling back:', e);
-    }
-  }
-
-  // 2. Direct Android Bridge fallback
+  // 1. Direct Android Bridge (non-exclusive sonification overlay — Yuma/Spotify keep playing)
   if (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function') {
     try {
       window.AndroidVoice.playVoice(audioUrl);
-      setTimeout(() => { if (pulseEl) pulseEl.classList.add('hidden'); }, 8000);
+      window._onNativeVoiceDone = () => { if (pulseEl) pulseEl.classList.add('hidden'); };
+      setTimeout(() => { if (pulseEl) pulseEl.classList.add('hidden'); }, 12000);
       return;
     } catch (e) {
       console.warn('AndroidVoice failed, falling back:', e);
