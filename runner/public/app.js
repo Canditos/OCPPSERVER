@@ -403,7 +403,20 @@ function playStudioVoice(spokenText) {
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
   const audioUrl = `${API_BASE}/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
-  // 1. Android Native Audio Ducking (allows Yuma/music to lower volume and auto-resume smoothly)
+  // 1. Direct Android Native Bridge (Guaranteed ducking and auto-resume for Yuma/Spotify)
+  if (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function') {
+    try {
+      window.AndroidVoice.playVoice(audioUrl);
+      setTimeout(() => {
+        if (pulseEl) pulseEl.classList.add('hidden');
+      }, 4500);
+      return;
+    } catch (e) {
+      console.warn('AndroidVoice failed, falling back:', e);
+    }
+  }
+
+  // 2. Capacitor Plugin fallback
   if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AudioFocusPlugin) {
     window.Capacitor.Plugins.AudioFocusPlugin.playVoice({ url: audioUrl })
       .then(() => {
@@ -416,7 +429,7 @@ function playStudioVoice(spokenText) {
     return;
   }
 
-  // 2. Web Audio fallback with immediate cleanup to release Android focus
+  // 3. Web Audio fallback with immediate cleanup to release Android focus
   fallbackWebAudio(audioUrl, pulseEl);
 }
 
