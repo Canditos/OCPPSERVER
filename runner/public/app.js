@@ -1,12 +1,12 @@
-// Nightscout Audio Runner & Sports Carb Coach (English Edition)
-// Studio-Quality Voice via Bluetooth with zero cuts and zero noise
+// Nightscout Audio Runner & Sports Carb Coach
+// Dynamic Dual-Language Edition: English (EN) and Português (PT-PT)
 
-const CONFIG_KEY = 'ns_runner_config_en_v1';
+const CONFIG_KEY = 'ns_runner_config_v4';
 
 const defaultConfig = {
   nsUrl: 'https://diabetes.gatoescondido.com',
   intervalMinutes: 2,
-  language: 'en',
+  language: 'en', // 'en' or 'pt-PT'
   targetMin: 110,
   targetMax: 170,
   urgentLow: 75,
@@ -47,31 +47,226 @@ function saveConfig() {
   }
 }
 
-// Direction translations and symbols
-const DIRECTIONS = {
-  NONE: { symbol: '—', label: 'Unknown', spoken: 'steady' },
-  DoubleUp: { symbol: '⇈', label: 'Rising sharply', spoken: 'rising sharply' },
-  SingleUp: { symbol: '↑', label: 'Rising fast', spoken: 'rising fast' },
-  FortyFiveUp: { symbol: '↗', label: 'Rising slightly', spoken: 'rising slightly' },
-  Flat: { symbol: '→', label: 'Steady', spoken: 'steady' },
-  FortyFiveDown: { symbol: '↘', label: 'Slowly falling', spoken: 'slowly falling' },
-  SingleDown: { symbol: '↓', label: 'Falling fast', spoken: 'falling fast' },
-  DoubleDown: { symbol: '⇊', label: 'Dropping sharply', spoken: 'dropping sharply' },
-  NOT_COMPUTABLE: { symbol: '?', label: 'Not computable', spoken: 'steady' },
-  RATE_OUT_OF_RANGE: { symbol: '↕', label: 'Rapid rate', spoken: 'with rapid rate' }
+// Translations and Direction mappings
+const I18N = {
+  'en': {
+    flag: '🇬🇧',
+    code: 'EN',
+    directions: {
+      NONE: { symbol: '—', label: 'Unknown', spoken: 'steady' },
+      DoubleUp: { symbol: '⇈', label: 'Rising sharply', spoken: 'rising sharply' },
+      SingleUp: { symbol: '↑', label: 'Rising fast', spoken: 'rising fast' },
+      FortyFiveUp: { symbol: '↗', label: 'Rising slightly', spoken: 'rising slightly' },
+      Flat: { symbol: '→', label: 'Steady', spoken: 'steady' },
+      FortyFiveDown: { symbol: '↘', label: 'Slowly falling', spoken: 'slowly falling' },
+      SingleDown: { symbol: '↓', label: 'Falling fast', spoken: 'falling fast' },
+      DoubleDown: { symbol: '⇊', label: 'Dropping sharply', spoken: 'dropping sharply' },
+      NOT_COMPUTABLE: { symbol: '?', label: 'Not computable', spoken: 'steady' },
+      RATE_OUT_OF_RANGE: { symbol: '↕', label: 'Rapid rate', spoken: 'with rapid rate' }
+    },
+    ui: {
+      workoutStopped: 'Workout Stopped',
+      workoutRunning: 'Workout Active',
+      loading: 'loading...',
+      bluetooth: 'Bluetooth Audio',
+      glucoseTitle: 'CURRENT GLUCOSE',
+      var5m: '5M DELTA:',
+      coachTitle: 'Carb Coach Recommendation',
+      evaluating: 'Evaluating',
+      dose: 'DOSE:',
+      nextVoice: 'Next Audio',
+      duration: 'Duration',
+      announcements: 'Announcements',
+      startBtn: 'Start Workout (Voice every 2 min)',
+      stopBtn: 'Stop Workout',
+      speakNow: 'Speak Now',
+      testAudio: 'Test Audio',
+      speaking: 'Speaking',
+      footerTip: '💡 On your Google Pixel, double-tap or skip track on your Bluetooth earbuds to hear your glucose reading anytime.',
+      settingsTitle: 'Workout Settings',
+      labelLangSetting: 'Voice & App Language',
+      labelNsUrl: 'Nightscout Server URL',
+      labelInterval: 'Voice Announcement Interval',
+      btnSaveSettings: 'Save Settings'
+    }
+  },
+  'pt-PT': {
+    flag: '🇵🇹',
+    code: 'PT',
+    directions: {
+      NONE: { symbol: '—', label: 'Indeterminado', spoken: 'estável' },
+      DoubleUp: { symbol: '⇈', label: 'A subir a pique', spoken: 'a subir vertiginosamente' },
+      SingleUp: { symbol: '↑', label: 'A subir rápido', spoken: 'a subir com velocidade' },
+      FortyFiveUp: { symbol: '↗', label: 'A subir ligeiramente', spoken: 'a subir ligeiramente' },
+      Flat: { symbol: '→', label: 'Estável', spoken: 'estável' },
+      FortyFiveDown: { symbol: '↘', label: 'A descer suavemente', spoken: 'a descer suavemente' },
+      SingleDown: { symbol: '↓', label: 'A descer rápido', spoken: 'a descer com velocidade' },
+      DoubleDown: { symbol: '⇊', label: 'A cair a pique', spoken: 'a cair vertiginosamente' },
+      NOT_COMPUTABLE: { symbol: '?', label: 'Sem cálculo', spoken: 'estável' },
+      RATE_OUT_OF_RANGE: { symbol: '↕', label: 'Variação rápida', spoken: 'com variação rápida' }
+    },
+    ui: {
+      workoutStopped: 'Treino Parado',
+      workoutRunning: 'Treino a Correr',
+      loading: 'a carregar...',
+      bluetooth: 'Phones Bluetooth',
+      glucoseTitle: 'GLICÉMIA ATUAL',
+      var5m: 'VARIAÇÃO 5M:',
+      coachTitle: 'Recomendação de Hidratos (HC)',
+      evaluating: 'A Avaliar',
+      dose: 'DOSE:',
+      nextVoice: 'Próxima Voz',
+      duration: 'Duração',
+      announcements: 'Avisos',
+      startBtn: 'Iniciar Treino (Voz a cada 2 min)',
+      stopBtn: 'Parar Treino',
+      speakNow: 'Falar Agora',
+      testAudio: 'Testar Áudio',
+      speaking: 'A Falar',
+      footerTip: '💡 No Google Pixel podes usar o botão dos phones (mudar de faixa) para ouvir a glicémia a qualquer momento.',
+      settingsTitle: 'Definições da Corrida',
+      labelLangSetting: 'Língua da Voz e da App',
+      labelNsUrl: 'Endereço Nightscout',
+      labelInterval: 'Intervalo de Anúncio por Voz',
+      btnSaveSettings: 'Guardar Definições'
+    }
+  }
 };
 
 // Sports Carb Coach Decision Engine
 function evaluateCarbAdvice(sgv, direction, delta) {
+  const lang = config.language || 'en';
   const dirKey = direction || 'Flat';
-  const dirInfo = DIRECTIONS[dirKey] || DIRECTIONS.Flat;
+  const dirInfo = I18N[lang]?.directions[dirKey] || I18N[lang]?.directions.Flat;
   const dirSpoken = dirInfo.spoken;
 
   const isDroppingFast = dirKey === 'SingleDown' || dirKey === 'DoubleDown' || (delta !== null && delta <= -6);
   const isDroppingSlow = dirKey === 'FortyFiveDown' || (delta !== null && delta < -2 && delta > -6);
   const isDropping = isDroppingFast || isDroppingSlow;
 
-  // < 75 mg/dL: Urgent Hypo
+  if (lang === 'pt-PT') {
+    // PORTUGUÊS DE PORTUGAL
+    if (sgv < config.urgentLow) {
+      return {
+        status: 'urgent',
+        badge: '🚨 HIPOGLICÉMIA',
+        badgeColor: 'bg-red-600 text-white animate-pulse',
+        cardBorder: 'border-red-500 shadow-red-900/50',
+        carbs: '15g a 20g HC rápidos',
+        title: 'Pára a corrida e ingere 15g a 20g de hidratos rápidos',
+        adviceText: 'Glicémia perigosa durante esforço. Pára ou caminha agora. Toma 1 gel ou açúcar.',
+        spokenText: `Atenção urgente! Glicémia perigosamente baixa a ${sgv}. Pára a corrida e consome quinze a vinte gramas de hidratos de absorção rápida já.`
+      };
+    }
+    if (sgv >= config.urgentLow && sgv < 95) {
+      if (isDropping) {
+        return {
+          status: 'urgent',
+          badge: '⚠️ AVISO DE DESCIDA',
+          badgeColor: 'bg-orange-600 text-white animate-pulse',
+          cardBorder: 'border-orange-500 shadow-orange-900/40',
+          carbs: '15g HC rápidos',
+          title: 'Ingerir 15g de hidratos rápidos já',
+          adviceText: 'Glicémia baixa e a cair. Toma 1 gel imediatamente para travar a descida.',
+          spokenText: `Aviso. Glicémia a ${sgv}, ${dirSpoken}. Consome quinze gramas de hidratos de absorção rápida imediatamente.`
+        };
+      }
+      return {
+        status: 'warning',
+        badge: '⚠️ LIMIAR INFERIOR',
+        badgeColor: 'bg-amber-500 text-gray-900',
+        cardBorder: 'border-amber-500 shadow-amber-900/30',
+        carbs: '10g a 15g HC',
+        title: 'Ingerir 10g a 15g de hidratos',
+        adviceText: 'Glicémia no limite inferior para corrida. Consome 10 a 15g para manter energia.',
+        spokenText: `Glicémia a ${sgv}, no limiar inferior. Consome dez a quinze gramas de hidratos de carbono.`
+      };
+    }
+    if (sgv >= 95 && sgv < 120) {
+      if (isDroppingFast) {
+        return {
+          status: 'warning',
+          badge: '⚠️ QUEDA RÁPIDA',
+          badgeColor: 'bg-amber-600 text-white',
+          cardBorder: 'border-amber-500 shadow-amber-900/30',
+          carbs: '15g HC',
+          title: 'Queda rápida: Toma 15g de hidratos',
+          adviceText: 'Queda acentuada. Antecipa antes de descer abaixo de 80.',
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Toma quinze gramas de hidratos para travar a descida.`
+        };
+      }
+      if (isDroppingSlow) {
+        return {
+          status: 'warning',
+          badge: 'ℹ️ DESCIDA SUAVE',
+          badgeColor: 'bg-yellow-500 text-gray-900',
+          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
+          carbs: '10g HC',
+          title: 'Toma 10g de hidratos ou meio gel',
+          adviceText: 'A descer suavemente. 10g mantêm a glicémia estável.',
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Sugiro dez gramas de hidratos.`
+        };
+      }
+      return {
+        status: 'ideal',
+        badge: '✅ ACEITÁVEL',
+        badgeColor: 'bg-emerald-600 text-white',
+        cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+        carbs: '5g a 10g HC (opcional)',
+        title: 'Estável: mantém o ritmo',
+        adviceText: 'Valor aceitável. Se o treino for longo, podes ingerir 5 a 10g de hidratos.',
+        spokenText: `Glicémia a ${sgv}, estável. Podes manter o ritmo.`
+      };
+    }
+    if (sgv >= 120 && sgv <= config.targetMax) {
+      if (isDroppingFast) {
+        return {
+          status: 'warning',
+          badge: '⚠️ QUEDA ACENTUADA',
+          badgeColor: 'bg-yellow-500 text-gray-900',
+          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
+          carbs: '10g HC preventivos',
+          title: 'Glicémia boa mas a cair rápido',
+          adviceText: 'Estás em boa faixa, mas previne a descida com 10g de hidratos.',
+          spokenText: `Glicémia a ${sgv}, boa mas a cair rápido. Toma dez gramas de hidratos preventivos.`
+        };
+      }
+      return {
+        status: 'ideal',
+        badge: '🎯 ZONA IDEAL',
+        badgeColor: 'bg-emerald-500 text-white',
+        cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+        carbs: 'Sem hidratos necessários',
+        title: 'Zona ideal para corrida: Continua sem hidratos',
+        adviceText: 'Glicémia perfeita para treino aeróbico com boa margem de segurança.',
+        spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Zona ideal para correr. Não precisas de hidratos.`
+      };
+    }
+    if (sgv > config.targetMax && sgv <= 230) {
+      return {
+        status: 'high',
+        badge: 'ℹ️ ELEVADA',
+        badgeColor: 'bg-purple-600 text-white',
+        cardBorder: 'border-purple-500 shadow-purple-900/30',
+        carbs: 'Sem hidratos + Água',
+        title: 'Elevada: Bebe água e não consumas hidratos',
+        adviceText: 'Glicémia alta. Hidrata-te bem com água e acompanha a evolução.',
+        spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Bebe água, não precisas de hidratos.`
+      };
+    }
+    return {
+      status: 'high',
+      badge: '⚠️ MUITO ELEVADA',
+      badgeColor: 'bg-rose-700 text-white',
+      cardBorder: 'border-rose-500 shadow-rose-900/40',
+      carbs: 'Sem hidratos + Hidratação',
+      title: 'Muito elevada: Modera o ritmo e bebe água',
+      adviceText: 'Atenção ao esforço intenso com glicémia elevada. Hidratação abundante.',
+      spokenText: `Atenção. Glicémia muito alta a ${sgv}. Modera o ritmo, bebe água e evita hidratos.`
+    };
+  }
+
+  // ENGLISH DEFAULT
   if (sgv < config.urgentLow) {
     return {
       status: 'urgent',
@@ -84,8 +279,6 @@ function evaluateCarbAdvice(sgv, direction, delta) {
       spokenText: `Urgent alert! Blood glucose critical at ${sgv}. Stop running and take 15 to 20 grams of fast-acting carbs now.`
     };
   }
-
-  // 75 to 95 mg/dL: Low Borderline
   if (sgv >= config.urgentLow && sgv < 95) {
     if (isDropping) {
       return {
@@ -110,8 +303,6 @@ function evaluateCarbAdvice(sgv, direction, delta) {
       spokenText: `Blood glucose at ${sgv}, borderline low. Take 10 to 15 grams of carbs.`
     };
   }
-
-  // 95 to 120 mg/dL: Moderate / Anticipate
   if (sgv >= 95 && sgv < 120) {
     if (isDroppingFast) {
       return {
@@ -148,8 +339,6 @@ function evaluateCarbAdvice(sgv, direction, delta) {
       spokenText: `Blood glucose at ${sgv}, steady. Pace is good. Carbs optional.`
     };
   }
-
-  // 120 to 170 mg/dL: Target Aerobic Zone
   if (sgv >= 120 && sgv <= config.targetMax) {
     if (isDroppingFast) {
       return {
@@ -174,8 +363,6 @@ function evaluateCarbAdvice(sgv, direction, delta) {
       spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Target zone for running, no carbs needed.`
     };
   }
-
-  // 171 to 230 mg/dL: High
   if (sgv > config.targetMax && sgv <= 230) {
     return {
       status: 'high',
@@ -188,8 +375,6 @@ function evaluateCarbAdvice(sgv, direction, delta) {
       spokenText: `Blood glucose elevated at ${sgv}, ${dirSpoken}. Drink water, no carbs needed.`
     };
   }
-
-  // > 230 mg/dL: Very High
   return {
     status: 'high',
     badge: '⚠️ VERY HIGH',
@@ -202,7 +387,7 @@ function evaluateCarbAdvice(sgv, direction, delta) {
   };
 }
 
-// Studio Voice Audio Playback via Server TTS (Zero Cuts, High Quality)
+// Studio Voice Audio Playback via Server TTS (Language-aware)
 function playStudioVoice(spokenText) {
   const pulseEl = document.getElementById('audioPulseIndicator');
   if (pulseEl) pulseEl.classList.remove('hidden');
@@ -212,8 +397,9 @@ function playStudioVoice(spokenText) {
     currentAudioPlayer = null;
   }
 
+  const lang = config.language || 'en';
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
-  const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&lang=en`;
+  const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
   const audio = new Audio(audioUrl);
   currentAudioPlayer = audio;
@@ -228,7 +414,7 @@ function playStudioVoice(spokenText) {
     if (pulseEl) pulseEl.classList.add('hidden');
     if ('speechSynthesis' in window) {
       const u = new SpeechSynthesisUtterance(cleanText);
-      u.lang = 'en-US';
+      u.lang = lang;
       window.speechSynthesis.speak(u);
     }
   };
@@ -239,11 +425,71 @@ function playStudioVoice(spokenText) {
   });
 }
 
-// Media Session Setup (Android Lock Screen & Earbud Button controls)
+// Apply Language strings to entire UI
+function applyLanguageUI() {
+  const lang = config.language || 'en';
+  const data = I18N[lang];
+  if (!data) return;
+  const texts = data.ui;
+
+  document.getElementById('currentLangFlag').textContent = data.flag;
+  document.getElementById('currentLangText').textContent = data.code;
+
+  const setT = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  setT('labelSpeaking', texts.speaking);
+  setT('labelBluetooth', texts.bluetooth);
+  setT('labelGlucoseTitle', texts.glucoseTitle);
+  setT('labelVar5m', texts.var5m);
+  setT('labelCoachTitle', texts.coachTitle);
+  setT('labelDose', texts.dose);
+  setT('labelNextVoice', texts.nextVoice);
+  setT('labelDuration', texts.duration);
+  setT('labelAnnouncements', texts.announcements);
+  setT('footerTip', texts.footerTip);
+  setT('settingsTitle', texts.settingsTitle);
+  setT('labelLangSetting', texts.labelLangSetting);
+  setT('labelNsUrl', texts.labelNsUrl);
+  setT('labelInterval', texts.labelInterval);
+  setT('btnSaveSettings', texts.btnSaveSettings);
+
+  const startBtn = document.getElementById('startBtnText');
+  if (startBtn) startBtn.textContent = texts.startBtn;
+  const stopBtn = document.getElementById('stopBtnText');
+  if (stopBtn) stopBtn.textContent = texts.stopBtn;
+  const speakBtn = document.getElementById('speakNowText');
+  if (speakBtn) speakBtn.textContent = texts.speakNow;
+  const testBtn = document.getElementById('testAudioText');
+  if (testBtn) testBtn.textContent = texts.testAudio;
+
+  const statusText = document.getElementById('workoutStatusText');
+  if (statusText) statusText.textContent = isRunning ? texts.workoutRunning : texts.workoutStopped;
+
+  const cfgLang = document.getElementById('cfgLanguage');
+  if (cfgLang) cfgLang.value = lang;
+}
+
+// Toggle language
+function toggleLanguage() {
+  config.language = config.language === 'en' ? 'pt-PT' : 'en';
+  saveConfig();
+  applyLanguageUI();
+  if (lastEntry) {
+    const delta = prevEntry ? lastEntry.sgv - prevEntry.sgv : null;
+    const advice = evaluateCarbAdvice(lastEntry.sgv, lastEntry.direction, delta);
+    updateUIWithReading(lastEntry, prevEntry, delta, advice);
+  }
+}
+
+// Media Session Setup
 function updateMediaSession(sgv, direction, carbAdvice) {
   if (!('mediaSession' in navigator)) return;
 
-  const dirInfo = DIRECTIONS[direction || 'Flat'] || DIRECTIONS.Flat;
+  const lang = config.language || 'en';
+  const dirInfo = I18N[lang]?.directions[direction || 'Flat'] || I18N[lang]?.directions.Flat;
   const symbol = dirInfo.symbol;
 
   navigator.mediaSession.metadata = new MediaMetadata({
@@ -263,7 +509,7 @@ function updateMediaSession(sgv, direction, carbAdvice) {
   });
 }
 
-// Fetch Nightscout Readings via Server Proxy
+// Fetch Nightscout Readings
 async function fetchNightscoutEntries() {
   const endpointsToTry = [
     '/api/entries',
@@ -290,11 +536,18 @@ async function fetchNightscoutEntries() {
 }
 
 function timeAgo(date) {
+  const lang = config.language || 'en';
   const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
+  if (lang === 'en') {
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    return `${Math.floor(minutes / 60)}h ago`;
+  }
+  if (seconds < 60) return `há ${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+  if (minutes < 60) return `há ${minutes} min`;
+  return `há ${Math.floor(minutes / 60)}h`;
 }
 
 // Polling & Announcement Routine
@@ -336,11 +589,12 @@ async function performPollAndAnnouncement(isManualTrigger = false) {
     const syncIndicator = document.getElementById('syncIndicator');
     if (syncIndicator) syncIndicator.classList.remove('animate-spin');
     const readingTime = document.getElementById('readingTime');
-    if (readingTime) readingTime.textContent = 'Connection error';
+    if (readingTime) readingTime.textContent = 'Error';
   }
 }
 
 function updateUIWithReading(current, previous, delta, advice) {
+  const lang = config.language || 'en';
   const sgvEl = document.getElementById('currentSgv');
   const trendEl = document.getElementById('currentTrend');
   const deltaEl = document.getElementById('currentDelta');
@@ -353,7 +607,7 @@ function updateUIWithReading(current, previous, delta, advice) {
 
   if (sgvEl) sgvEl.textContent = current.sgv;
   if (trendEl) {
-    const dirInfo = DIRECTIONS[current.direction] || DIRECTIONS.NONE;
+    const dirInfo = I18N[lang]?.directions[current.direction] || I18N[lang]?.directions.Flat;
     trendEl.textContent = dirInfo.symbol;
     trendEl.title = dirInfo.label;
   }
@@ -398,10 +652,11 @@ async function startWorkout() {
     }
   }
 
+  const lang = config.language || 'en';
   document.getElementById('btnStartWorkout').classList.add('hidden');
   document.getElementById('btnStopWorkout').classList.remove('hidden');
   document.getElementById('workoutStatusBadge').className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5';
-  document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Workout Active';
+  document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> ' + I18N[lang].ui.workoutRunning;
 
   workoutIntervalId = setInterval(updateWorkoutDuration, 1000);
 
@@ -432,10 +687,11 @@ function stopWorkout() {
     wakeLock = null;
   }
 
+  const lang = config.language || 'en';
   document.getElementById('btnStartWorkout').classList.remove('hidden');
   document.getElementById('btnStopWorkout').classList.add('hidden');
   document.getElementById('workoutStatusBadge').className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5';
-  document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span> Workout Stopped';
+  document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span> ' + I18N[lang].ui.workoutStopped;
   document.getElementById('countdownText').textContent = '—';
 }
 
@@ -487,21 +743,29 @@ function announceCurrent(forceFetch = false) {
 // App Initialization
 window.addEventListener('DOMContentLoaded', () => {
   loadConfig();
+  applyLanguageUI();
 
   const nsInput = document.getElementById('cfgNsUrl');
   const intervalSelect = document.getElementById('cfgInterval');
   const targetMin = document.getElementById('cfgTargetMin');
   const targetMax = document.getElementById('cfgTargetMax');
+  const langSelect = document.getElementById('cfgLanguage');
 
   if (nsInput) nsInput.value = config.nsUrl;
   if (intervalSelect) intervalSelect.value = String(config.intervalMinutes);
   if (targetMin) targetMin.value = config.targetMin;
   if (targetMax) targetMax.value = config.targetMax;
+  if (langSelect) langSelect.value = config.language;
 
+  document.getElementById('btnToggleLang')?.addEventListener('click', toggleLanguage);
   document.getElementById('btnStartWorkout')?.addEventListener('click', startWorkout);
   document.getElementById('btnStopWorkout')?.addEventListener('click', stopWorkout);
   document.getElementById('btnTestAudio')?.addEventListener('click', () => {
-    playStudioVoice("Audio test: Blood glucose 129, steady. Target zone for running, no carbs needed.");
+    if (config.language === 'pt-PT') {
+      playStudioVoice("Teste de áudio: Glicémia cento e vinte e oito, estável. Ritmo ideal para corrida, não precisas de hidratos de carbono.");
+    } else {
+      playStudioVoice("Audio test: Blood glucose 128, steady. Target zone for running, no carbs needed.");
+    }
   });
   document.getElementById('btnAnnounceNow')?.addEventListener('click', () => announceCurrent(true));
 
@@ -516,9 +780,11 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnSaveSettings')?.addEventListener('click', () => {
     config.nsUrl = document.getElementById('cfgNsUrl').value.trim() || defaultConfig.nsUrl;
     config.intervalMinutes = parseInt(document.getElementById('cfgInterval').value, 10) || 2;
+    config.language = document.getElementById('cfgLanguage').value || 'en';
     config.targetMin = parseInt(document.getElementById('cfgTargetMin').value, 10) || 110;
     config.targetMax = parseInt(document.getElementById('cfgTargetMax').value, 10) || 170;
     saveConfig();
+    applyLanguageUI();
     settingsModal.classList.add('hidden');
 
     if (isRunning) {
