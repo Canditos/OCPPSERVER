@@ -29,7 +29,16 @@ services:
       - coolify
     restart: always
 
-
+  nightscout-runner:
+    build:
+      context: ./runner
+      dockerfile: Dockerfile
+    labels:
+      - "traefik.docker.network=coolify"
+    networks:
+      - default
+      - coolify
+    restart: always
 
 volumes:
   ocpp_data:

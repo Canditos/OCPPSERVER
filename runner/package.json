@@ -1,0 +1,19 @@
+{
+  "name": "nightscout-audio-runner",
+  "version": "1.0.0",
+  "description": "Voice audio assistant for diabetes runners with Nightscout and sports carbohydrate coach",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "nightscout",
+    "type1diabetes",
+    "running",
+    "bluetooth",
+    "text-to-speech",
+    "carb-coach"
+  ],
+  "author": "Antigravity",
+  "license": "MIT"
+}

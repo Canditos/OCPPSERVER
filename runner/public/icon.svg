@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="drop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <!-- Heartbeat / pulse line -->
+  <path d="M64 270 h90 l35 -60 l45 120 l40 -90 l30 50 l30 -20 h114" fill="none" stroke="#38bdf8" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+  <!-- Blood drop -->
+  <path d="M256 120 C256 120, 180 230, 180 290 A76 76 0 0 0 332 290 C332 230, 256 120, 256 120 Z" fill="url(#drop)"/>
+  <!-- Runner silhouette in white inside drop -->
+  <circle cx="256" cy="245" r="14" fill="#ffffff" />
+  <path d="M246 268 l16 18 l22 -10 M254 265 l-14 28 l18 24 M254 265 l12 28 l20 6" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
