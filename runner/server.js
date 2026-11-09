@@ -44,7 +44,24 @@ function getLocalIpAddresses() {
 const server = http.createServer((req, res) => {
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
 
-  // 1. Neural European Portuguese (RaquelNeural) & English TTS Route
+  // 1. Diagnostics endpoint
+  if (parsedUrl.pathname === '/api/diag') {
+    const workerScript = path.join(__dirname, 'tts_worker.py');
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    execFile(pythonCmd, ['--version'], (pyErr, pyOut, pyErrOut) => {
+      execFile(pythonCmd, ['-c', 'import edge_tts; print(edge_tts.__version__)'], (edgeErr, edgeOut, edgeErrOut) => {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({
+          platform: process.platform,
+          python: { error: pyErr?.message, stdout: pyOut.trim(), stderr: pyErrOut.trim() },
+          edge_tts: { error: edgeErr?.message, stdout: edgeOut.trim(), stderr: edgeErrOut.trim() }
+        }, null, 2));
+      });
+    });
+    return;
+  }
+
+  // 2. Neural European Portuguese (RaquelNeural) & English TTS Route
   if (parsedUrl.pathname === '/api/tts') {
     const text = (parsedUrl.searchParams.get('text') || '').trim();
     const lang = parsedUrl.searchParams.get('lang') || 'pt-PT';
@@ -63,21 +80,35 @@ const server = http.createServer((req, res) => {
     const cachedFile = path.join(CACHE_DIR, `${hash}.mp3`);
 
     if (fs.existsSync(cachedFile)) {
-      res.writeHead(200, {
-        'Content-Type': 'audio/mpeg',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=86400'
-      });
-      fs.createReadStream(cachedFile).pipe(res);
-      return;
+      try {
+        const stat = fs.statSync(cachedFile);
+        if (stat.size > 200) {
+          res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'public, max-age=86400'
+          });
+          fs.createReadStream(cachedFile).pipe(res);
+          return;
+        } else {
+          fs.unlinkSync(cachedFile);
+        }
+      } catch (e) {}
     }
 
     // Generate using python edge-tts worker
     const workerScript = path.join(__dirname, 'tts_worker.py');
     const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
 
-    execFile(pythonCmd, [workerScript, text, voice, cachedFile], (error) => {
-      if (!error && fs.existsSync(cachedFile)) {
+    execFile(pythonCmd, [workerScript, text, voice, cachedFile], (error, stdout, stderr) => {
+      let valid = false;
+      try {
+        if (fs.existsSync(cachedFile) && fs.statSync(cachedFile).size > 200) {
+          valid = true;
+        }
+      } catch (e) {}
+
+      if (valid) {
         res.writeHead(200, {
           'Content-Type': 'audio/mpeg',
           'Access-Control-Allow-Origin': '*',
@@ -85,24 +116,19 @@ const server = http.createServer((req, res) => {
         });
         fs.createReadStream(cachedFile).pipe(res);
       } else {
-        // Fallback to Google Translate TTS if python worker fails
-        console.warn('Python TTS worker error, falling back to Google TTS:', error?.message);
-        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
-        https.get(ttsUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            'Referer': 'https://translate.google.com/'
-          }
-        }, (ttsRes) => {
-          res.writeHead(200, {
-            'Content-Type': 'audio/mpeg',
-            'Access-Control-Allow-Origin': '*'
-          });
-          ttsRes.pipe(res);
-        }).on('error', () => {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'TTS failed' }));
+        console.error('Neural TTS generation failed. Stderr:', stderr, 'Error:', error?.message);
+        if (fs.existsSync(cachedFile)) {
+          try { fs.unlinkSync(cachedFile); } catch (e) {}
+        }
+        res.writeHead(500, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
         });
+        res.end(JSON.stringify({
+          error: 'Neural TTS generation failed',
+          details: error?.message,
+          stderr: stderr ? stderr.trim() : ''
+        }));
       }
     });
 
