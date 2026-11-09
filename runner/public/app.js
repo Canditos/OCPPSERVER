@@ -6,6 +6,7 @@ const isNativeApp = window.location.origin.includes('localhost') ||
                     window.location.protocol === 'capacitor:' || 
                     window.location.protocol === 'file:';
 const API_BASE = isNativeApp ? 'https://runner.gatoescondido.com' : '';
+const NativeVoice = (window.Capacitor && window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('VoiceAudio') : null;
 
 const CONFIG_KEY = 'ns_runner_config_v4';
 
@@ -403,7 +404,18 @@ function playStudioVoice(spokenText) {
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
   const audioUrl = `${API_BASE}/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
-  // 1. Direct Android Bridge (non-exclusive sonification overlay — Yuma/Spotify keep playing)
+  // 1. Capacitor Plugin (non-exclusive sonification overlay — Yuma/Spotify keep playing)
+  if (NativeVoice) {
+    NativeVoice.play({ url: audioUrl })
+      .then(() => { if (pulseEl) pulseEl.classList.add('hidden'); })
+      .catch(e => {
+        console.warn('NativeVoice plugin error, trying web fallback:', e);
+        fallbackWebAudio(audioUrl, pulseEl);
+      });
+    return;
+  }
+
+  // 2. AndroidVoice JavascriptInterface fallback
   if (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function') {
     try {
       window.AndroidVoice.playVoice(audioUrl);
