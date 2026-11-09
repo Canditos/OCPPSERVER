@@ -33,8 +33,19 @@ services:
     build:
       context: ./runner
       dockerfile: Dockerfile
+    environment:
+      - PORT=3000
     labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
       - "traefik.docker.network=coolify"
+      - "traefik.http.routers.runner-http.rule=Host(`runner.gatoescondido.com`)"
+      - "traefik.http.routers.runner-http.entrypoints=http"
+      - "traefik.http.routers.runner-https.rule=Host(`runner.gatoescondido.com`)"
+      - "traefik.http.routers.runner-https.entrypoints=https"
+      - "traefik.http.routers.runner-https.tls=true"
+      - "traefik.http.routers.runner-https.tls.certresolver=letsencrypt"
+      - "traefik.http.services.runner-svc.loadbalancer.server.port=3000"
     networks:
       - default
       - coolify
