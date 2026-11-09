@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(VoiceAudioPlugin.class);
         super.onCreate(savedInstanceState);
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
