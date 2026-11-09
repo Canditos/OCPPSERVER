@@ -16,7 +16,8 @@ const defaultConfig = {
   targetMin: 110,
   targetMax: 170,
   urgentLow: 75,
-  wakeLockEnabled: true
+  wakeLockEnabled: true,
+  enableEarbudShortcuts: false // Keep disabled so background music apps (Yuma, Spotify) keep earbud controls
 };
 
 let config = { ...defaultConfig };
@@ -393,37 +394,71 @@ function evaluateCarbAdvice(sgv, direction, delta) {
   };
 }
 
-// Studio Voice Audio Playback via Server TTS (Language-aware)
+// Studio Voice Audio Playback via Server TTS (Language-aware with Audio Ducking for Music)
 function playStudioVoice(spokenText) {
   const pulseEl = document.getElementById('audioPulseIndicator');
   if (pulseEl) pulseEl.classList.remove('hidden');
-
-  if (currentAudioPlayer) {
-    currentAudioPlayer.pause();
-    currentAudioPlayer = null;
-  }
 
   const lang = config.language || 'en';
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
   const audioUrl = `${API_BASE}/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
+  // 1. Android Native Audio Ducking (allows Yuma/music to lower volume and auto-resume smoothly)
+  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AudioFocusPlugin) {
+    window.Capacitor.Plugins.AudioFocusPlugin.playVoice({ url: audioUrl })
+      .then(() => {
+        if (pulseEl) pulseEl.classList.add('hidden');
+      })
+      .catch(err => {
+        console.warn('Native AudioFocusPlugin error, falling back to Web Audio:', err);
+        fallbackWebAudio(audioUrl, pulseEl);
+      });
+    return;
+  }
+
+  // 2. Web Audio fallback with immediate cleanup to release Android focus
+  fallbackWebAudio(audioUrl, pulseEl);
+}
+
+function fallbackWebAudio(audioUrl, pulseEl) {
+  if (currentAudioPlayer) {
+    try {
+      currentAudioPlayer.pause();
+      currentAudioPlayer.src = '';
+      currentAudioPlayer.load();
+    } catch (e) {}
+    currentAudioPlayer = null;
+  }
+
   const audio = new Audio(audioUrl);
   currentAudioPlayer = audio;
 
-  audio.onended = () => {
+  const cleanup = () => {
     if (pulseEl) pulseEl.classList.add('hidden');
     currentAudioPlayer = null;
+    try {
+      audio.pause();
+      audio.src = '';
+      audio.load(); // Releases audio track to let background music unpause
+    } catch (e) {}
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'none';
+    }
   };
 
+  audio.onended = cleanup;
   audio.onerror = (e) => {
-    console.error('Audio stream error loading RaquelNeural from server:', e);
-    if (pulseEl) pulseEl.classList.add('hidden');
-    // Do NOT fall back to robotic/Brazilian Android system voice
+    console.error('Audio stream error loading TTS from server:', e);
+    cleanup();
   };
+
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.playbackState = 'playing';
+  }
 
   audio.play().catch(err => {
     console.warn('Audio play prevented', err);
-    if (pulseEl) pulseEl.classList.add('hidden');
+    cleanup();
   });
 }
 
@@ -486,9 +521,14 @@ function toggleLanguage() {
   }
 }
 
-// Media Session Setup
+// Media Session Setup (only if earbud shortcuts are enabled, so we do not steal lockscreen from Yuma/music)
 function updateMediaSession(sgv, direction, carbAdvice) {
   if (!('mediaSession' in navigator)) return;
+  if (!config.enableEarbudShortcuts) {
+    // If not enabled, make sure we do not hold the playback state
+    navigator.mediaSession.playbackState = 'none';
+    return;
+  }
 
   const lang = config.language || 'en';
   const dirInfo = I18N[lang]?.directions[direction || 'Flat'] || I18N[lang]?.directions.Flat;
