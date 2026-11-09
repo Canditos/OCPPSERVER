@@ -1,0 +1,68 @@
+name: Build Nightscout Runner APK
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'runner/**'
+      - '.github/workflows/build-runner-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build-runner-apk:
+    name: Build Nightscout Runner APK
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Runner Dependencies
+        working-directory: runner
+        run: |
+          npm install
+
+      - name: Sync Capacitor Android
+        working-directory: runner
+        run: |
+          npx cap sync android
+
+      - name: Build Android APK (Debug)
+        working-directory: runner/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare APK Output
+        run: |
+          mkdir -p release-runner-apk
+          cp runner/android/app/build/outputs/apk/debug/app-debug.apk release-runner-apk/nightscout-runner.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightscout-runner-apk
+          path: release-runner-apk/nightscout-runner.apk
+          retention-days: 30

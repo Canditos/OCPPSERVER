@@ -1,0 +1,8 @@
+{
+  "appId": "com.gatoescondido.runner",
+  "appName": "NS Runner",
+  "webDir": "public",
+  "server": {
+    "androidScheme": "https"
+  }
+}
