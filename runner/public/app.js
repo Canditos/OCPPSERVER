@@ -215,7 +215,7 @@ function evaluateCarbAdvice(sgv, direction, delta) {
         carbs: '5g a 10g HC (opcional)',
         title: 'Estável: mantém o ritmo',
         adviceText: 'Valor aceitável. Se o treino for longo, podes ingerir 5 a 10g de hidratos.',
-        spokenText: `Glicémia a ${sgv}, estável. Podes manter o ritmo.`
+        spokenText: `Glicémia a ${sgv}, estável. Valor aceitável. Se o treino for longo, podes ingerir cinco a dez gramas de hidratos de carbono.`
       };
     }
     if (sgv >= 120 && sgv <= config.targetMax) {
@@ -336,7 +336,7 @@ function evaluateCarbAdvice(sgv, direction, delta) {
       carbs: '5-10g carbs (optional)',
       title: 'Steady: Keep your pace',
       adviceText: 'Good level. If your run is longer than 45 min, consider light carbs.',
-      spokenText: `Blood glucose at ${sgv}, steady. Pace is good. Carbs optional.`
+      spokenText: `Blood glucose at ${sgv}, steady. Acceptable level. If your run is long, you can take 5 to 10 grams of carbs.`
     };
   }
   if (sgv >= 120 && sgv <= config.targetMax) {
