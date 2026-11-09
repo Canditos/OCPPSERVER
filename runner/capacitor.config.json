@@ -3,8 +3,6 @@
   "appName": "NS Runner",
   "webDir": "public",
   "server": {
-    "url": "https://runner.gatoescondido.com",
-    "cleartext": true,
     "androidScheme": "https"
   }
 }

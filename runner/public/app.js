@@ -403,33 +403,38 @@ function playStudioVoice(spokenText) {
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
   const audioUrl = `${API_BASE}/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
-  // 1. Direct Android Native Bridge (Guaranteed ducking and auto-resume for Yuma/Spotify)
+  // 1. Native Android Plugin (VoiceAudio: Non-exclusive sonification overlay so Yuma never stops)
+  if (window.Capacitor && (window.Capacitor.isNativePlatform() || window.Capacitor.platform === 'android')) {
+    try {
+      const VoiceAudio = window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin('VoiceAudio') : window.Capacitor.Plugins?.VoiceAudio;
+      if (VoiceAudio && typeof VoiceAudio.play === 'function') {
+        VoiceAudio.play({ url: audioUrl })
+          .then(() => {
+            if (pulseEl) pulseEl.classList.add('hidden');
+          })
+          .catch(e => {
+            console.warn('VoiceAudio play error, falling back:', e);
+            fallbackWebAudio(audioUrl, pulseEl);
+          });
+        return;
+      }
+    } catch (e) {
+      console.warn('VoiceAudio native plugin failed, falling back:', e);
+    }
+  }
+
+  // 2. Direct Android Bridge fallback
   if (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function') {
     try {
       window.AndroidVoice.playVoice(audioUrl);
-      // Hide pulse when native callback fires, or after 12s safety timeout for long phrases
-      window._onNativeVoiceDone = () => { if (pulseEl) pulseEl.classList.add('hidden'); };
-      setTimeout(() => { if (pulseEl) pulseEl.classList.add('hidden'); }, 12000);
+      setTimeout(() => { if (pulseEl) pulseEl.classList.add('hidden'); }, 8000);
       return;
     } catch (e) {
       console.warn('AndroidVoice failed, falling back:', e);
     }
   }
 
-  // 2. Capacitor Plugin fallback
-  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AudioFocusPlugin) {
-    window.Capacitor.Plugins.AudioFocusPlugin.playVoice({ url: audioUrl })
-      .then(() => {
-        if (pulseEl) pulseEl.classList.add('hidden');
-      })
-      .catch(err => {
-        console.warn('Native AudioFocusPlugin error, falling back to Web Audio:', err);
-        fallbackWebAudio(audioUrl, pulseEl);
-      });
-    return;
-  }
-
-  // 3. Web Audio fallback with immediate cleanup to release Android focus
+  // 3. Web Audio fallback
   fallbackWebAudio(audioUrl, pulseEl);
 }
 
@@ -844,10 +849,34 @@ window.addEventListener('DOMContentLoaded', () => {
   // Initial fetch on page load
   performPollAndAnnouncement(false);
 
-  // Register PWA Service Worker
+  // Update visual audio engine badge (Native vs Web)
+  function updateAudioEngineDisplay() {
+    const badge = document.getElementById('audioEngineBadge');
+    if (!badge) return;
+    const isNative = (window.Capacitor && (window.Capacitor.isNativePlatform() || window.Capacitor.platform === 'android')) ||
+                     (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function');
+    if (isNative) {
+      badge.textContent = '⚡ Nativo (Música OK)';
+      badge.className = 'text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40';
+    } else {
+      badge.textContent = '🌐 Modo Web';
+      badge.className = 'text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-800 text-slate-400';
+    }
+  }
+
+  updateAudioEngineDisplay();
+  setTimeout(updateAudioEngineDisplay, 1000);
+  setTimeout(updateAudioEngineDisplay, 3000);
+
+  // Clean up any stale service workers or caches from previous sessions
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(err => {
-      console.warn('SW registration skipped', err);
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      for (const r of regs) r.unregister();
+    });
+  }
+  if ('caches' in window) {
+    caches.keys().then(keys => {
+      for (const k of keys) caches.delete(k);
     });
   }
 });
