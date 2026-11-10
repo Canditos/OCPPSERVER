@@ -3,6 +3,7 @@ package com.gatoescondido.runner;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -32,7 +33,16 @@ public class MainActivity extends BridgeActivity {
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().addJavascriptInterface(new AudioBridge(), "AndroidVoice");
-                Log.d(TAG, "AndroidVoice JavascriptInterface registered successfully");
+                getBridge().getWebView().setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        Log.e(TAG, "DownloadListener error", e);
+                    }
+                });
+                Log.d(TAG, "AndroidVoice JavascriptInterface & DownloadListener registered successfully");
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to register AndroidVoice interface", e);
@@ -140,6 +150,26 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public boolean isWorkoutRunning() {
             return RunnerService.isRunning();
+        }
+
+        @JavascriptInterface
+        public void openDownloadUrl(String url) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } catch (Exception e) {
+                Log.e(TAG, "openDownloadUrl error", e);
+            }
+        }
+
+        @JavascriptInterface
+        public int getNativeVersionCode() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+            } catch (Exception e) {
+                return 2;
+            }
         }
     }
 }

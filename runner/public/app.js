@@ -588,6 +588,15 @@ function applyLanguageUI() {
   setT('labelInterval', texts.labelInterval);
   setT('btnSaveSettings', texts.btnSaveSettings);
 
+  const footerWhatsNew = document.getElementById('btnFooterWhatsNew');
+  if (footerWhatsNew) {
+    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.2)</span>' : "<span>✨ What's New (v1.2)</span>";
+  }
+  const settingsWhatsNew = document.getElementById('btnSettingsWhatsNew');
+  if (settingsWhatsNew) {
+    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.2</span>' : "<span>✨ See What's New in v1.2</span>";
+  }
+
   const startBtn = document.getElementById('startBtnText');
   if (startBtn) startBtn.textContent = texts.startBtn;
   const stopBtn = document.getElementById('stopBtnText');
@@ -887,6 +896,105 @@ function announceCurrent(forceFetch = false) {
   }
 }
 
+// What's New & Release Changelog System
+const CHANGELOG_DATA = {
+  versionCode: 3,
+  versionName: '1.2',
+  'pt-PT': {
+    title: 'O que há de novo',
+    sub: 'Versão 1.2 • Atualização Recente',
+    btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
+    features: [
+      {
+        icon: '🎧',
+        title: 'Atenuação Universal de Música (Audio Ducking)',
+        desc: 'Quando a voz anuncia a tua glicemia ou hidratos, o som de qualquer aplicação (Yuma, Spotify, Podcasts, YouTube Music) baixa suavemente e sobe automaticamente a seguir.'
+      },
+      {
+        icon: '📲',
+        title: 'Atualizações Diretas Sem Desinstalar',
+        desc: 'Assinatura permanente de segurança. As novas atualizações instalam diretamente por cima, sem perderes definições nem precisares de desinstalar.'
+      },
+      {
+        icon: '⚡',
+        title: 'Interface Otimizada & Live OTA',
+        desc: 'Novo cabeçalho limpo com distintivo de áudio nativo perfeitamente alinhado e atualizações instantâneas via nuvem.'
+      },
+      {
+        icon: '🔔',
+        title: 'Notificações de Atualização',
+        desc: 'Ficas agora sempre a saber todas as alterações e melhorias sempre que a aplicação é atualizada.'
+      }
+    ]
+  },
+  'en': {
+    title: "What's New",
+    sub: 'Version 1.2 • Recent Update',
+    btnDismiss: "Got it, Let's Run! 🏃‍♂️",
+    features: [
+      {
+        icon: '🎧',
+        title: 'Universal Audio Ducking',
+        desc: 'When glucose or carbs are spoken, music from Yuma, Spotify, Podcasts, or YouTube Music lowers smoothly and restores to full volume immediately after.'
+      },
+      {
+        icon: '📲',
+        title: 'Direct Updates Without Uninstalling',
+        desc: 'Configured permanent keystore signing. Update APKs cleanly install on top without having to uninstall or re-enter settings.'
+      },
+      {
+        icon: '⚡',
+        title: 'Refined Header & Live OTA',
+        desc: 'Clean native badge alignment and instant cloud updates without downloading a new APK.'
+      },
+      {
+        icon: '🔔',
+        title: 'Update Notifications',
+        desc: 'Always view the changelog and release notes whenever an update arrives.'
+      }
+    ]
+  }
+};
+
+function openWhatsNewModal(customFeatures) {
+  const modal = document.getElementById('whatsNewModal');
+  if (!modal) return;
+  const lang = config.language === 'pt-PT' ? 'pt-PT' : 'en';
+  const cData = CHANGELOG_DATA[lang] || CHANGELOG_DATA['pt-PT'];
+
+  const titleEl = document.getElementById('whatsNewTitle');
+  const subEl = document.getElementById('whatsNewSub');
+  const listEl = document.getElementById('whatsNewContent');
+  const btnDismiss = document.getElementById('btnDismissWhatsNew');
+
+  if (titleEl) titleEl.textContent = cData.title;
+  if (subEl) subEl.textContent = `${cData.sub} (v${CHANGELOG_DATA.versionName})`;
+  if (btnDismiss) btnDismiss.textContent = cData.btnDismiss;
+
+  const features = (customFeatures && customFeatures.length > 0) ? customFeatures : cData.features;
+
+  if (listEl) {
+    listEl.innerHTML = features.map(f => `
+      <div class="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+        <span class="text-xl shrink-0 p-2 rounded-xl bg-slate-900 border border-slate-800">${f.icon || '✨'}</span>
+        <div>
+          <h4 class="text-xs font-bold text-slate-100">${f.title}</h4>
+          <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">${f.desc}</p>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeWhatsNewModal() {
+  const modal = document.getElementById('whatsNewModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  localStorage.setItem('runner_last_seen_version_code', String(CHANGELOG_DATA.versionCode));
+}
+
 // App Initialization
 // Check for native APK updates
 async function checkAppVersion() {
@@ -895,8 +1003,13 @@ async function checkAppVersion() {
     const res = await fetch('/api/version?t=' + Date.now());
     if (!res.ok) return;
     const data = await res.json();
-    const CURRENT_VERSION_CODE = 2; // Matches native versionCode in build.gradle
-    if (data.versionCode && data.versionCode > CURRENT_VERSION_CODE) {
+    let currentVersion = 2; // Default fallback for current installed APK
+    if (window.AndroidVoice && typeof window.AndroidVoice.getNativeVersionCode === 'function') {
+      try {
+        currentVersion = window.AndroidVoice.getNativeVersionCode();
+      } catch (err) {}
+    }
+    if (data.versionCode && data.versionCode > currentVersion) {
       showUpdateBanner(data);
     }
   } catch (e) {
@@ -906,18 +1019,45 @@ async function checkAppVersion() {
 
 function showUpdateBanner(data) {
   if (document.getElementById('updateBanner')) return;
+  const lang = config.language === 'pt-PT' ? 'pt-PT' : 'en';
+  const isPt = lang === 'pt-PT';
   const banner = document.createElement('div');
   banner.id = 'updateBanner';
-  banner.className = 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white px-4 py-2 text-xs flex items-center justify-between shadow-lg sticky top-0 z-50';
+  banner.className = 'bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-700 text-white px-3 py-2 text-xs flex items-center justify-between shadow-lg sticky top-0 z-50 border-b border-white/10';
   banner.innerHTML = `
-    <div class="flex items-center gap-1.5 font-medium">
-      <span>🚀 Nova versão ${data.versionName} disponível!</span>
+    <div class="flex items-center gap-1.5 font-medium truncate mr-2">
+      <span class="animate-bounce">🚀</span>
+      <span>${isPt ? `Nova versão ${data.versionName} disponível!` : `New version ${data.versionName} available!`}</span>
     </div>
-    <a href="${data.apkUrl}" class="px-2.5 py-1 bg-white text-sky-900 font-extrabold rounded-lg text-xs hover:bg-slate-100 transition shadow">
-      Atualizar
-    </a>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button id="btnBannerWhatsNew" class="px-2 py-1 bg-white/20 hover:bg-white/30 text-white font-bold rounded-lg text-[11px] transition cursor-pointer">
+        ${isPt ? 'Novidades' : 'Changelog'}
+      </button>
+      <button id="btnDoUpdate" class="px-2.5 py-1 bg-white text-sky-900 font-extrabold rounded-lg text-[11px] hover:bg-slate-100 transition shadow cursor-pointer">
+        ${isPt ? 'Atualizar' : 'Update'}
+      </button>
+    </div>
   `;
   document.body.prepend(banner);
+
+  const btnWhatsNew = banner.querySelector('#btnBannerWhatsNew');
+  if (btnWhatsNew) {
+    btnWhatsNew.addEventListener('click', () => {
+      openWhatsNewModal(data.features || null);
+    });
+  }
+
+  const btn = banner.querySelector('#btnDoUpdate');
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (window.AndroidVoice && typeof window.AndroidVoice.openDownloadUrl === 'function') {
+        window.AndroidVoice.openDownloadUrl(data.apkUrl);
+      } else {
+        window.location.href = data.apkUrl;
+      }
+    });
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -990,6 +1130,26 @@ window.addEventListener('DOMContentLoaded', () => {
       resetCountdown();
     }
   });
+
+  // What's New Modal listeners
+  document.getElementById('btnFooterWhatsNew')?.addEventListener('click', () => openWhatsNewModal());
+  document.getElementById('btnSettingsWhatsNew')?.addEventListener('click', () => {
+    settingsModal.classList.add('hidden');
+    openWhatsNewModal();
+  });
+  document.getElementById('btnCloseWhatsNew')?.addEventListener('click', closeWhatsNewModal);
+  document.getElementById('btnDismissWhatsNew')?.addEventListener('click', closeWhatsNewModal);
+  document.getElementById('whatsNewModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'whatsNewModal') closeWhatsNewModal();
+  });
+
+  // Automatically show What's New notification on launch if the user hasn't seen this version yet
+  const lastSeen = localStorage.getItem('runner_last_seen_version_code');
+  if (!lastSeen || parseInt(lastSeen, 10) < CHANGELOG_DATA.versionCode) {
+    setTimeout(() => {
+      openWhatsNewModal();
+    }, 1200);
+  }
 
   // Initial fetch on page load
   performPollAndAnnouncement(false);

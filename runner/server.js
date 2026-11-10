@@ -57,14 +57,36 @@ const server = http.createServer((req, res) => {
   // 1.1 App Version endpoint for in-app updates
   if (parsedUrl.pathname === '/api/version') {
     res.writeHead(200, {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 2,
-      versionName: '1.1',
+      versionCode: 3,
+      versionName: '1.2',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Atualização automática live over-the-air + assinatura permanente.'
+      releaseNotes: 'Atenuação universal de volume (Audio Ducking) para Spotify, Yuma, YouTube Music, Podcasts e qualquer som em segundo plano.',
+      features: [
+        {
+          icon: '🎧',
+          title: 'Atenuação Universal de Música (Audio Ducking)',
+          desc: 'O Yuma, Spotify, Podcasts ou YouTube baixam o volume suavemente durante o anúncio da glicemia e voltam logo aos 100%.'
+        },
+        {
+          icon: '📲',
+          title: 'Atualizações Diretas Sem Desinstalar',
+          desc: 'Assinatura permanente de segurança — nunca mais precisas de desinstalar a app para atualizar.'
+        },
+        {
+          icon: '⚡',
+          title: 'Interface Aperfeiçoada & Live OTA',
+          desc: 'Novo cabeçalho alinhado e atualizações instantâneas de ecrã via nuvem.'
+        },
+        {
+          icon: '🔔',
+          title: 'Notificação de Versões',
+          desc: 'Vê sempre o que há de novo e o que foi alterado em cada versão.'
+        }
+      ]
     }));
     return;
   }
