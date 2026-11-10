@@ -61,11 +61,16 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 3,
-      versionName: '1.2',
+      versionCode: 4,
+      versionName: '1.3',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Atenuação universal de volume (Audio Ducking) para Spotify, Yuma, YouTube Music, Podcasts e qualquer som em segundo plano.',
+      releaseNotes: 'Zero latência no início da voz: eliminação da pausa e silêncio antes do anúncio vocal.',
       features: [
+        {
+          icon: '⚡',
+          title: 'Zero Latência Vocal (Início Imediato)',
+          desc: 'A música só atenua no exato milissegundo em que a voz começa a falar. Acabaram-se as pausas ou silêncios prévios.'
+        },
         {
           icon: '🎧',
           title: 'Atenuação Universal de Música (Audio Ducking)',
@@ -74,17 +79,12 @@ const server = http.createServer((req, res) => {
         {
           icon: '📲',
           title: 'Atualizações Diretas Sem Desinstalar',
-          desc: 'Assinatura permanente de segurança — nunca mais precisas de desinstalar a app para atualizar.'
-        },
-        {
-          icon: '⚡',
-          title: 'Interface Aperfeiçoada & Live OTA',
-          desc: 'Novo cabeçalho alinhado e atualizações instantâneas de ecrã via nuvem.'
+          desc: 'Assinatura permanente de segurança — atualiza diretamente por cima com 1 toque.'
         },
         {
           icon: '🔔',
-          title: 'Notificação de Versões',
-          desc: 'Vê sempre o que há de novo e o que foi alterado em cada versão.'
+          title: 'Notificações de Versões',
+          desc: 'Consulta as novidades e melhorias a qualquer momento.'
         }
       ]
     }));
@@ -168,6 +168,8 @@ const server = http.createServer((req, res) => {
         if (stat.size > 200) {
           res.writeHead(200, {
             'Content-Type': 'audio/mpeg',
+            'Content-Length': stat.size,
+            'Accept-Ranges': 'bytes',
             'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'public, max-age=86400'
           });
@@ -185,15 +187,22 @@ const server = http.createServer((req, res) => {
 
     execFile(pythonCmd, [workerScript, text, voice, cachedFile], (error, stdout, stderr) => {
       let valid = false;
+      let statSize = 0;
       try {
-        if (fs.existsSync(cachedFile) && fs.statSync(cachedFile).size > 200) {
-          valid = true;
+        if (fs.existsSync(cachedFile)) {
+          const stat = fs.statSync(cachedFile);
+          if (stat.size > 200) {
+            valid = true;
+            statSize = stat.size;
+          }
         }
       } catch (e) {}
 
       if (valid) {
         res.writeHead(200, {
           'Content-Type': 'audio/mpeg',
+          'Content-Length': statSize,
+          'Accept-Ranges': 'bytes',
           'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'public, max-age=86400'
         });

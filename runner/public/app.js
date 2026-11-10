@@ -590,11 +590,11 @@ function applyLanguageUI() {
 
   const footerWhatsNew = document.getElementById('btnFooterWhatsNew');
   if (footerWhatsNew) {
-    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.2)</span>' : "<span>✨ What's New (v1.2)</span>";
+    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.3)</span>' : "<span>✨ What's New (v1.3)</span>";
   }
   const settingsWhatsNew = document.getElementById('btnSettingsWhatsNew');
   if (settingsWhatsNew) {
-    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.2</span>' : "<span>✨ See What's New in v1.2</span>";
+    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.3</span>' : "<span>✨ See What's New in v1.3</span>";
   }
 
   const startBtn = document.getElementById('startBtnText');
@@ -898,13 +898,18 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 3,
-  versionName: '1.2',
+  versionCode: 4,
+  versionName: '1.3',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.2 • Atualização Recente',
+    sub: 'Versão 1.3 • Atualização Recente',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
+      {
+        icon: '⚡',
+        title: 'Zero Latência Vocal (Início Imediato)',
+        desc: 'A música agora só baixa no exato milissegundo em que a voz começa a falar. Acabaram-se as pausas ou silêncios prévios.'
+      },
       {
         icon: '🎧',
         title: 'Atenuação Universal de Música (Audio Ducking)',
@@ -916,11 +921,6 @@ const CHANGELOG_DATA = {
         desc: 'Assinatura permanente de segurança. As novas atualizações instalam diretamente por cima, sem perderes definições nem precisares de desinstalar.'
       },
       {
-        icon: '⚡',
-        title: 'Interface Otimizada & Live OTA',
-        desc: 'Novo cabeçalho limpo com distintivo de áudio nativo perfeitamente alinhado e atualizações instantâneas via nuvem.'
-      },
-      {
         icon: '🔔',
         title: 'Notificações de Atualização',
         desc: 'Ficas agora sempre a saber todas as alterações e melhorias sempre que a aplicação é atualizada.'
@@ -929,9 +929,14 @@ const CHANGELOG_DATA = {
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.2 • Recent Update',
+    sub: 'Version 1.3 • Recent Update',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
+      {
+        icon: '⚡',
+        title: 'Zero Voice Latency (Instant Start)',
+        desc: 'Music now ducks at the exact millisecond speech begins. No preceding silence or buffering pause.'
+      },
       {
         icon: '🎧',
         title: 'Universal Audio Ducking',
@@ -941,11 +946,6 @@ const CHANGELOG_DATA = {
         icon: '📲',
         title: 'Direct Updates Without Uninstalling',
         desc: 'Configured permanent keystore signing. Update APKs cleanly install on top without having to uninstall or re-enter settings.'
-      },
-      {
-        icon: '⚡',
-        title: 'Refined Header & Live OTA',
-        desc: 'Clean native badge alignment and instant cloud updates without downloading a new APK.'
       },
       {
         icon: '🔔',
@@ -1065,7 +1065,7 @@ window.addEventListener('DOMContentLoaded', () => {
   function showLiveToast() {
     const toast = document.createElement('div');
     toast.className = 'fixed bottom-16 left-1/2 -translate-x-1/2 bg-slate-900/95 text-emerald-400 border border-emerald-500/40 px-3.5 py-1.5 rounded-full text-xs font-mono shadow-2xl flex items-center gap-2 z-50 transition-opacity duration-500 backdrop-blur';
-    toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>● Ligado ao Servidor (Live OTA v1.2)</span>';
+    toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>● Ligado ao Servidor (Live OTA v1.3)</span>';
     document.body.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
