@@ -12,9 +12,19 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CACHE_DIR = path.join(PUBLIC_DIR, 'audio_cache');
 
-// Ensure cache directory exists
+// Ensure cache directory exists and purge legacy low-volume audios on startup
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
+} else {
+  try {
+    const cachedFiles = fs.readdirSync(CACHE_DIR);
+    for (const f of cachedFiles) {
+      if (f.endsWith('.mp3')) {
+        try { fs.unlinkSync(path.join(CACHE_DIR, f)); } catch (e) {}
+      }
+    }
+    console.log('Cleaned up legacy TTS cache files for loud voice upgrade.');
+  } catch (e) {}
 }
 
 const MIME_TYPES = {
@@ -93,7 +103,7 @@ const server = http.createServer((req, res) => {
                    langKey.startsWith('de') ? 'de-DE-KatjaNeural' : 'en-US-JennyNeural');
 
     // File cache hash
-    const hash = crypto.createHash('md5').update(`${voice}:${text}`).digest('hex');
+    const hash = crypto.createHash('md5').update(`v2_loud:${voice}:${text}`).digest('hex');
     const cachedFile = path.join(CACHE_DIR, `${hash}.mp3`);
 
     if (fs.existsSync(cachedFile)) {
