@@ -192,10 +192,15 @@
 
   </main>
 
-  <!-- Footer Tip -->
-  <footer id="footerTip" class="px-5 py-3 text-center border-t border-slate-900 text-[11px] text-slate-400">
-    <div>💡 No Google Pixel podes usar o botão dos phones para ouvir a glicémia a qualquer momento.</div>
-    <div class="text-[9px] text-emerald-400/80 font-mono mt-1">● Atualizado Online (Live OTA)</div>
+  <!-- Footer Tip & OTA Status -->
+  <footer class="px-5 py-3 text-center border-t border-slate-900 text-[11px] text-slate-400">
+    <div id="footerTip" class="leading-relaxed">💡 Durante a corrida podes usar o botão dos auriculares para ouvir a glicémia a qualquer momento.</div>
+    <div class="mt-2 flex items-center justify-center gap-2">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-950/90 text-emerald-400 border border-emerald-500/40 shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Live OTA: Atualizado Online (v1.2)</span>
+      </span>
+    </div>
   </footer>
 
   <!-- Settings Modal Dialog -->
@@ -259,6 +264,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=13"></script>
+  <script src="/app.js?v=14"></script>
 </body>
 </html>

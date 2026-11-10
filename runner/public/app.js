@@ -21,7 +21,7 @@ const CONFIG_KEY = 'ns_runner_config_v4';
 const defaultConfig = {
   nsUrl: 'https://diabetes.gatoescondido.com',
   intervalMinutes: 2,
-  language: 'en', // 'en' or 'pt-PT'
+  language: 'pt-PT', // Authentic European Portuguese by default
   targetMin: 110,
   targetMax: 170,
   urgentLow: 75,
@@ -181,7 +181,7 @@ const I18N = {
       speakNow: 'Speak Now',
       testAudio: 'Test Audio',
       speaking: 'Speaking',
-      footerTip: '💡 On your Google Pixel, double-tap or skip track on your Bluetooth earbuds to hear your glucose reading anytime.',
+      footerTip: '💡 During a run, use your earbud button or gesture to hear glucose anytime.',
       settingsTitle: 'Workout Settings',
       labelLangSetting: 'Voice & App Language',
       labelNsUrl: 'Nightscout Server URL',
@@ -222,7 +222,7 @@ const I18N = {
       speakNow: 'Falar Agora',
       testAudio: 'Testar Áudio',
       speaking: 'A Falar',
-      footerTip: '💡 No Google Pixel podes usar o botão dos phones (mudar de faixa) para ouvir a glicémia a qualquer momento.',
+      footerTip: '💡 Durante a corrida podes usar o botão dos auriculares para ouvir a glicémia a qualquer momento.',
       settingsTitle: 'Definições da Corrida',
       labelLangSetting: 'Língua da Voz e da App',
       labelNsUrl: 'Endereço Nightscout',
@@ -921,6 +921,19 @@ function showUpdateBanner(data) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  // Show brief Live OTA toast notification on startup
+  function showLiveToast() {
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-16 left-1/2 -translate-x-1/2 bg-slate-900/95 text-emerald-400 border border-emerald-500/40 px-3.5 py-1.5 rounded-full text-xs font-mono shadow-2xl flex items-center gap-2 z-50 transition-opacity duration-500 backdrop-blur';
+    toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>● Ligado ao Servidor (Live OTA v1.2)</span>';
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 600);
+    }, 3500);
+  }
+  setTimeout(showLiveToast, 800);
+
   setTimeout(checkAppVersion, 2500);
   loadConfig();
   applyLanguageUI();
