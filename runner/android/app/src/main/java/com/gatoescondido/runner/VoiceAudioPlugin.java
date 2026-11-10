@@ -1,8 +1,6 @@
-﻿package com.gatoescondido.runner;
+package com.gatoescondido.runner;
 
 import android.content.Intent;
-import android.media.AudioAttributes;
-import android.media.MediaPlayer;
 import android.os.Build;
 import android.util.Log;
 
@@ -15,18 +13,30 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "VoiceAudio")
 public class VoiceAudioPlugin extends Plugin {
     private static final String TAG = "VoiceAudioPlugin";
-    private MediaPlayer mediaPlayer = null;
 
     @PluginMethod
     public void startWorkout(PluginCall call) {
+        int interval = call.getInt("intervalMinutes", 2);
+        String lang = call.getString("language", "pt-PT");
+        String apiBase = call.getString("apiBase", "https://runner.gatoescondido.com");
+        int targetMin = call.getInt("targetMin", 110);
+        int targetMax = call.getInt("targetMax", 170);
+
         getActivity().runOnUiThread(() -> {
             try {
                 Intent serviceIntent = new Intent(getContext(), RunnerService.class);
+                serviceIntent.putExtra(RunnerService.EXTRA_INTERVAL, interval);
+                serviceIntent.putExtra(RunnerService.EXTRA_LANG, lang);
+                serviceIntent.putExtra(RunnerService.EXTRA_API_BASE, apiBase);
+                serviceIntent.putExtra(RunnerService.EXTRA_TARGET_MIN, targetMin);
+                serviceIntent.putExtra(RunnerService.EXTRA_TARGET_MAX, targetMax);
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     getContext().startForegroundService(serviceIntent);
                 } else {
                     getContext().startService(serviceIntent);
                 }
+                Log.d(TAG, "RunnerService started via VoiceAudioPlugin with interval=" + interval + "m, lang=" + lang);
                 JSObject ret = new JSObject();
                 ret.put("started", true);
                 call.resolve(ret);
@@ -42,8 +52,9 @@ public class VoiceAudioPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 Intent serviceIntent = new Intent(getContext(), RunnerService.class);
-                serviceIntent.setAction("STOP");
+                serviceIntent.setAction(RunnerService.ACTION_STOP);
                 getContext().startService(serviceIntent);
+                Log.d(TAG, "RunnerService stopped via VoiceAudioPlugin");
                 JSObject ret = new JSObject();
                 ret.put("stopped", true);
                 call.resolve(ret);
@@ -62,63 +73,24 @@ public class VoiceAudioPlugin extends Plugin {
             return;
         }
 
+        Log.d(TAG, "VoiceAudioPlugin.play called with url: " + url);
+
         getActivity().runOnUiThread(() -> {
-            try {
-                if (mediaPlayer != null) {
-                    try {
-                        if (mediaPlayer.isPlaying()) {
-                            mediaPlayer.stop();
-                        }
-                    } catch (Exception ignored) {}
-                    mediaPlayer.release();
-                    mediaPlayer = null;
-                }
+            AudioEngine.playVoice(getContext(), url, () -> {
+                JSObject ret = new JSObject();
+                ret.put("completed", true);
+                call.resolve(ret);
+            });
+        });
+    }
 
-                // Play as assistant sonification without requesting exclusive audio focus
-                AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build();
-
-                mediaPlayer = new MediaPlayer();
-                mediaPlayer.setAudioAttributes(audioAttributes);
-                mediaPlayer.setDataSource(url);
-
-                mediaPlayer.setOnPreparedListener(mp -> {
-                    try {
-                        mp.start();
-                        Log.d(TAG, "Native MediaPlayer started speech seamlessly over music");
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error starting MediaPlayer", e);
-                        call.reject("Start failed: " + e.getMessage());
-                    }
-                });
-
-                mediaPlayer.setOnCompletionListener(mp -> {
-                    try {
-                        mp.release();
-                        mediaPlayer = null;
-                    } catch (Exception ignored) {}
-                    JSObject ret = new JSObject();
-                    ret.put("completed", true);
-                    call.resolve(ret);
-                });
-
-                mediaPlayer.setOnErrorListener((mp, what, extra) -> {
-                    try {
-                        mp.release();
-                        mediaPlayer = null;
-                    } catch (Exception ignored) {}
-                    call.reject("MediaPlayer error: " + what);
-                    return true;
-                });
-
-                mediaPlayer.prepareAsync();
-
-            } catch (Exception e) {
-                Log.e(TAG, "Exception in play", e);
-                call.reject("Play exception: " + e.getMessage());
-            }
+    @PluginMethod
+    public void stop(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            AudioEngine.cleanup();
+            JSObject ret = new JSObject();
+            ret.put("stopped", true);
+            call.resolve(ret);
         });
     }
 }

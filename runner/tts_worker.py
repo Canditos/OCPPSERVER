@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import asyncio
 import traceback
@@ -23,7 +23,7 @@ def get_fallback_voice(voice: str) -> str:
 async def synthesize(text: str, voice: str, out_path: str):
     tmp_path = out_path + '.tmp'
     try:
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(text, voice, volume='+40%')
         await communicate.save(tmp_path)
         if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 100:
             if os.path.exists(out_path):

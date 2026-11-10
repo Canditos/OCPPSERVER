@@ -44,10 +44,27 @@ let backgroundTimerWorker = null;
 
 // Native Android Foreground Service integration (Capacitor & Android JavascriptInterface)
 function triggerNativeForegroundStart() {
+  const payload = {
+    intervalMinutes: config.intervalMinutes || 2,
+    language: config.language || 'pt-PT',
+    apiBase: API_BASE,
+    targetMin: config.targetMin || 110,
+    targetMax: config.targetMax || 170
+  };
   if (NativeVoice && typeof NativeVoice.startWorkout === 'function') {
-    NativeVoice.startWorkout().catch(e => console.warn('NativeVoice.startWorkout error:', e));
+    NativeVoice.startWorkout(payload).catch(e => console.warn('NativeVoice.startWorkout error:', e));
   } else if (window.AndroidVoice && typeof window.AndroidVoice.startWorkoutService === 'function') {
-    try { window.AndroidVoice.startWorkoutService(); } catch (e) { console.warn('AndroidVoice.startWorkoutService error:', e); }
+    try {
+      window.AndroidVoice.startWorkoutService(
+        payload.intervalMinutes,
+        payload.language,
+        payload.apiBase,
+        payload.targetMin,
+        payload.targetMax
+      );
+    } catch (e) {
+      console.warn('AndroidVoice.startWorkoutService error:', e);
+    }
   }
 }
 
@@ -58,6 +75,25 @@ function triggerNativeForegroundStop() {
     try { window.AndroidVoice.stopWorkoutService(); } catch (e) { console.warn('AndroidVoice.stopWorkoutService error:', e); }
   }
 }
+
+// Native event listeners (when phone is unlocked or action pressed in notification)
+window._onNativeWorkoutReading = function(data) {
+  console.log('Received native reading:', data);
+  if (data && data.announcementCount) {
+    announcementCount = data.announcementCount;
+    const countEl = document.getElementById('announcementCount');
+    if (countEl) countEl.textContent = announcementCount;
+  }
+  lastAnnouncementTimestamp = Date.now();
+  secondsRemaining = (config.intervalMinutes || 2) * 60;
+  updateCountdownDisplay();
+  performPollAndAnnouncement(false, true); // true = skipSpeech since native service already spoke
+};
+
+window._onNativeWorkoutStopped = function() {
+  console.log('Received native workout stopped');
+  stopWorkout(true);
+};
 
 // 1-second silent WAV data URI for continuous audio session keep-alive
 const SILENT_AUDIO_URI = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhEQAAAP///////////////////w==';
@@ -146,7 +182,9 @@ function onHeartbeatTick() {
   if (timeSinceLast >= targetIntervalMs) {
     console.log('[Timer] interval reached (' + timeSinceLast + 'ms). Polling & announcing.');
     lastAnnouncementTimestamp = now;
-    performPollAndAnnouncement(false);
+    if (!isNativeApp) {
+      performPollAndAnnouncement(false);
+    }
   }
 }
 
@@ -707,7 +745,7 @@ function timeAgo(date) {
 }
 
 // Polling & Announcement Routine
-async function performPollAndAnnouncement(isManualTrigger = false) {
+async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = false) {
   try {
     const syncIndicator = document.getElementById('syncIndicator');
     if (syncIndicator) syncIndicator.classList.add('animate-spin');
@@ -734,7 +772,7 @@ async function performPollAndAnnouncement(isManualTrigger = false) {
     updateUIWithReading(current, previous, delta, advice);
     updateMediaSession(sgv, direction, advice);
 
-    if (isRunning || isManualTrigger) {
+    if ((isRunning || isManualTrigger) && !skipSpeech) {
       announcementCount++;
       const countEl = document.getElementById('announcementCount');
       if (countEl) countEl.textContent = announcementCount;
@@ -831,20 +869,26 @@ async function startWorkout() {
   if (workoutIntervalId) clearInterval(workoutIntervalId);
   workoutIntervalId = setInterval(onHeartbeatTick, 1000);
 
-  // Immediate poll and announce
-  await performPollAndAnnouncement(false);
+  // Immediate poll and announce (in native mode, native service already polls & speaks)
+  if (!isNativeApp) {
+    await performPollAndAnnouncement(false);
+  } else {
+    performPollAndAnnouncement(false, true); // skipSpeech since native service already speaks
+  }
   lastAnnouncementTimestamp = Date.now();
   secondsRemaining = (config.intervalMinutes || 2) * 60;
   updateCountdownDisplay();
 }
 
-function stopWorkout() {
+function stopWorkout(fromNative = false) {
   isRunning = false;
   if (workoutIntervalId) clearInterval(workoutIntervalId);
   if (timerId) clearInterval(timerId);
   if (countdownTimerId) clearInterval(countdownTimerId);
 
-  triggerNativeForegroundStop();
+  if (!fromNative) {
+    triggerNativeForegroundStop();
+  }
   stopSilentAudioKeepAlive();
   stopBackgroundWorker();
 
