@@ -1,11 +1,19 @@
 // Nightscout Audio Runner & Sports Carb Coach
 // Dynamic Dual-Language Edition: English (EN) and Português (PT-PT)
 
-// Detect if running inside native Android APK (Capacitor/localhost)
-const isNativeApp = window.location.origin.includes('localhost') || 
-                    window.location.protocol === 'capacitor:' || 
-                    window.location.protocol === 'file:';
-const API_BASE = isNativeApp ? 'https://runner.gatoescondido.com' : '';
+// Detect if running inside native Android APK (Capacitor/localhost/AndroidVoice bridge)
+function isRunningNative() {
+  return (typeof window.AndroidVoice !== 'undefined') ||
+         (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
+         window.location.origin.includes('localhost') ||
+         window.location.protocol === 'capacitor:' ||
+         window.location.protocol === 'file:';
+}
+
+const isNativeApp = isRunningNative();
+const API_BASE = (window.location.origin.includes('localhost') || window.location.protocol === 'capacitor:' || window.location.protocol === 'file:')
+  ? 'https://runner.gatoescondido.com'
+  : '';
 const NativeVoice = (window.Capacitor && window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('VoiceAudio') : null;
 
 const CONFIG_KEY = 'ns_runner_config_v4';
@@ -880,7 +888,40 @@ function announceCurrent(forceFetch = false) {
 }
 
 // App Initialization
+// Check for native APK updates
+async function checkAppVersion() {
+  if (!isRunningNative()) return;
+  try {
+    const res = await fetch('/api/version?t=' + Date.now());
+    if (!res.ok) return;
+    const data = await res.json();
+    const CURRENT_VERSION_CODE = 2; // Matches native versionCode in build.gradle
+    if (data.versionCode && data.versionCode > CURRENT_VERSION_CODE) {
+      showUpdateBanner(data);
+    }
+  } catch (e) {
+    console.warn('App version check ignored:', e);
+  }
+}
+
+function showUpdateBanner(data) {
+  if (document.getElementById('updateBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'updateBanner';
+  banner.className = 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white px-4 py-2 text-xs flex items-center justify-between shadow-lg sticky top-0 z-50';
+  banner.innerHTML = `
+    <div class="flex items-center gap-1.5 font-medium">
+      <span>🚀 Nova versão ${data.versionName} disponível!</span>
+    </div>
+    <a href="${data.apkUrl}" class="px-2.5 py-1 bg-white text-sky-900 font-extrabold rounded-lg text-xs hover:bg-slate-100 transition shadow">
+      Atualizar
+    </a>
+  `;
+  document.body.prepend(banner);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(checkAppVersion, 2500);
   loadConfig();
   applyLanguageUI();
 

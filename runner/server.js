@@ -54,6 +54,40 @@ function getLocalIpAddresses() {
 const server = http.createServer((req, res) => {
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
 
+  // 1.1 App Version endpoint for in-app updates
+  if (parsedUrl.pathname === '/api/version') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(JSON.stringify({
+      versionCode: 2,
+      versionName: '1.1',
+      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
+      releaseNotes: 'Atualização automática live over-the-air + assinatura permanente.'
+    }));
+    return;
+  }
+
+  // 1.2 Direct APK download route
+  if (parsedUrl.pathname === '/nightscout-runner.apk' || parsedUrl.pathname === '/download') {
+    const candidates = [
+      path.join(PUBLIC_DIR, 'nightscout-runner.apk'),
+      path.join(__dirname, 'nightscout-runner.apk')
+    ];
+    const apkPath = candidates.find(p => fs.existsSync(p));
+    if (apkPath) {
+      const stat = fs.statSync(apkPath);
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Disposition': 'attachment; filename="nightscout-runner.apk"',
+        'Content-Length': stat.size
+      });
+      fs.createReadStream(apkPath).pipe(res);
+      return;
+    }
+  }
+
   // 1. Diagnostics endpoint
   if (parsedUrl.pathname === '/api/diag') {
     const workerScript = path.join(__dirname, 'tts_worker.py');

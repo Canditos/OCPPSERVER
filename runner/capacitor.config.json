@@ -3,6 +3,11 @@
   "appName": "NS Runner",
   "webDir": "public",
   "server": {
-    "androidScheme": "https"
+    "url": "https://runner.gatoescondido.com",
+    "cleartext": false,
+    "allowNavigation": [
+      "runner.gatoescondido.com",
+      "diabetes.gatoescondido.com"
+    ]
   }
 }
