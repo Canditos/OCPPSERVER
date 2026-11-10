@@ -32,14 +32,14 @@
         </svg>
       </div>
       <div>
-        <h1 class="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
-          NS Runner
-          <span id="syncIndicator" class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400" title="Connected"></span>
-        </h1>
-        <div class="flex items-center gap-1.5">
-          <p class="text-[11px] text-slate-400 font-medium">Nightscout & Carb Coach</p>
-          <span id="audioEngineBadge" class="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-slate-800 text-slate-400">Audio: Detecting...</span>
+        <div class="flex items-center gap-2">
+          <h1 class="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
+            NS Runner
+            <span id="syncIndicator" class="inline-block w-2 h-2 rounded-full bg-emerald-400" title="Connected"></span>
+          </h1>
+          <span id="audioEngineBadge" class="whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40 leading-none">⚡ Nativo</span>
         </div>
+        <p class="text-[11px] text-slate-400 font-medium mt-0.5">Nightscout & Carb Coach</p>
       </div>
     </div>
 
@@ -194,7 +194,8 @@
 
   <!-- Footer Tip -->
   <footer id="footerTip" class="px-5 py-3 text-center border-t border-slate-900 text-[11px] text-slate-400">
-    💡 On your Google Pixel, double-tap or skip track on your Bluetooth earbuds to hear your glucose reading anytime.
+    <div>💡 No Google Pixel podes usar o botão dos phones para ouvir a glicémia a qualquer momento.</div>
+    <div class="text-[9px] text-emerald-400/80 font-mono mt-1">● Atualizado Online (Live OTA)</div>
   </footer>
 
   <!-- Settings Modal Dialog -->
@@ -258,6 +259,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=12"></script>
+  <script src="/app.js?v=13"></script>
 </body>
 </html>

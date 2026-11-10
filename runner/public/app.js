@@ -985,14 +985,13 @@ window.addEventListener('DOMContentLoaded', () => {
   function updateAudioEngineDisplay() {
     const badge = document.getElementById('audioEngineBadge');
     if (!badge) return;
-    const isNative = (window.Capacitor && (window.Capacitor.isNativePlatform() || window.Capacitor.platform === 'android')) ||
-                     (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function');
+    const isNative = isRunningNative();
     if (isNative) {
-      badge.textContent = '⚡ Nativo (Música OK)';
-      badge.className = 'text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40';
+      badge.textContent = '⚡ Nativo';
+      badge.className = 'whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40 leading-none';
     } else {
-      badge.textContent = '🌐 Modo Web';
-      badge.className = 'text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-800 text-slate-400';
+      badge.textContent = '🌐 Web';
+      badge.className = 'whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-800 text-slate-400 border border-slate-700 leading-none';
     }
   }
 
