@@ -36,11 +36,9 @@ let workoutIntervalId = null;
 let announcementCount = 0;
 let currentAudioPlayer = null;
 
-// Background Keep-Alive State
+// Background State
 let lastAnnouncementTimestamp = Date.now();
 let lastHeartbeatProcessTime = 0;
-let silentAudioElement = null;
-let backgroundTimerWorker = null;
 
 // Native Android Foreground Service integration (Capacitor & Android JavascriptInterface)
 function triggerNativeForegroundStart() {
@@ -94,73 +92,6 @@ window._onNativeWorkoutStopped = function() {
   console.log('Received native workout stopped');
   stopWorkout(true);
 };
-
-// 1-second silent WAV data URI for continuous audio session keep-alive
-const SILENT_AUDIO_URI = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhEQAAAP///////////////////w==';
-
-function startSilentAudioKeepAlive() {
-  try {
-    if (!silentAudioElement) {
-      silentAudioElement = new Audio(SILENT_AUDIO_URI);
-      silentAudioElement.loop = true;
-      silentAudioElement.volume = 0.001; // inaudible to avoid interfering with music
-      silentAudioElement.setAttribute('playsinline', 'true');
-      silentAudioElement.setAttribute('webkit-playsinline', 'true');
-    }
-
-    silentAudioElement.ontimeupdate = () => {
-      if (isRunning) {
-        onHeartbeatTick();
-      }
-    };
-
-    silentAudioElement.play().catch(e => {
-      console.warn('Silent audio keep-alive play warning:', e);
-    });
-  } catch (e) {
-    console.warn('Failed to start silent audio keep-alive:', e);
-  }
-}
-
-function stopSilentAudioKeepAlive() {
-  if (silentAudioElement) {
-    try {
-      silentAudioElement.pause();
-      silentAudioElement.currentTime = 0;
-    } catch (e) {}
-  }
-}
-
-function startBackgroundWorker() {
-  if (window.Worker) {
-    try {
-      if (backgroundTimerWorker) {
-        try { backgroundTimerWorker.terminate(); } catch (e) {}
-      }
-      const workerCode = 'let t = null; self.onmessage = function(e) { if (e.data === "start") { if (t) clearInterval(t); t = setInterval(function() { self.postMessage("tick"); }, 1000); } else if (e.data === "stop") { if (t) clearInterval(t); t = null; } };';
-      const blob = new Blob([workerCode], { type: 'application/javascript' });
-      backgroundTimerWorker = new Worker(URL.createObjectURL(blob));
-      backgroundTimerWorker.onmessage = (e) => {
-        if (e.data === 'tick' && isRunning) {
-          onHeartbeatTick();
-        }
-      };
-      backgroundTimerWorker.postMessage('start');
-    } catch (e) {
-      console.warn('Web Worker creation failed:', e);
-    }
-  }
-}
-
-function stopBackgroundWorker() {
-  if (backgroundTimerWorker) {
-    try {
-      backgroundTimerWorker.postMessage('stop');
-      backgroundTimerWorker.terminate();
-    } catch (e) {}
-    backgroundTimerWorker = null;
-  }
-}
 
 function onHeartbeatTick() {
   const now = Date.now();
@@ -843,10 +774,6 @@ async function startWorkout() {
   // 1. Start Native Android Foreground Service (for APK background execution)
   triggerNativeForegroundStart();
 
-  // 2. Start Web Keep-Alive (Silent Audio Loop + Web Worker)
-  startSilentAudioKeepAlive();
-  startBackgroundWorker();
-
   if (config.wakeLockEnabled && 'wakeLock' in navigator) {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
@@ -889,8 +816,6 @@ function stopWorkout(fromNative = false) {
   if (!fromNative) {
     triggerNativeForegroundStop();
   }
-  stopSilentAudioKeepAlive();
-  stopBackgroundWorker();
 
   if (currentAudioPlayer) {
     currentAudioPlayer.pause();

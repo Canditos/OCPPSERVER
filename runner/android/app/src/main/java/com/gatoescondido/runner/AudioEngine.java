@@ -2,10 +2,8 @@ package com.gatoescondido.runner;
 
 import android.content.Context;
 import android.media.AudioAttributes;
-import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.os.Build;
 import android.util.Log;
 
 public class AudioEngine {
@@ -51,8 +49,7 @@ public class AudioEngine {
 
     /**
      * Plays TTS audio URL:
-     * - Uses USAGE_ASSISTANCE_NAVIGATION_GUIDANCE to guarantee routing to Bluetooth headphones
-     * - Explicitly routes to active Bluetooth A2DP / BLE headset if connected
+     * - Uses USAGE_ASSISTANCE_NAVIGATION_GUIDANCE to route to Bluetooth headphones
      * - Does NOT request exclusive audio focus, so background music (Yuma/Spotify) never pauses
      * - Ducks music volume right when playback starts, and restores it when speech ends
      */
@@ -67,31 +64,6 @@ public class AudioEngine {
 
             mediaPlayer = new MediaPlayer();
             mediaPlayer.setAudioAttributes(audioAttributes);
-
-            // Explicitly route to Bluetooth A2DP or BLE headset if connected
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                try {
-                    AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-                    if (am != null) {
-                        AudioDeviceInfo[] devices = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
-                        for (AudioDeviceInfo dev : devices) {
-                            int type = dev.getType();
-                            if (type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                                (Build.VERSION.SDK_INT >= 31 && type == AudioDeviceInfo.TYPE_BLE_HEADSET) ||
-                                (Build.VERSION.SDK_INT >= 31 && type == AudioDeviceInfo.TYPE_BLE_SPEAKER) ||
-                                type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-                                type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES) {
-                                boolean routed = mediaPlayer.setPreferredDevice(dev);
-                                Log.d(TAG, "Routed speech to device: " + dev.getProductName() + " (type=" + type + ", success=" + routed + ")");
-                                break;
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.w(TAG, "Failed to query or set preferred audio device", e);
-                }
-            }
-
             mediaPlayer.setDataSource(url);
 
             mediaPlayer.setOnPreparedListener(mp -> {

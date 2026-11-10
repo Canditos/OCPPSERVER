@@ -14,7 +14,6 @@ import android.os.PowerManager;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
-import androidx.core.app.ServiceCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -68,7 +67,7 @@ public class RunnerService extends Service {
         String action = intent != null ? intent.getAction() : null;
         if (ACTION_STOP.equals(action)) {
             Log.d(TAG, "Stopping RunnerService via STOP action");
-            stopForegroundService();
+            stopForegroundService(true);
             return START_NOT_STICKY;
         }
 
@@ -105,32 +104,31 @@ public class RunnerService extends Service {
             Log.e(TAG, "Failed to acquire wake lock", e);
         }
 
-        // 2. Start Foreground with initial notification
+        // 2. Start Foreground with initial notification (mediaPlayback type for audio runner)
         Notification notification = buildNotification(
                 language.equals("en") ? "🏃 Nightscout Runner" : "🏃 Treino Ativo — NS Runner",
                 language.equals("en") ? "Connecting to Nightscout..." : "A ligar ao Nightscout..."
         );
 
-        int fgsType = 0;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+
-                fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
-            } else {
-                fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
-            }
-        }
-
         try {
-            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, fgsType);
-            Log.d(TAG, "ServiceCompat.startForeground succeeded with type=" + fgsType);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+            Log.d(TAG, "startForeground succeeded with type mediaPlayback");
         } catch (Exception e) {
-            Log.e(TAG, "startForeground fallback", e);
-            startForeground(NOTIFICATION_ID, notification);
+            Log.e(TAG, "startForeground error", e);
+            try {
+                startForeground(NOTIFICATION_ID, notification);
+            } catch (Exception e2) {
+                Log.e(TAG, "Fallback startForeground failed", e2);
+            }
         }
 
         // 3. Start recurring background timer in Java (immune to WebView sleep!)
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(this::pollAndAnnounce, 1, intervalMinutes * 60L, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::pollAndAnnounce, 2, intervalMinutes * 60L, TimeUnit.SECONDS);
     }
 
     private void pollAndAnnounce() {
@@ -235,10 +233,12 @@ public class RunnerService extends Service {
         }
     }
 
-    private void stopForegroundService() {
+    private void stopForegroundService(boolean notifyWeb) {
         isServiceRunning = false;
         if (scheduler != null) {
-            scheduler.shutdownNow();
+            try {
+                scheduler.shutdownNow();
+            } catch (Exception ignored) {}
             scheduler = null;
         }
 
@@ -252,9 +252,14 @@ public class RunnerService extends Service {
             wakeLock = null;
         }
 
-        stopForeground(true);
+        try {
+            stopForeground(true);
+        } catch (Exception ignored) {}
         stopSelf();
-        MainActivity.notifyWorkoutStopped();
+
+        if (notifyWeb) {
+            MainActivity.notifyWorkoutStopped();
+        }
     }
 
     private String httpGet(String urlStr) {
@@ -287,7 +292,7 @@ public class RunnerService extends Service {
 
     @Override
     public void onDestroy() {
-        stopForegroundService();
+        stopForegroundService(false);
         super.onDestroy();
     }
 

@@ -16,8 +16,6 @@ import com.getcapacitor.BridgeActivity;
 import org.json.JSONObject;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.List;
 
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "NS_MainActivity";
@@ -29,7 +27,7 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         currentActivityRef = new WeakReference<>(this);
 
-        requestAppPermissions();
+        requestNotificationPermission();
 
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
@@ -47,25 +45,12 @@ public class MainActivity extends BridgeActivity {
         currentActivityRef = new WeakReference<>(this);
     }
 
-    private void requestAppPermissions() {
-        List<String> permissionsNeeded = new ArrayList<>();
-
+    private void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // Android 13+
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS);
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-                    != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.BLUETOOTH_CONNECT);
-            }
-        }
-
-        if (!permissionsNeeded.isEmpty()) {
-            ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), 101);
         }
     }
 
