@@ -187,7 +187,7 @@ const I18N = {
       bluetooth: 'Bluetooth Audio',
       glucoseTitle: 'CURRENT GLUCOSE',
       var5m: '5M DELTA:',
-      coachTitle: 'Carb Coach Recommendation',
+      coachTitle: 'Carb Coach',
       evaluating: 'Evaluating',
       dose: 'DOSE:',
       nextVoice: 'Next Audio',
@@ -198,7 +198,7 @@ const I18N = {
       speakNow: 'Speak Now',
       testAudio: 'Test Audio',
       speaking: 'Speaking',
-      footerTip: '💡 During a run, use your earbud button or gesture to hear glucose anytime.',
+      footerTip: '💡 Earbuds: Click button to hear glucose on demand',
       settingsTitle: 'Workout Settings',
       labelLangSetting: 'Voice & App Language',
       labelNsUrl: 'Nightscout Server URL',
@@ -228,7 +228,7 @@ const I18N = {
       bluetooth: 'Phones Bluetooth',
       glucoseTitle: 'GLICÉMIA ATUAL',
       var5m: 'VARIAÇÃO 5M:',
-      coachTitle: 'Recomendação de Hidratos (HC)',
+      coachTitle: 'Carb Coach',
       evaluating: 'A Avaliar',
       dose: 'DOSE:',
       nextVoice: 'Próxima Voz',
@@ -239,7 +239,7 @@ const I18N = {
       speakNow: 'Falar Agora',
       testAudio: 'Testar Áudio',
       speaking: 'A Falar',
-      footerTip: '💡 Durante a corrida podes usar o botão dos auriculares para ouvir a glicémia a qualquer momento.',
+      footerTip: '💡 Auriculares: Botão ouve glicémia instantânea',
       settingsTitle: 'Definições da Corrida',
       labelLangSetting: 'Língua da Voz e da App',
       labelNsUrl: 'Endereço Nightscout',
@@ -466,9 +466,9 @@ function updateProfileButtonsUI() {
     const el = document.getElementById(id);
     if (!el) return;
     if (active) {
-      el.className = 'profile-btn flex-1 py-1.5 px-2 rounded-xl font-bold text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer';
+      el.className = 'profile-btn flex-1 py-1 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer';
     } else {
-      el.className = 'profile-btn flex-1 py-1.5 px-2 rounded-xl font-medium text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer';
+      el.className = 'profile-btn flex-1 py-1 px-1.5 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer';
     }
   };
   setBtn('profZone2', p === 'zone2');
@@ -977,7 +977,7 @@ function applyLanguageUI() {
 
   const footerWhatsNew = document.getElementById('btnFooterWhatsNew');
   if (footerWhatsNew) {
-    footerWhatsNew.innerHTML = isPt ? '<span>✨ O que há de novo (v1.6)</span>' : "<span>✨ What's New (v1.6)</span>";
+    footerWhatsNew.innerHTML = '<span>✨ v1.6</span>';
   }
   const settingsWhatsNew = document.getElementById('btnSettingsWhatsNew');
   if (settingsWhatsNew) {
@@ -1200,14 +1200,14 @@ function updateUIWithReading(current, previous, delta, advice) {
 
   if (adviceBadge) {
     adviceBadge.textContent = advice.badge;
-    adviceBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${advice.badgeColor}`;
+    adviceBadge.className = `px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${advice.badgeColor}`;
   }
   if (adviceCarbs) adviceCarbs.textContent = advice.carbs;
   if (adviceTitle) adviceTitle.textContent = advice.title;
   if (adviceDesc) adviceDesc.textContent = advice.adviceText;
 
   if (mainCard) {
-    mainCard.className = `relative overflow-hidden rounded-3xl bg-slate-900/90 border-2 p-6 backdrop-blur-xl transition-all duration-300 shadow-2xl ${advice.cardBorder}`;
+    mainCard.className = `relative overflow-hidden rounded-2xl bg-slate-900/90 border-2 px-4 py-2 sm:py-3 backdrop-blur-xl transition-all duration-300 shadow-xl ${advice.cardBorder}`;
   }
 }
 
