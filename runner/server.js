@@ -61,30 +61,30 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 5,
-      versionName: '1.4',
+      versionCode: 6,
+      versionName: '1.5',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Paragem imediata do serviço e correção definitiva dos botões de áudio com cache no telemóvel.',
+      releaseNotes: 'Contador e intervalo dinâmicos, e deteção em tempo real de auriculares Bluetooth.',
       features: [
         {
+          icon: '⏱️',
+          title: 'Contador & Intervalo Dinâmico',
+          desc: 'O ecrã e o botão refletem imediatamente o intervalo configurado (1, 2, 3 ou 5 min) mesmo com o treino parado.'
+        },
+        {
+          icon: '🎧',
+          title: 'Estado Real dos Fones Bluetooth',
+          desc: 'O indicador no topo mostra em tempo real se os auriculares Bluetooth estão ligados (com nome do dispositivo) ou se o áudio sai pelo altifalante.'
+        },
+        {
           icon: '🛑',
-          title: 'Paragem Completa do Treino',
+          title: 'Paragem Total do Treino',
           desc: 'Ao clicar em Parar Treino, o serviço em segundo plano e a notificação são terminados imediatamente sem ficarem presos.'
         },
         {
           icon: '⚡',
-          title: 'Zero Falhas no Testar Som & Falar Agora',
-          desc: 'Disparo instantâneo e fiável com cache local no telemóvel e resolução direta de rotas de áudio.'
-        },
-        {
-          icon: '🎧',
-          title: 'Atenuação Universal de Música (Audio Ducking)',
-          desc: 'O Yuma, Spotify, Podcasts ou YouTube baixam o volume suavemente durante o anúncio da glicemia e voltam logo aos 100%.'
-        },
-        {
-          icon: '📲',
-          title: 'Atualizações Diretas Sem Desinstalar',
-          desc: 'Atualiza diretamente por cima com 1 só toque.'
+          title: 'Disparo Fiável e Instantâneo',
+          desc: 'Testar Som e Falar Agora tocam sem qualquer atraso com áudio ducking na música.'
         }
       ]
     }));

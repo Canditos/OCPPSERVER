@@ -570,6 +570,14 @@ function fallbackWebAudio(audioUrl, onDone) {
   });
 }
 
+function getStartButtonText(lang, intervalMinutes) {
+  const m = intervalMinutes || 2;
+  if (lang === 'pt-PT') {
+    return `Iniciar Treino (Voz a cada ${m} min)`;
+  }
+  return `Start Workout (Voice every ${m} min)`;
+}
+
 // Apply Language strings to entire UI
 function applyLanguageUI() {
   const lang = config.language || 'en';
@@ -586,7 +594,6 @@ function applyLanguageUI() {
   };
 
   setT('labelSpeaking', texts.speaking);
-  setT('labelBluetooth', texts.bluetooth);
   setT('labelGlucoseTitle', texts.glucoseTitle);
   setT('labelVar5m', texts.var5m);
   setT('labelCoachTitle', texts.coachTitle);
@@ -603,15 +610,15 @@ function applyLanguageUI() {
 
   const footerWhatsNew = document.getElementById('btnFooterWhatsNew');
   if (footerWhatsNew) {
-    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.4)</span>' : "<span>✨ What's New (v1.4)</span>";
+    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.5)</span>' : "<span>✨ What's New (v1.5)</span>";
   }
   const settingsWhatsNew = document.getElementById('btnSettingsWhatsNew');
   if (settingsWhatsNew) {
-    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.4</span>' : "<span>✨ See What's New in v1.4</span>";
+    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.5</span>' : "<span>✨ See What's New in v1.5</span>";
   }
 
   const startBtn = document.getElementById('startBtnText');
-  if (startBtn) startBtn.textContent = texts.startBtn;
+  if (startBtn) startBtn.textContent = getStartButtonText(lang, config.intervalMinutes);
   const stopBtn = document.getElementById('stopBtnText');
   if (stopBtn) stopBtn.textContent = texts.stopBtn;
   const speakBtn = document.getElementById('speakNowText');
@@ -624,6 +631,24 @@ function applyLanguageUI() {
 
   const cfgLang = document.getElementById('cfgLanguage');
   if (cfgLang) cfgLang.value = lang;
+
+  const intervalSelect = document.getElementById('cfgInterval');
+  if (intervalSelect) {
+    const curVal = intervalSelect.value || String(config.intervalMinutes || 2);
+    const opts = [
+      { val: '1', pt: 'A cada 1 minuto', en: 'Every 1 minute' },
+      { val: '2', pt: 'A cada 2 minutos (Recomendado)', en: 'Every 2 minutes (Recommended)' },
+      { val: '3', pt: 'A cada 3 minutos', en: 'Every 3 minutes' },
+      { val: '5', pt: 'A cada 5 minutos', en: 'Every 5 minutes' },
+    ];
+    intervalSelect.innerHTML = opts.map(o =>
+      `<option value="${o.val}" ${o.val === curVal ? 'selected' : ''}>${lang === 'pt-PT' ? o.pt : o.en}</option>`
+    ).join('');
+  }
+
+  if (typeof updateBluetoothStatusBadge === 'function' && typeof currentAudioStatus !== 'undefined') {
+    updateBluetoothStatusBadge(currentAudioStatus);
+  }
 }
 
 // Toggle language
@@ -866,7 +891,7 @@ function stopWorkout(fromNative = false) {
   document.getElementById('btnStopWorkout').classList.add('hidden');
   document.getElementById('workoutStatusBadge').className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5';
   document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span> ' + I18N[lang].ui.workoutStopped;
-  document.getElementById('countdownText').textContent = '—';
+  updateCountdownDisplay();
 }
 
 function resetCountdown() {
@@ -876,11 +901,17 @@ function resetCountdown() {
 }
 
 function updateCountdownDisplay() {
+  const el = document.getElementById('countdownText');
+  if (!el) return;
+  if (!isRunning) {
+    const mins = config.intervalMinutes || 2;
+    el.textContent = `${mins}:00`;
+    return;
+  }
   const mins = Math.floor(secondsRemaining / 60);
   const secs = secondsRemaining % 60;
   const str = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  const el = document.getElementById('countdownText');
-  if (el) el.textContent = str;
+  el.textContent = str;
 }
 
 function updateWorkoutDuration() {
@@ -914,13 +945,23 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 5,
-  versionName: '1.4',
+  versionCode: 6,
+  versionName: '1.5',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.4 • Atualização Recente',
+    sub: 'Versão 1.5 • Atualização Recente',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
+      {
+        icon: '⏱️',
+        title: 'Contador & Intervalo Dinâmico',
+        desc: 'O ecrã e o botão refletem imediatamente o intervalo configurado (1, 2, 3 ou 5 min) mesmo com o treino parado.'
+      },
+      {
+        icon: '🎧',
+        title: 'Estado Real dos Fones Bluetooth',
+        desc: 'O indicador no topo mostra em tempo real se os auriculares Bluetooth estão ligados (com nome do dispositivo) ou se o áudio sai pelo altifalante.'
+      },
       {
         icon: '🛑',
         title: 'Paragem Completa do Treino',
@@ -928,26 +969,26 @@ const CHANGELOG_DATA = {
       },
       {
         icon: '⚡',
-        title: 'Zero Falhas no Testar Som & Falar Agora',
-        desc: 'Disparo instantâneo e fiável com cache local no telemóvel e resolução direta de rotas de áudio.'
-      },
-      {
-        icon: '🎧',
-        title: 'Atenuação Universal de Música (Audio Ducking)',
-        desc: 'O Yuma, Spotify, Podcasts ou YouTube baixam o volume suavemente durante o anúncio da glicemia e voltam logo aos 100%.'
-      },
-      {
-        icon: '📲',
-        title: 'Atualizações Diretas Sem Desinstalar',
-        desc: 'Atualiza diretamente por cima com 1 só toque.'
+        title: 'Disparo Fiável e Instantâneo',
+        desc: 'Testar Som e Falar Agora tocam sem qualquer atraso com áudio ducking na música.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.4 • Recent Update',
+    sub: 'Version 1.5 • Recent Update',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
+      {
+        icon: '⏱️',
+        title: 'Dynamic Countdown & Interval',
+        desc: 'The display and button immediately reflect your chosen interval (1, 2, 3, or 5 min) even before starting a workout.'
+      },
+      {
+        icon: '🎧',
+        title: 'Live Bluetooth Earbuds Detection',
+        desc: 'The top badge reflects real-time connection status and shows your Bluetooth earbud model name.'
+      },
       {
         icon: '🛑',
         title: 'Complete Workout Stop',
@@ -955,18 +996,8 @@ const CHANGELOG_DATA = {
       },
       {
         icon: '⚡',
-        title: 'Instant Audio Test & Speak Now',
-        desc: 'Reliable, instant voice triggers with local on-device caching and direct audio routes.'
-      },
-      {
-        icon: '🎧',
-        title: 'Universal Audio Ducking',
-        desc: 'Music lowers smoothly during glucose announcements and restores to 100%.'
-      },
-      {
-        icon: '📲',
-        title: 'Direct Updates Without Uninstalling',
-        desc: 'Updates install directly on top in 1 click.'
+        title: 'Instant Voice & Music Ducking',
+        desc: 'Instant voice triggers with local caching and automatic ducking of Spotify, Yuma, and background music.'
       }
     ]
   }
@@ -1076,6 +1107,106 @@ function showUpdateBanner(data) {
   }
 }
 
+
+// Live Audio Output Status System (Bluetooth earbuds vs Phone speaker)
+let currentAudioStatus = null;
+
+function updateBluetoothStatusBadge(status) {
+  currentAudioStatus = status;
+  const badge = document.getElementById('audioStatusBadge');
+  const icon = document.getElementById('audioStatusIcon');
+  const label = document.getElementById('labelBluetooth');
+  if (!badge || !label) return;
+
+  const lang = config.language || 'pt-PT';
+  const isPt = lang === 'pt-PT';
+
+  if (!status || (!status.isBluetooth && !status.isWired)) {
+    // Built-in Speaker / No headphones
+    badge.className = 'flex items-center gap-1.5 text-xs font-medium bg-slate-900/80 border border-slate-800 text-slate-400 px-3 py-1 rounded-full transition-all cursor-pointer select-none';
+    label.textContent = isPt ? 'Altifalante (Sem Fones)' : 'Speaker (No Earbuds)';
+    badge.title = isPt ? 'Altifalante ativo (Sem auriculares detetados)' : 'Speaker active (No earbuds detected)';
+    if (icon) {
+      icon.innerHTML = `<svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77zm-2.5 4.77l-4.5 4.5H3v3h4l4.5 4.5V8zM16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+      </svg>`;
+    }
+  } else if (status.isBluetooth) {
+    // Bluetooth Earbuds Connected
+    badge.className = 'flex items-center gap-1.5 text-xs font-semibold bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 px-3 py-1 rounded-full shadow-sm shadow-emerald-950/50 transition-all cursor-pointer select-none';
+    const rawName = (status.deviceName && status.deviceName.trim()) ? status.deviceName.trim() : '';
+    const name = rawName || (isPt ? 'Fones Bluetooth' : 'Bluetooth Earbuds');
+    label.textContent = name;
+    badge.title = isPt ? `Auriculares Bluetooth ligados: ${name}` : `Bluetooth earbuds connected: ${name}`;
+    if (icon) {
+      icon.innerHTML = `<span class="relative flex h-2 w-2 mr-0.5">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+      </span>
+      <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14.88 16.29L13 18.17V13.83l1.88 2.46M13 10.17V5.83l1.88 2.46L13 10.17m4.71-3.88c-.39-.39-1.02-.39-1.41 0L13.41 9.17l-.41-.42V3a1 1 0 00-1.71-.71L7.29 6.29a1.003 1.003 0 000 1.41l4 4-4 4a1.003 1.003 0 000 1.41l4 4c.39.39 1.02.39 1.41 0l4-4a.996.996 0 000-1.41L13.41 12l3.29-3.29c.4-.4.4-1.03.01-1.42z"/>
+      </svg>`;
+    }
+  } else if (status.isWired) {
+    // Wired headphones
+    badge.className = 'flex items-center gap-1.5 text-xs font-semibold bg-sky-950/60 border border-sky-500/50 text-sky-300 px-3 py-1 rounded-full shadow-sm transition-all cursor-pointer select-none';
+    label.textContent = isPt ? 'Fones Ligados' : 'Wired Earbuds';
+    badge.title = isPt ? 'Auscultadores com fio ligados' : 'Wired earbuds connected';
+    if (icon) {
+      icon.innerHTML = `<svg class="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3a9 9 0 00-9 9v7c0 1.1.9 2 2 2h3a1 1 0 001-1v-5a1 1 0 00-1-1H5v-2a7 7 0 1114 0v2h-3a1 1 0 00-1 1v5a1 1 0 001 1h3c1.1 0 2-.9 2-2v-7a9 9 0 00-9-9z"/>
+      </svg>`;
+    }
+  }
+}
+
+function showAudioStatusToast() {
+  const lang = config.language || 'pt-PT';
+  const isPt = lang === 'pt-PT';
+  let msg = '';
+  if (currentAudioStatus && currentAudioStatus.isBluetooth) {
+    const name = currentAudioStatus.deviceName ? currentAudioStatus.deviceName : (isPt ? 'Auriculares Bluetooth' : 'Bluetooth Earbuds');
+    msg = isPt
+      ? `🎧 Ligado a: ${name}. O áudio e avisos de glicémia serão ouvidos nos fones com música atenuada.`
+      : `🎧 Connected to: ${name}. Glucose announcements play directly in earbuds with music ducking.`;
+  } else if (currentAudioStatus && currentAudioStatus.isWired) {
+    msg = isPt
+      ? '🎧 Fones com fio ligados. O áudio será reproduzido nos auscultadores.'
+      : '🎧 Wired earbuds connected. Audio will play through headphones.';
+  } else {
+    msg = isPt
+      ? '📱 Altifalante ativo. Nenhum fone detetado. Liga os teus auscultadores Bluetooth para correr.'
+      : '📱 Phone speaker active. No Bluetooth earbuds detected. Connect Bluetooth earbuds for running.';
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 max-w-[90vw] bg-slate-900/95 text-slate-100 border border-slate-700 px-4 py-2.5 rounded-2xl text-xs font-medium shadow-2xl z-50 transition-opacity duration-300 backdrop-blur leading-relaxed text-center';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 400);
+  }, 4000);
+}
+
+function checkInitialAudioOutput() {
+  if (window.AndroidVoice && typeof window.AndroidVoice.getAudioOutputStatus === 'function') {
+    try {
+      const raw = window.AndroidVoice.getAudioOutputStatus();
+      if (raw) {
+        const info = JSON.parse(raw);
+        updateBluetoothStatusBadge(info);
+        return;
+      }
+    } catch (e) {
+      console.warn('getAudioOutputStatus error:', e);
+    }
+  }
+  updateBluetoothStatusBadge({ connected: false, isBluetooth: false, isWired: false, deviceName: '' });
+}
+
+window._onAudioOutputUpdate = updateBluetoothStatusBadge;
+
 window.addEventListener('DOMContentLoaded', () => {
   // Show brief Live OTA toast notification on startup
   function showLiveToast() {
@@ -1091,8 +1222,11 @@ window.addEventListener('DOMContentLoaded', () => {
   setTimeout(showLiveToast, 800);
 
   setTimeout(checkAppVersion, 2500);
-  loadConfig();
-  applyLanguageUI();
+      loadConfig();
+    applyLanguageUI();
+    updateCountdownDisplay();
+    checkInitialAudioOutput();
+    document.getElementById('audioStatusBadge')?.addEventListener('click', showAudioStatusToast);
 
   const nsInput = document.getElementById('cfgNsUrl');
   const intervalSelect = document.getElementById('cfgInterval');
@@ -1134,6 +1268,7 @@ window.addEventListener('DOMContentLoaded', () => {
     config.targetMax = parseInt(document.getElementById('cfgTargetMax').value, 10) || 170;
     saveConfig();
     applyLanguageUI();
+    updateCountdownDisplay();
     settingsModal.classList.add('hidden');
 
     if (isRunning) {

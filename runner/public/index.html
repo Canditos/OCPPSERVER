@@ -78,12 +78,14 @@
         <span id="workoutStatusText">Workout Stopped</span>
       </div>
 
-      <!-- Bluetooth status badge -->
-      <div class="flex items-center gap-1.5 text-xs text-sky-400/90 font-medium bg-sky-950/40 border border-sky-800/40 px-3 py-1 rounded-full">
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M14.88 16.29L13 18.17V13.83l1.88 2.46M13 10.17V5.83l1.88 2.46L13 10.17m4.71-3.88c-.39-.39-1.02-.39-1.41 0L13.41 9.17l-.41-.42V3a1 1 0 00-1.71-.71L7.29 6.29a1.003 1.003 0 000 1.41l4 4-4 4a1.003 1.003 0 000 1.41l4 4c.39.39 1.02.39 1.41 0l4-4a.996.996 0 000-1.41L13.41 12l3.29-3.29c.4-.4.4-1.03.01-1.42z"/>
-        </svg>
-        <span id="labelBluetooth">Bluetooth Audio</span>
+      <!-- Bluetooth / Audio output status badge -->
+      <div id="audioStatusBadge" class="flex items-center gap-1.5 text-xs text-slate-400 font-medium bg-slate-900/80 border border-slate-800 px-3 py-1 rounded-full transition-all cursor-pointer select-none" title="Estado da saída de áudio">
+        <span id="audioStatusIcon" class="flex items-center">
+          <svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77zm-2.5 4.77l-4.5 4.5H3v3h4l4.5 4.5V8zM16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+          </svg>
+        </span>
+        <span id="labelBluetooth" class="truncate max-w-[130px]">Altifalante (Sem Fones)</span>
       </div>
     </div>
 
@@ -162,7 +164,7 @@
         <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
           <path d="M8 5v14l11-7z" />
         </svg>
-        <span id="startBtnText">Start Workout (Voice every 2 min)</span>
+        <span id="startBtnText">Iniciar Treino (Voz a cada 2 min)</span>
       </button>
 
       <button id="btnStopWorkout" class="hidden w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 active:scale-[0.98] text-white font-extrabold text-lg shadow-lg shadow-rose-600/30 flex items-center justify-center gap-3 transition">
@@ -197,7 +199,7 @@
     <div id="footerTip" class="leading-relaxed">💡 Durante a corrida podes usar o botão dos auriculares para ouvir a glicémia a qualquer momento.</div>
     <div class="mt-2 flex items-center justify-center gap-2">
       <button id="btnFooterWhatsNew" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-800 hover:border-sky-500/40 shadow-sm transition active:scale-95 cursor-pointer">
-        <span>✨ O que há de novo (v1.4)</span>
+        <span>✨ O que há de novo (v1.5)</span>
       </button>
       <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-950/90 text-emerald-400 border border-emerald-500/40 shadow-sm">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -238,10 +240,10 @@
         <div>
           <label id="labelInterval" class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">Voice Announcement Interval</label>
           <select id="cfgInterval" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
-            <option value="1">Every 1 minute</option>
-            <option value="2" selected>Every 2 minutes (Recommended)</option>
-            <option value="3">Every 3 minutes</option>
-            <option value="5">Every 5 minutes</option>
+            <option value="1">A cada 1 minuto</option>
+            <option value="2" selected>A cada 2 minutos (Recomendado)</option>
+            <option value="3">A cada 3 minutos</option>
+            <option value="5">A cada 5 minutos</option>
           </select>
         </div>
 
@@ -260,7 +262,7 @@
         <!-- Changelog link inside Settings -->
         <div class="pt-2">
           <button id="btnSettingsWhatsNew" type="button" class="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-sky-400 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-700/50 transition">
-            <span>✨ Ver o que há de novo na v1.4</span>
+            <span>✨ Ver o que há de novo na v1.5</span>
           </button>
         </div>
 
@@ -287,7 +289,7 @@
           </div>
           <div>
             <h2 id="whatsNewTitle" class="text-base font-extrabold text-white">O que há de novo</h2>
-            <p id="whatsNewSub" class="text-[11px] text-sky-400 font-mono">Versão 1.4 • Atualização Recente</p>
+            <p id="whatsNewSub" class="text-[11px] text-sky-400 font-mono">Versão 1.5 • Atualização Recente</p>
           </div>
         </div>
         <button id="btnCloseWhatsNew" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition">
@@ -309,6 +311,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=17"></script>
+  <script src="/app.js?v=20"></script>
 </body>
 </html>

@@ -1,8 +1,12 @@
 package com.gatoescondido.runner;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.AudioDeviceCallback;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -21,6 +25,7 @@ import java.lang.ref.WeakReference;
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "NS_MainActivity";
     private static WeakReference<MainActivity> currentActivityRef = null;
+    private AudioDeviceCallback audioDeviceCallback = null;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -28,7 +33,8 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         currentActivityRef = new WeakReference<>(this);
 
-        requestNotificationPermission();
+        requestPermissions();
+        initAudioDeviceMonitoring();
 
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
@@ -53,14 +59,148 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         currentActivityRef = new WeakReference<>(this);
+        broadcastAudioOutputStatus();
     }
 
-    private void requestNotificationPermission() {
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        try {
+            if (audioDeviceCallback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                if (am != null) {
+                    am.unregisterAudioDeviceCallback(audioDeviceCallback);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error unregistering AudioDeviceCallback", e);
+        }
+    }
+
+    private void requestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // Android 13+
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 102);
+            }
+        }
+    }
+
+    private void initAudioDeviceMonitoring() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                if (am != null) {
+                    audioDeviceCallback = new AudioDeviceCallback() {
+                        @Override
+                        public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
+                            Log.d(TAG, "Audio devices added, notifying webview");
+                            broadcastAudioOutputStatus();
+                        }
+
+                        @Override
+                        public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
+                            Log.d(TAG, "Audio devices removed, notifying webview");
+                            broadcastAudioOutputStatus();
+                        }
+                    };
+                    am.registerAudioDeviceCallback(audioDeviceCallback, null);
+                    Log.d(TAG, "Registered AudioDeviceCallback");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to register AudioDeviceCallback", e);
+            }
+        }
+    }
+
+    public JSONObject getAudioOutputStatusJson() {
+        JSONObject result = new JSONObject();
+        boolean isBluetooth = false;
+        boolean isWired = false;
+        String deviceName = "";
+
+        try {
+            AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    AudioDeviceInfo[] devices = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+                    if (devices != null) {
+                        for (AudioDeviceInfo dev : devices) {
+                            int type = dev.getType();
+                            boolean bt = (type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || 
+                                          type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                if (type == AudioDeviceInfo.TYPE_BLE_HEADSET || 
+                                    type == AudioDeviceInfo.TYPE_BLE_SPEAKER) {
+                                    bt = true;
+                                }
+                            }
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                if (type == AudioDeviceInfo.TYPE_BLE_BROADCAST) {
+                                    bt = true;
+                                }
+                            }
+
+                            if (bt) {
+                                isBluetooth = true;
+                                try {
+                                    CharSequence name = dev.getProductName();
+                                    if (name != null && name.length() > 0 && !name.toString().equalsIgnoreCase("speaker")) {
+                                        deviceName = name.toString();
+                                    }
+                                } catch (Exception ignored) {}
+                                break; // Bluetooth takes priority
+                            }
+
+                            if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                                type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                                type == AudioDeviceInfo.TYPE_USB_HEADSET) {
+                                isWired = true;
+                                try {
+                                    CharSequence name = dev.getProductName();
+                                    if (name != null && name.length() > 0) {
+                                        deviceName = name.toString();
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+                        }
+                    }
+                } else {
+                    if (am.isBluetoothA2dpOn() || am.isBluetoothScoOn()) {
+                        isBluetooth = true;
+                    } else if (am.isWiredHeadsetOn()) {
+                        isWired = true;
+                    }
+                }
+            }
+
+            result.put("connected", isBluetooth || isWired);
+            result.put("isBluetooth", isBluetooth);
+            result.put("isWired", isWired);
+            result.put("deviceName", deviceName);
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking audio output status", e);
+        }
+        return result;
+    }
+
+    public void broadcastAudioOutputStatus() {
+        try {
+            final JSONObject status = getAudioOutputStatusJson();
+            runOnUiThread(() -> {
+                if (getBridge() != null && getBridge().getWebView() != null) {
+                    String js = "if(window._onAudioOutputUpdate) { window._onAudioOutputUpdate(" + status.toString() + "); }";
+                    getBridge().getWebView().evaluateJavascript(js, null);
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "broadcastAudioOutputStatus error", e);
         }
     }
 
@@ -148,6 +288,11 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public boolean isWorkoutRunning() {
             return RunnerService.isRunning();
+        }
+
+        @JavascriptInterface
+        public String getAudioOutputStatus() {
+            return getAudioOutputStatusJson().toString();
         }
 
         @JavascriptInterface
