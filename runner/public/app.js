@@ -1457,8 +1457,8 @@ async function checkAppVersion() {
     const data = await res.json();
     if (!data || !data.versionCode) return;
 
-    // Check if user already dismissed or installed this version in this session
-    const dismissed = sessionStorage.getItem('runner_dismissed_update_version');
+    // Check if user already dismissed or installed this version in localStorage
+    const dismissed = localStorage.getItem('runner_dismissed_update_version');
     if (dismissed && parseInt(dismissed, 10) >= data.versionCode) {
       const existing = document.getElementById('updateBanner');
       if (existing) existing.remove();
@@ -1486,6 +1486,13 @@ async function checkAppVersion() {
 
     // If native version is equal to or greater than server, WE ARE UP TO DATE!
     if (currentVersion && currentVersion >= data.versionCode) {
+      const existing = document.getElementById('updateBanner');
+      if (existing) existing.remove();
+      return;
+    }
+
+    // If localStorage already records this version was installed, don't nag
+    if (stored && parseInt(stored, 10) >= data.versionCode) {
       const existing = document.getElementById('updateBanner');
       if (existing) existing.remove();
       return;
@@ -1536,7 +1543,7 @@ function showUpdateBanner(data) {
   const btnDismiss = banner.querySelector('#btnDismissUpdate');
   if (btnDismiss) {
     btnDismiss.addEventListener('click', () => {
-      sessionStorage.setItem('runner_dismissed_update_version', String(data.versionCode));
+      localStorage.setItem('runner_dismissed_update_version', String(data.versionCode));
       banner.remove();
     });
   }
@@ -1546,7 +1553,7 @@ function showUpdateBanner(data) {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       localStorage.setItem('runner_installed_version_code', String(data.versionCode));
-      sessionStorage.setItem('runner_dismissed_update_version', String(data.versionCode));
+      localStorage.setItem('runner_dismissed_update_version', String(data.versionCode));
       banner.remove();
 
       if (window.AndroidVoice && typeof window.AndroidVoice.openDownloadUrl === 'function') {
@@ -1659,11 +1666,28 @@ function checkInitialAudioOutput() {
 window._onAudioOutputUpdate = updateBluetoothStatusBadge;
 
 window.addEventListener('DOMContentLoaded', () => {
+  function updateNativeVersionDisplay() {
+    const nativeEl = document.getElementById('settingsNativeVersion');
+    if (!nativeEl) return;
+    if (window.AndroidVoice && typeof window.AndroidVoice.getNativeVersionName === 'function') {
+      try {
+        const vName = window.AndroidVoice.getNativeVersionName();
+        nativeEl.textContent = `Android APK v${vName}`;
+      } catch (e) {
+        nativeEl.textContent = 'Android APK (Nativo)';
+      }
+    } else if (isRunningNative()) {
+      nativeEl.textContent = 'Android APK (Nativo)';
+    } else {
+      nativeEl.textContent = 'Navegador Web';
+    }
+  }
+
   // Show brief Live OTA toast notification on startup
   function showLiveToast() {
     const toast = document.createElement('div');
     toast.className = 'fixed bottom-16 left-1/2 -translate-x-1/2 bg-slate-900/95 text-emerald-400 border border-emerald-500/40 px-3.5 py-1.5 rounded-full text-xs font-mono shadow-2xl flex items-center gap-2 z-50 transition-opacity duration-500 backdrop-blur';
-    toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>● Ligado ao Servidor (Live OTA v1.4)</span>';
+    toast.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>● Ligado ao Servidor (Live OTA v${CHANGELOG_DATA.versionName})</span>`;
     document.body.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
@@ -1676,6 +1700,7 @@ window.addEventListener('DOMContentLoaded', () => {
       loadConfig();
     applyLanguageUI();
     updateCountdownDisplay();
+    updateNativeVersionDisplay();
     checkInitialAudioOutput();
     document.getElementById('audioStatusBadge')?.addEventListener('click', showAudioStatusToast);
     // Profile buttons
@@ -1742,6 +1767,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Settings Modal
   const settingsModal = document.getElementById('settingsModal');
   document.getElementById('btnOpenSettings')?.addEventListener('click', () => {
+    updateNativeVersionDisplay();
     settingsModal.classList.remove('hidden');
   });
   document.getElementById('btnCloseSettings')?.addEventListener('click', () => {

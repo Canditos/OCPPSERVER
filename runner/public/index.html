@@ -227,11 +227,11 @@
     <div id="footerTip" class="leading-relaxed">💡 Durante a corrida podes usar o botão dos auriculares para ouvir a glicémia a qualquer momento.</div>
     <div class="mt-2 flex items-center justify-center gap-2">
       <button id="btnFooterWhatsNew" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-800 hover:border-sky-500/40 shadow-sm transition active:scale-95 cursor-pointer">
-        <span>✨ O que há de novo (v1.5)</span>
+        <span>✨ O que há de novo (v1.6)</span>
       </button>
       <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-950/90 text-emerald-400 border border-emerald-500/40 shadow-sm">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>Live OTA</span>
+        <span>Live OTA v1.6</span>
       </span>
     </div>
   </footer>
@@ -316,9 +316,21 @@
 
         <!-- Changelog link inside Settings -->
         <div class="pt-2">
-          <button id="btnSettingsWhatsNew" type="button" class="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-sky-400 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-700/50 transition">
-            <span>✨ Ver o que há de novo na v1.5</span>
+          <button id="btnSettingsWhatsNew" type="button" class="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-sky-400 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-700/50 transition cursor-pointer">
+            <span>✨ Ver o que há de novo na v1.6</span>
           </button>
+        </div>
+
+        <!-- App Version Diagnostic -->
+        <div class="pt-2 border-t border-slate-800/80 text-[11px] font-mono text-slate-400 space-y-1">
+          <div class="flex items-center justify-between">
+            <span>Live OTA:</span>
+            <span class="text-emerald-400 font-bold">v1.6 (Ativo)</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Wrapper Nativo:</span>
+            <span id="settingsNativeVersion" class="text-slate-300">Android APK v1.6</span>
+          </div>
         </div>
 
         <!-- Save Button -->
@@ -344,7 +356,7 @@
           </div>
           <div>
             <h2 id="whatsNewTitle" class="text-base font-extrabold text-white">O que há de novo</h2>
-            <p id="whatsNewSub" class="text-[11px] text-sky-400 font-mono">Versão 1.5 • Atualização Recente</p>
+            <p id="whatsNewSub" class="text-[11px] text-sky-400 font-mono">Versão 1.6 • Atualização Recente</p>
           </div>
         </div>
         <button id="btnCloseWhatsNew" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition">
@@ -446,6 +458,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=23"></script>
+  <script src="/app.js?v=24"></script>
 </body>
 </html>
