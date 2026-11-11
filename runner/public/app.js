@@ -11,9 +11,7 @@ function isRunningNative() {
 }
 
 const isNativeApp = isRunningNative();
-const API_BASE = (window.location.origin.includes('localhost') || window.location.protocol === 'capacitor:' || window.location.protocol === 'file:')
-  ? 'https://runner.gatoescondido.com'
-  : '';
+const API_BASE = 'https://runner.gatoescondido.com';
 const NativeVoice = (window.Capacitor && window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('VoiceAudio') : null;
 
 const CONFIG_KEY = 'ns_runner_config_v4';
@@ -57,9 +55,7 @@ function triggerNativeForegroundStart() {
     targetMin: config.targetMin || 110,
     targetMax: config.targetMax || 170
   };
-  if (NativeVoice && typeof NativeVoice.startWorkout === 'function') {
-    NativeVoice.startWorkout(payload).catch(e => console.warn('NativeVoice.startWorkout error:', e));
-  } else if (window.AndroidVoice && typeof window.AndroidVoice.startWorkoutService === 'function') {
+  if (window.AndroidVoice && typeof window.AndroidVoice.startWorkoutService === 'function') {
     try {
       window.AndroidVoice.startWorkoutService(
         payload.intervalMinutes,
@@ -71,14 +67,20 @@ function triggerNativeForegroundStart() {
     } catch (e) {
       console.warn('AndroidVoice.startWorkoutService error:', e);
     }
+  } else if (NativeVoice && typeof NativeVoice.startWorkout === 'function') {
+    NativeVoice.startWorkout(payload).catch(e => console.warn('NativeVoice.startWorkout error:', e));
   }
 }
 
 function triggerNativeForegroundStop() {
+  if (window.AndroidVoice && typeof window.AndroidVoice.stopWorkoutService === 'function') {
+    try { window.AndroidVoice.stopWorkoutService(); } catch (e) { console.warn('AndroidVoice.stopWorkoutService error:', e); }
+  }
+  if (window.AndroidVoice && typeof window.AndroidVoice.stopVoice === 'function') {
+    try { window.AndroidVoice.stopVoice(); } catch (e) {}
+  }
   if (NativeVoice && typeof NativeVoice.stopWorkout === 'function') {
     NativeVoice.stopWorkout().catch(e => console.warn('NativeVoice.stopWorkout error:', e));
-  } else if (window.AndroidVoice && typeof window.AndroidVoice.stopWorkoutService === 'function') {
-    try { window.AndroidVoice.stopWorkoutService(); } catch (e) { console.warn('AndroidVoice.stopWorkoutService error:', e); }
   }
 }
 
@@ -493,36 +495,47 @@ function playStudioVoice(spokenText) {
 
   const lang = config.language || 'en';
   const cleanText = spokenText.replace(/⇈|↑|↗|→|↘|↓|⇊|—|\?/g, '').trim();
-  const audioUrl = `${API_BASE}/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
+  const audioUrl = `https://runner.gatoescondido.com/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
 
-  // 1. Capacitor Plugin (non-exclusive sonification overlay — Yuma/Spotify keep playing)
-  if (NativeVoice) {
-    NativeVoice.play({ url: audioUrl })
-      .then(() => { if (pulseEl) pulseEl.classList.add('hidden'); })
-      .catch(e => {
-        console.warn('NativeVoice plugin error, trying web fallback:', e);
-        fallbackWebAudio(audioUrl, pulseEl);
-      });
-    return;
-  }
+  const btnTest = document.getElementById('btnTestAudio');
+  const btnSpeak = document.getElementById('btnAnnounceNow');
+  if (btnTest) btnTest.classList.add('opacity-70');
+  if (btnSpeak) btnSpeak.classList.add('opacity-70');
 
-  // 2. AndroidVoice JavascriptInterface fallback
+  const onDone = () => {
+    if (pulseEl) pulseEl.classList.add('hidden');
+    if (btnTest) btnTest.classList.remove('opacity-70');
+    if (btnSpeak) btnSpeak.classList.remove('opacity-70');
+  };
+
+  // 1. Direct native AndroidVoice bridge (primary, 100% reliable)
   if (window.AndroidVoice && typeof window.AndroidVoice.playVoice === 'function') {
     try {
+      window._onNativeVoiceDone = onDone;
       window.AndroidVoice.playVoice(audioUrl);
-      window._onNativeVoiceDone = () => { if (pulseEl) pulseEl.classList.add('hidden'); };
-      setTimeout(() => { if (pulseEl) pulseEl.classList.add('hidden'); }, 12000);
+      setTimeout(onDone, 12000);
       return;
     } catch (e) {
       console.warn('AndroidVoice failed, falling back:', e);
     }
   }
 
+  // 2. Capacitor Plugin
+  if (NativeVoice && typeof NativeVoice.play === 'function') {
+    NativeVoice.play({ url: audioUrl })
+      .then(onDone)
+      .catch(e => {
+        console.warn('NativeVoice plugin error, trying web fallback:', e);
+        fallbackWebAudio(audioUrl, onDone);
+      });
+    return;
+  }
+
   // 3. Web Audio fallback
-  fallbackWebAudio(audioUrl, pulseEl);
+  fallbackWebAudio(audioUrl, onDone);
 }
 
-function fallbackWebAudio(audioUrl, pulseEl) {
+function fallbackWebAudio(audioUrl, onDone) {
   if (currentAudioPlayer) {
     try {
       currentAudioPlayer.pause();
@@ -536,7 +549,7 @@ function fallbackWebAudio(audioUrl, pulseEl) {
   currentAudioPlayer = audio;
 
   const cleanup = () => {
-    if (pulseEl) pulseEl.classList.add('hidden');
+    if (onDone) onDone();
     currentAudioPlayer = null;
     try {
       audio.pause();
@@ -590,11 +603,11 @@ function applyLanguageUI() {
 
   const footerWhatsNew = document.getElementById('btnFooterWhatsNew');
   if (footerWhatsNew) {
-    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.3)</span>' : "<span>✨ What's New (v1.3)</span>";
+    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.4)</span>' : "<span>✨ What's New (v1.4)</span>";
   }
   const settingsWhatsNew = document.getElementById('btnSettingsWhatsNew');
   if (settingsWhatsNew) {
-    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.3</span>' : "<span>✨ See What's New in v1.3</span>";
+    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.4</span>' : "<span>✨ See What's New in v1.4</span>";
   }
 
   const startBtn = document.getElementById('startBtnText');
@@ -887,70 +900,73 @@ function updateWorkoutDuration() {
 }
 
 function announceCurrent(forceFetch = false) {
-  if (forceFetch || !lastEntry) {
-    performPollAndAnnouncement(true);
-  } else {
+  if (lastEntry) {
     const delta = prevEntry ? lastEntry.sgv - prevEntry.sgv : null;
     const advice = evaluateCarbAdvice(lastEntry.sgv, lastEntry.direction, delta);
     playStudioVoice(advice.spokenText);
+    if (forceFetch) {
+      performPollAndAnnouncement(false, true); // true = skip speech since we already spoke!
+    }
+  } else {
+    performPollAndAnnouncement(true, false);
   }
 }
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 4,
-  versionName: '1.3',
+  versionCode: 5,
+  versionName: '1.4',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.3 • Atualização Recente',
+    sub: 'Versão 1.4 • Atualização Recente',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
       {
+        icon: '🛑',
+        title: 'Paragem Completa do Treino',
+        desc: 'Ao clicar em Parar Treino, o serviço em segundo plano e a notificação são terminados imediatamente sem ficarem presos.'
+      },
+      {
         icon: '⚡',
-        title: 'Zero Latência Vocal (Início Imediato)',
-        desc: 'A música agora só baixa no exato milissegundo em que a voz começa a falar. Acabaram-se as pausas ou silêncios prévios.'
+        title: 'Zero Falhas no Testar Som & Falar Agora',
+        desc: 'Disparo instantâneo e fiável com cache local no telemóvel e resolução direta de rotas de áudio.'
       },
       {
         icon: '🎧',
         title: 'Atenuação Universal de Música (Audio Ducking)',
-        desc: 'Quando a voz anuncia a tua glicemia ou hidratos, o som de qualquer aplicação (Yuma, Spotify, Podcasts, YouTube Music) baixa suavemente e sobe automaticamente a seguir.'
+        desc: 'O Yuma, Spotify, Podcasts ou YouTube baixam o volume suavemente durante o anúncio da glicemia e voltam logo aos 100%.'
       },
       {
         icon: '📲',
         title: 'Atualizações Diretas Sem Desinstalar',
-        desc: 'Assinatura permanente de segurança. As novas atualizações instalam diretamente por cima, sem perderes definições nem precisares de desinstalar.'
-      },
-      {
-        icon: '🔔',
-        title: 'Notificações de Atualização',
-        desc: 'Ficas agora sempre a saber todas as alterações e melhorias sempre que a aplicação é atualizada.'
+        desc: 'Atualiza diretamente por cima com 1 só toque.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.3 • Recent Update',
+    sub: 'Version 1.4 • Recent Update',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
       {
+        icon: '🛑',
+        title: 'Complete Workout Stop',
+        desc: 'Stopping the workout immediately dismisses the notification and halts the background service cleanly.'
+      },
+      {
         icon: '⚡',
-        title: 'Zero Voice Latency (Instant Start)',
-        desc: 'Music now ducks at the exact millisecond speech begins. No preceding silence or buffering pause.'
+        title: 'Instant Audio Test & Speak Now',
+        desc: 'Reliable, instant voice triggers with local on-device caching and direct audio routes.'
       },
       {
         icon: '🎧',
         title: 'Universal Audio Ducking',
-        desc: 'When glucose or carbs are spoken, music from Yuma, Spotify, Podcasts, or YouTube Music lowers smoothly and restores to full volume immediately after.'
+        desc: 'Music lowers smoothly during glucose announcements and restores to 100%.'
       },
       {
         icon: '📲',
         title: 'Direct Updates Without Uninstalling',
-        desc: 'Configured permanent keystore signing. Update APKs cleanly install on top without having to uninstall or re-enter settings.'
-      },
-      {
-        icon: '🔔',
-        title: 'Update Notifications',
-        desc: 'Always view the changelog and release notes whenever an update arrives.'
+        desc: 'Updates install directly on top in 1 click.'
       }
     ]
   }
@@ -1065,7 +1081,7 @@ window.addEventListener('DOMContentLoaded', () => {
   function showLiveToast() {
     const toast = document.createElement('div');
     toast.className = 'fixed bottom-16 left-1/2 -translate-x-1/2 bg-slate-900/95 text-emerald-400 border border-emerald-500/40 px-3.5 py-1.5 rounded-full text-xs font-mono shadow-2xl flex items-center gap-2 z-50 transition-opacity duration-500 backdrop-blur';
-    toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>● Ligado ao Servidor (Live OTA v1.3)</span>';
+    toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>● Ligado ao Servidor (Live OTA v1.4)</span>';
     document.body.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';

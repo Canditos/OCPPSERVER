@@ -56,6 +56,16 @@ public class RunnerService extends Service {
         return isServiceRunning;
     }
 
+    public static void stopServiceDirect(Context context) {
+        try {
+            Intent serviceIntent = new Intent(context, RunnerService.class);
+            serviceIntent.setAction(ACTION_STOP);
+            context.stopService(serviceIntent);
+        } catch (Exception e) {
+            Log.e(TAG, "stopServiceDirect error", e);
+        }
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -253,8 +263,20 @@ public class RunnerService extends Service {
         }
 
         try {
-            stopForeground(true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                stopForeground(true);
+            }
         } catch (Exception ignored) {}
+
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.cancel(NOTIFICATION_ID);
+            }
+        } catch (Exception ignored) {}
+
         stopSelf();
 
         if (notifyWeb) {

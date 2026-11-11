@@ -139,9 +139,7 @@ public class MainActivity extends BridgeActivity {
         public void stopWorkoutService() {
             Log.d(TAG, "stopWorkoutService called via JavascriptInterface");
             try {
-                Intent serviceIntent = new Intent(MainActivity.this, RunnerService.class);
-                serviceIntent.setAction(RunnerService.ACTION_STOP);
-                startService(serviceIntent);
+                RunnerService.stopServiceDirect(MainActivity.this);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to stop RunnerService", e);
             }

@@ -51,9 +51,7 @@ public class VoiceAudioPlugin extends Plugin {
     public void stopWorkout(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                Intent serviceIntent = new Intent(getContext(), RunnerService.class);
-                serviceIntent.setAction(RunnerService.ACTION_STOP);
-                getContext().startService(serviceIntent);
+                RunnerService.stopServiceDirect(getContext());
                 Log.d(TAG, "RunnerService stopped via VoiceAudioPlugin");
                 JSObject ret = new JSObject();
                 ret.put("stopped", true);

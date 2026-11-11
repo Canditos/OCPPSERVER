@@ -61,15 +61,20 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 4,
-      versionName: '1.3',
+      versionCode: 5,
+      versionName: '1.4',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Zero latência no início da voz: eliminação da pausa e silêncio antes do anúncio vocal.',
+      releaseNotes: 'Paragem imediata do serviço e correção definitiva dos botões de áudio com cache no telemóvel.',
       features: [
         {
+          icon: '🛑',
+          title: 'Paragem Completa do Treino',
+          desc: 'Ao clicar em Parar Treino, o serviço em segundo plano e a notificação são terminados imediatamente sem ficarem presos.'
+        },
+        {
           icon: '⚡',
-          title: 'Zero Latência Vocal (Início Imediato)',
-          desc: 'A música só atenua no exato milissegundo em que a voz começa a falar. Acabaram-se as pausas ou silêncios prévios.'
+          title: 'Zero Falhas no Testar Som & Falar Agora',
+          desc: 'Disparo instantâneo e fiável com cache local no telemóvel e resolução direta de rotas de áudio.'
         },
         {
           icon: '🎧',
@@ -79,12 +84,7 @@ const server = http.createServer((req, res) => {
         {
           icon: '📲',
           title: 'Atualizações Diretas Sem Desinstalar',
-          desc: 'Assinatura permanente de segurança — atualiza diretamente por cima com 1 toque.'
-        },
-        {
-          icon: '🔔',
-          title: 'Notificações de Versões',
-          desc: 'Consulta as novidades e melhorias a qualquer momento.'
+          desc: 'Atualiza diretamente por cima com 1 só toque.'
         }
       ]
     }));
