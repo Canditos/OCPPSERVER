@@ -522,6 +522,7 @@ public class MainActivity extends BridgeActivity {
             Log.d(TAG, "stopWorkoutService called via JavascriptInterface");
             try {
                 RunnerService.stopServiceDirect(MainActivity.this);
+                runOnUiThread(AudioEngine::cleanup);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to stop RunnerService", e);
             }
@@ -553,7 +554,7 @@ public class MainActivity extends BridgeActivity {
             try {
                 return BuildConfig.VERSION_CODE;
             } catch (Exception e) {
-                return 7;
+                return 8;
             }
         }
 

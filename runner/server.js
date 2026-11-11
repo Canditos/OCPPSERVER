@@ -61,10 +61,10 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 7,
-      versionName: '1.6',
+      versionCode: 8,
+      versionName: '1.7',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Comandos de voz ("Tomei gel"), alertas preditivos de hipo, botões nos fones e resumo de treino.',
+      releaseNotes: 'Paragem imediata do treino e serviço de fundo, deteção universal de fones Bluetooth/VoIP Lenovo.',
       features: [
         {
           icon: '🎙️',

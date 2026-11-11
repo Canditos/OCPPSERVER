@@ -1270,17 +1270,29 @@ async function startWorkout() {
 }
 
 function stopWorkout(fromNative = false) {
+  console.log('[Workout] Stopping workout... fromNative=' + fromNative);
   isRunning = false;
-  if (workoutIntervalId) clearInterval(workoutIntervalId);
-  if (timerId) clearInterval(timerId);
-  if (countdownTimerId) clearInterval(countdownTimerId);
-
-  if (!fromNative) {
-    triggerNativeForegroundStop();
+  if (workoutIntervalId) {
+    clearInterval(workoutIntervalId);
+    workoutIntervalId = null;
+  }
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = null;
+  }
+  if (countdownTimerId) {
+    clearInterval(countdownTimerId);
+    countdownTimerId = null;
   }
 
+  // Always invoke native stop to kill Foreground Service, WakeLock, and Notification immediately
+  triggerNativeForegroundStop();
+
   if (currentAudioPlayer) {
-    currentAudioPlayer.pause();
+    try {
+      currentAudioPlayer.pause();
+      currentAudioPlayer.src = '';
+    } catch (e) {}
     currentAudioPlayer = null;
   }
 
@@ -1356,13 +1368,23 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 7,
-  versionName: '1.6',
+  versionCode: 8,
+  versionName: '1.7',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.6 • Atualização de Elite',
+    sub: 'Versão 1.7 • Encerramento Perfeito & Bluetooth',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
+      {
+        icon: '🛑',
+        title: 'Paragem Imediata de Treino',
+        desc: 'Ao carregar em "Parar Treino", o serviço de fundo nativo, notificações e temporizadores são cancelados instantaneamente.'
+      },
+      {
+        icon: '🎧',
+        title: 'Deteção Universal de Fones & VoIP',
+        desc: 'Suporte total para auscultadores Lenovo VoIP, perfis SCO, Headset e Bluetooth em tempo real.'
+      },
       {
         icon: '🎙️',
         title: 'Comando de Voz & Registo de Gel',
@@ -1372,24 +1394,24 @@ const CHANGELOG_DATA = {
         icon: '🚨',
         title: 'Alerta Preditivo de Hipo a 15 Minutos',
         desc: 'Aviso sonoro e urgente antecipado com tempo estimado até atingir 70 mg/dL.'
-      },
-      {
-        icon: '🎧',
-        title: 'Atalho no Botão dos Auscultadores',
-        desc: 'Carrega no botão dos teus fones Bluetooth (passar faixa) para ouvir a glicémia sob demanda a qualquer momento.'
-      },
-      {
-        icon: '🏃‍♂️',
-        title: 'Perfis de Treino & Resumo Final',
-        desc: 'Perfis Longo (130-170), Séries (110-150) e Caminhada (90-140), com relatório final e % Tempo no Alvo ao parar.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.6 • Elite Update',
+    sub: 'Version 1.7 • Clean Shutdown & Bluetooth',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
+      {
+        icon: '🛑',
+        title: 'Immediate Clean Workout Stop',
+        desc: 'Stopping the workout immediately terminates background service, audio, and notification tray icons.'
+      },
+      {
+        icon: '🎧',
+        title: 'Universal Headset & VoIP Detection',
+        desc: 'Full real-time detection for Lenovo VoIP, SCO and Bluetooth earbuds.'
+      },
       {
         icon: '🎙️',
         title: 'Voice Commands & Gel Logging',
@@ -1399,16 +1421,6 @@ const CHANGELOG_DATA = {
         icon: '🚨',
         title: '15-Minute Predictive Hypo Warning',
         desc: 'Advance audio alarm with estimated time until reaching 70 mg/dL during rapid drops.'
-      },
-      {
-        icon: '🎧',
-        title: 'Earbud Button Shortcut',
-        desc: 'Press your Bluetooth earbud button to hear glucose on-demand anytime while running.'
-      },
-      {
-        icon: '🏃‍♂️',
-        title: 'Workout Profiles & Final Summary',
-        desc: 'Long Run, Intervals, and Walk profiles, plus post-workout report with % Time In Range.'
       }
     ]
   }
@@ -1770,8 +1782,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (langSelect) langSelect.value = config.language;
 
   document.getElementById('btnToggleLang')?.addEventListener('click', toggleLanguage);
-  document.getElementById('btnStartWorkout')?.addEventListener('click', startWorkout);
-  document.getElementById('btnStopWorkout')?.addEventListener('click', stopWorkout);
+  document.getElementById('btnStartWorkout')?.addEventListener('click', () => startWorkout());
+  document.getElementById('btnStopWorkout')?.addEventListener('click', () => stopWorkout(false));
   document.getElementById('btnTestAudio')?.addEventListener('click', () => {
     if (config.language === 'pt-PT') {
       playStudioVoice("Teste de áudio: Glicémia cento e vinte e oito, estável. Ritmo ideal para corrida, não precisas de hidratos de carbono.");

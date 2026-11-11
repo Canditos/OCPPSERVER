@@ -39,7 +39,8 @@ public class RunnerService extends Service {
     public static final String EXTRA_TARGET_MIN = "targetMin";
     public static final String EXTRA_TARGET_MAX = "targetMax";
 
-    private static boolean isServiceRunning = false;
+    private static volatile RunnerService activeInstance = null;
+    private static volatile boolean isServiceRunning = false;
     private PowerManager.WakeLock wakeLock = null;
     private ScheduledExecutorService scheduler = null;
 
@@ -58,9 +59,46 @@ public class RunnerService extends Service {
 
     public static void stopServiceDirect(Context context) {
         try {
-            Intent serviceIntent = new Intent(context, RunnerService.class);
-            serviceIntent.setAction(ACTION_STOP);
-            context.stopService(serviceIntent);
+            Log.d(TAG, "stopServiceDirect called");
+            isServiceRunning = false;
+
+            // 1. Direct synchronous stop if running in same process
+            RunnerService instance = activeInstance;
+            if (instance != null) {
+                Log.d(TAG, "Stopping activeInstance directly");
+                instance.stopForegroundService(false);
+                activeInstance = null;
+            }
+
+            // 2. Deliver ACTION_STOP to onStartCommand
+            if (context != null) {
+                Intent stopIntent = new Intent(context, RunnerService.class);
+                stopIntent.setAction(ACTION_STOP);
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(stopIntent);
+                    } else {
+                        context.startService(stopIntent);
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed sending startService with ACTION_STOP", e);
+                }
+
+                try {
+                    context.stopService(stopIntent);
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed context.stopService", e);
+                }
+
+                try {
+                    NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                    if (nm != null) {
+                        nm.cancel(NOTIFICATION_ID);
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            AudioEngine.cleanup();
         } catch (Exception e) {
             Log.e(TAG, "stopServiceDirect error", e);
         }
@@ -69,32 +107,37 @@ public class RunnerService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        activeInstance = this;
         createNotificationChannel();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        String action = intent != null ? intent.getAction() : null;
+        if (intent == null) {
+            Log.d(TAG, "onStartCommand with null intent - stopping service");
+            stopForegroundService(false);
+            return START_NOT_STICKY;
+        }
+
+        String action = intent.getAction();
         if (ACTION_STOP.equals(action)) {
             Log.d(TAG, "Stopping RunnerService via STOP action");
             stopForegroundService(true);
             return START_NOT_STICKY;
         }
 
-        if (intent != null) {
-            intervalMinutes = intent.getIntExtra(EXTRA_INTERVAL, 2);
-            if (intervalMinutes < 1) intervalMinutes = 1;
-            String lang = intent.getStringExtra(EXTRA_LANG);
-            if (lang != null && !lang.isEmpty()) language = lang;
-            String base = intent.getStringExtra(EXTRA_API_BASE);
-            if (base != null && !base.isEmpty()) apiBase = base;
-            targetMin = intent.getIntExtra(EXTRA_TARGET_MIN, 110);
-            targetMax = intent.getIntExtra(EXTRA_TARGET_MAX, 170);
-        }
+        intervalMinutes = intent.getIntExtra(EXTRA_INTERVAL, 2);
+        if (intervalMinutes < 1) intervalMinutes = 1;
+        String lang = intent.getStringExtra(EXTRA_LANG);
+        if (lang != null && !lang.isEmpty()) language = lang;
+        String base = intent.getStringExtra(EXTRA_API_BASE);
+        if (base != null && !base.isEmpty()) apiBase = base;
+        targetMin = intent.getIntExtra(EXTRA_TARGET_MIN, 110);
+        targetMax = intent.getIntExtra(EXTRA_TARGET_MAX, 170);
 
         Log.d(TAG, "Starting RunnerService in foreground with interval=" + intervalMinutes + "m, lang=" + language);
         startWorkoutForeground();
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     private void startWorkoutForeground() {
@@ -243,7 +286,8 @@ public class RunnerService extends Service {
         }
     }
 
-    private void stopForegroundService(boolean notifyWeb) {
+    public void stopForegroundService(boolean notifyWeb) {
+        Log.d(TAG, "stopForegroundService called, notifyWeb=" + notifyWeb);
         isServiceRunning = false;
         if (scheduler != null) {
             try {
@@ -315,6 +359,9 @@ public class RunnerService extends Service {
     @Override
     public void onDestroy() {
         stopForegroundService(false);
+        if (activeInstance == this) {
+            activeInstance = null;
+        }
         super.onDestroy();
     }
 
