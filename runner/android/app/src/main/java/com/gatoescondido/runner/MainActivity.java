@@ -1,8 +1,15 @@
 package com.gatoescondido.runner;
 
 import android.Manifest;
+import android.bluetooth.BluetoothA2dp;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothHeadset;
+import android.bluetooth.BluetoothProfile;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
@@ -31,6 +38,7 @@ public class MainActivity extends BridgeActivity {
     private static final String TAG = "NS_MainActivity";
     private static WeakReference<MainActivity> currentActivityRef = null;
     private AudioDeviceCallback audioDeviceCallback = null;
+    private BroadcastReceiver btAudioReceiver = null;
     private SpeechRecognizer speechRecognizer = null;
 
     @Override
@@ -81,6 +89,15 @@ public class MainActivity extends BridgeActivity {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error unregistering AudioDeviceCallback", e);
+        }
+
+        try {
+            if (btAudioReceiver != null) {
+                unregisterReceiver(btAudioReceiver);
+                btAudioReceiver = null;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error unregistering btAudioReceiver", e);
         }
 
         try {
@@ -153,6 +170,27 @@ public class MainActivity extends BridgeActivity {
                 Log.e(TAG, "Failed to register AudioDeviceCallback", e);
             }
         }
+
+        try {
+            btAudioReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    Log.d(TAG, "Bluetooth / Audio broadcast received: " + (intent != null ? intent.getAction() : "null"));
+                    broadcastAudioOutputStatus();
+                }
+            };
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+            filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+            filter.addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED);
+            filter.addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED);
+            filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            filter.addAction(Intent.ACTION_HEADSET_PLUG);
+            registerReceiver(btAudioReceiver, filter);
+            Log.d(TAG, "Registered btAudioReceiver");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to register btAudioReceiver", e);
+        }
     }
 
     public JSONObject getAudioOutputStatusJson() {
@@ -164,56 +202,109 @@ public class MainActivity extends BridgeActivity {
         try {
             AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
             if (am != null) {
+                // 1. AudioDeviceInfo check (Android 6.0+)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    AudioDeviceInfo[] devices = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
-                    if (devices != null) {
-                        for (AudioDeviceInfo dev : devices) {
-                            int type = dev.getType();
-                            boolean bt = (type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || 
-                                          type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                if (type == AudioDeviceInfo.TYPE_BLE_HEADSET || 
-                                    type == AudioDeviceInfo.TYPE_BLE_SPEAKER) {
-                                    bt = true;
-                                }
-                            }
-                            if (Build.VERSION.SDK_INT >= 33) {
-                                if (type == AudioDeviceInfo.TYPE_BLE_BROADCAST) {
-                                    bt = true;
-                                }
-                            }
-
-                            if (bt) {
-                                isBluetooth = true;
-                                try {
-                                    CharSequence name = dev.getProductName();
-                                    if (name != null && name.length() > 0 && !name.toString().equalsIgnoreCase("speaker")) {
-                                        deviceName = name.toString();
+                    try {
+                        AudioDeviceInfo[] devices = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+                        if (devices != null) {
+                            for (AudioDeviceInfo dev : devices) {
+                                int type = dev.getType();
+                                boolean bt = (type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || 
+                                              type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                    if (type == AudioDeviceInfo.TYPE_HEARING_AID) {
+                                        bt = true;
                                     }
-                                } catch (Exception ignored) {}
-                                break;
-                            }
-
-                            if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-                                type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
-                                type == AudioDeviceInfo.TYPE_USB_HEADSET) {
-                                isWired = true;
-                                try {
-                                    CharSequence name = dev.getProductName();
-                                    if (name != null && name.length() > 0) {
-                                        deviceName = name.toString();
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    if (type == AudioDeviceInfo.TYPE_BLE_HEADSET || 
+                                        type == AudioDeviceInfo.TYPE_BLE_SPEAKER) {
+                                        bt = true;
                                     }
-                                } catch (Exception ignored) {}
+                                }
+                                if (Build.VERSION.SDK_INT >= 33) {
+                                    if (type == AudioDeviceInfo.TYPE_BLE_BROADCAST) {
+                                        bt = true;
+                                    }
+                                }
+
+                                if (bt) {
+                                    isBluetooth = true;
+                                    try {
+                                        CharSequence name = dev.getProductName();
+                                        if (name != null && name.length() > 0 && !name.toString().equalsIgnoreCase("speaker")) {
+                                            deviceName = name.toString();
+                                        }
+                                    } catch (Exception ignored) {}
+                                    break;
+                                }
+
+                                if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                                    type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                                    type == AudioDeviceInfo.TYPE_USB_HEADSET) {
+                                    isWired = true;
+                                    try {
+                                        CharSequence name = dev.getProductName();
+                                        if (name != null && name.length() > 0) {
+                                            deviceName = name.toString();
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
                             }
                         }
-                    }
-                } else {
-                    if (am.isBluetoothA2dpOn() || am.isBluetoothScoOn()) {
-                        isBluetooth = true;
-                    } else if (am.isWiredHeadsetOn()) {
-                        isWired = true;
+                    } catch (Exception e) {
+                        Log.w(TAG, "AudioDeviceInfo query error: " + e.getMessage());
                     }
                 }
+
+                // 2. Android 12+ CommunicationDevice check (specifically for VoIP headsets)
+                if (!isBluetooth && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    try {
+                        AudioDeviceInfo comm = am.getCommunicationDevice();
+                        if (comm != null) {
+                            int cType = comm.getType();
+                            if (cType == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                                cType == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                                cType == AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                                isBluetooth = true;
+                                CharSequence cName = comm.getProductName();
+                                if (cName != null && cName.length() > 0) {
+                                    deviceName = cName.toString();
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // 3. Fallback to classic AudioManager routing flags
+                if (!isBluetooth) {
+                    try {
+                        if (am.isBluetoothA2dpOn() || am.isBluetoothScoOn()) {
+                            isBluetooth = true;
+                        }
+                    } catch (Exception ignored) {}
+                }
+                if (!isWired) {
+                    try {
+                        if (am.isWiredHeadsetOn()) {
+                            isWired = true;
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            // 4. BluetoothAdapter Profile Connection check (Direct Bluetooth Subsystem)
+            if (!isBluetooth) {
+                try {
+                    BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
+                    if (bta != null && bta.isEnabled()) {
+                        int a2dp = bta.getProfileConnectionState(BluetoothProfile.A2DP);
+                        int headset = bta.getProfileConnectionState(BluetoothProfile.HEADSET);
+                        if (a2dp == BluetoothProfile.STATE_CONNECTED || headset == BluetoothProfile.STATE_CONNECTED) {
+                            isBluetooth = true;
+                        }
+                    }
+                } catch (Exception ignored) {}
             }
 
             result.put("connected", isBluetooth || isWired);

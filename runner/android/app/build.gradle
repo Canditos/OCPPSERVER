@@ -22,9 +22,9 @@ android {
     signingConfigs {
         appSign {
             storeFile file('runner-keystore.jks')
-            storePassword 'runner-app-2026'
-            keyAlias 'runner'
-            keyPassword 'runner-app-2026'
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
         }
     }
     buildTypes {

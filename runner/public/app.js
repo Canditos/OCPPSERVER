@@ -128,6 +128,11 @@ function onHeartbeatTick() {
   // 1. Duration display
   updateWorkoutDuration();
 
+  // 2. Periodic Bluetooth output state sync (every ~8 seconds)
+  if (now % 8000 < 500) {
+    checkInitialAudioOutput();
+  }
+
   // 2. Real wall-clock countdown and announcement trigger
   const targetIntervalMs = (config.intervalMinutes || 2) * 60 * 1000;
   const timeSinceLast = now - lastAnnouncementTimestamp;
@@ -1229,6 +1234,7 @@ async function startWorkout() {
 
   // 1. Start Native Android Foreground Service (for APK background execution)
   triggerNativeForegroundStart();
+  checkInitialAudioOutput();
 
   if (config.wakeLockEnabled && 'wakeLock' in navigator) {
     try {
@@ -1702,7 +1708,18 @@ window.addEventListener('DOMContentLoaded', () => {
     updateCountdownDisplay();
     updateNativeVersionDisplay();
     checkInitialAudioOutput();
-    document.getElementById('audioStatusBadge')?.addEventListener('click', showAudioStatusToast);
+    document.getElementById('audioStatusBadge')?.addEventListener('click', () => {
+      checkInitialAudioOutput();
+      showAudioStatusToast();
+    });
+    document.getElementById('btnSettingsDownloadApk')?.addEventListener('click', () => {
+      const apkUrl = 'https://runner.gatoescondido.com/nightscout-runner.apk';
+      if (window.AndroidVoice && typeof window.AndroidVoice.openDownloadUrl === 'function') {
+        window.AndroidVoice.openDownloadUrl(apkUrl);
+      } else {
+        window.location.href = apkUrl;
+      }
+    });
     // Profile buttons
     document.getElementById('profZone2')?.addEventListener('click', () => setWorkoutProfile('zone2'));
     document.getElementById('profHIIT')?.addEventListener('click', () => setWorkoutProfile('hiit'));
