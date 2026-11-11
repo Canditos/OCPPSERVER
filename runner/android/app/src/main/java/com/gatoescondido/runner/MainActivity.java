@@ -460,10 +460,15 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public int getNativeVersionCode() {
             try {
-                return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+                return BuildConfig.VERSION_CODE;
             } catch (Exception e) {
-                return 2;
+                return 7;
             }
+        }
+
+        @JavascriptInterface
+        public String getNativeVersionName() {
+            return BuildConfig.VERSION_NAME;
         }
     }
 }

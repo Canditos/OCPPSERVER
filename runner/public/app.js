@@ -1455,13 +1455,44 @@ async function checkAppVersion() {
     const res = await fetch('/api/version?t=' + Date.now());
     if (!res.ok) return;
     const data = await res.json();
-    let currentVersion = 2; // Default fallback for current installed APK
+    if (!data || !data.versionCode) return;
+
+    // Check if user already dismissed or installed this version in this session
+    const dismissed = sessionStorage.getItem('runner_dismissed_update_version');
+    if (dismissed && parseInt(dismissed, 10) >= data.versionCode) {
+      const existing = document.getElementById('updateBanner');
+      if (existing) existing.remove();
+      return;
+    }
+
+    let currentVersion = null;
     if (window.AndroidVoice && typeof window.AndroidVoice.getNativeVersionCode === 'function') {
       try {
         currentVersion = window.AndroidVoice.getNativeVersionCode();
-      } catch (err) {}
+      } catch (err) {
+        console.warn('getNativeVersionCode error:', err);
+      }
     }
-    if (data.versionCode && data.versionCode > currentVersion) {
+
+    // Check localStorage fallback
+    const stored = localStorage.getItem('runner_installed_version_code');
+    if (currentVersion !== null && currentVersion !== undefined && currentVersion > 0) {
+      localStorage.setItem('runner_installed_version_code', String(currentVersion));
+    } else if (stored) {
+      currentVersion = parseInt(stored, 10);
+    }
+
+    console.log(`[VersionCheck] Installed=${currentVersion}, Server=${data.versionCode}`);
+
+    // If native version is equal to or greater than server, WE ARE UP TO DATE!
+    if (currentVersion && currentVersion >= data.versionCode) {
+      const existing = document.getElementById('updateBanner');
+      if (existing) existing.remove();
+      return;
+    }
+
+    // Only show banner if we have a valid confirmed older native version
+    if (currentVersion && currentVersion > 0 && data.versionCode > currentVersion) {
       showUpdateBanner(data);
     }
   } catch (e) {
@@ -1488,6 +1519,9 @@ function showUpdateBanner(data) {
       <button id="btnDoUpdate" class="px-2.5 py-1 bg-white text-sky-900 font-extrabold rounded-lg text-[11px] hover:bg-slate-100 transition shadow cursor-pointer">
         ${isPt ? 'Atualizar' : 'Update'}
       </button>
+      <button id="btnDismissUpdate" class="p-1 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-sm transition cursor-pointer" title="${isPt ? 'Fechar' : 'Dismiss'}">
+        ✕
+      </button>
     </div>
   `;
   document.body.prepend(banner);
@@ -1499,10 +1533,22 @@ function showUpdateBanner(data) {
     });
   }
 
+  const btnDismiss = banner.querySelector('#btnDismissUpdate');
+  if (btnDismiss) {
+    btnDismiss.addEventListener('click', () => {
+      sessionStorage.setItem('runner_dismissed_update_version', String(data.versionCode));
+      banner.remove();
+    });
+  }
+
   const btn = banner.querySelector('#btnDoUpdate');
   if (btn) {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
+      localStorage.setItem('runner_installed_version_code', String(data.versionCode));
+      sessionStorage.setItem('runner_dismissed_update_version', String(data.versionCode));
+      banner.remove();
+
       if (window.AndroidVoice && typeof window.AndroidVoice.openDownloadUrl === 'function') {
         window.AndroidVoice.openDownloadUrl(data.apkUrl);
       } else {
