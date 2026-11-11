@@ -10,7 +10,11 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.webkit.JavascriptInterface;
 
 import androidx.core.app.ActivityCompat;
@@ -21,11 +25,13 @@ import com.getcapacitor.BridgeActivity;
 import org.json.JSONObject;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "NS_MainActivity";
     private static WeakReference<MainActivity> currentActivityRef = null;
     private AudioDeviceCallback audioDeviceCallback = null;
+    private SpeechRecognizer speechRecognizer = null;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -35,6 +41,7 @@ public class MainActivity extends BridgeActivity {
 
         requestPermissions();
         initAudioDeviceMonitoring();
+        initSpeechRecognizer();
 
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
@@ -75,6 +82,31 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             Log.e(TAG, "Error unregistering AudioDeviceCallback", e);
         }
+
+        try {
+            if (speechRecognizer != null) {
+                speechRecognizer.destroy();
+                speechRecognizer = null;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error destroying speechRecognizer", e);
+        }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT ||
+            keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS ||
+            keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
+            keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+            Log.d(TAG, "Headset media button key event detected: " + keyCode);
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().post(() ->
+                    getBridge().getWebView().evaluateJavascript("if(window._onHeadsetButton) window._onHeadsetButton();", null));
+            }
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     private void requestPermissions() {
@@ -89,6 +121,10 @@ public class MainActivity extends BridgeActivity {
                     != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 102);
             }
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 103);
         }
     }
 
@@ -155,7 +191,7 @@ public class MainActivity extends BridgeActivity {
                                         deviceName = name.toString();
                                     }
                                 } catch (Exception ignored) {}
-                                break; // Bluetooth takes priority
+                                break;
                             }
 
                             if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
@@ -201,6 +237,105 @@ public class MainActivity extends BridgeActivity {
             });
         } catch (Exception e) {
             Log.e(TAG, "broadcastAudioOutputStatus error", e);
+        }
+    }
+
+    private void initSpeechRecognizer() {
+        runOnUiThread(() -> {
+            try {
+                if (SpeechRecognizer.isRecognitionAvailable(this)) {
+                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+                    speechRecognizer.setRecognitionListener(new RecognitionListener() {
+                        @Override
+                        public void onReadyForSpeech(Bundle params) {
+                            Log.d(TAG, "SpeechRecognizer ready");
+                            notifySpeechState("listening");
+                        }
+                        @Override
+                        public void onBeginningOfSpeech() {}
+                        @Override
+                        public void onRmsChanged(float rmsdB) {}
+                        @Override
+                        public void onBufferReceived(byte[] buffer) {}
+                        @Override
+                        public void onEndOfSpeech() {
+                            notifySpeechState("processing");
+                        }
+                        @Override
+                        public void onError(int error) {
+                            Log.w(TAG, "SpeechRecognizer error: " + error);
+                            notifySpeechState("error");
+                        }
+                        @Override
+                        public void onResults(Bundle results) {
+                            ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                            if (matches != null && !matches.isEmpty()) {
+                                String text = matches.get(0);
+                                Log.d(TAG, "Speech recognized: " + text);
+                                notifySpeechResult(text);
+                            } else {
+                                notifySpeechState("idle");
+                            }
+                        }
+                        @Override
+                        public void onPartialResults(Bundle partialResults) {}
+                        @Override
+                        public void onEvent(int eventType, Bundle params) {}
+                    });
+                    Log.d(TAG, "SpeechRecognizer initialized successfully");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to initialize SpeechRecognizer", e);
+            }
+        });
+    }
+
+    public void startListening(String language) {
+        runOnUiThread(() -> {
+            try {
+                if (speechRecognizer == null) {
+                    initSpeechRecognizer();
+                }
+                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language != null && !language.isEmpty() ? language : "pt-PT");
+                intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+                speechRecognizer.startListening(intent);
+                notifySpeechState("listening");
+            } catch (Exception e) {
+                Log.e(TAG, "startListening error", e);
+                notifySpeechState("error");
+            }
+        });
+    }
+
+    public void stopListening() {
+        runOnUiThread(() -> {
+            try {
+                if (speechRecognizer != null) {
+                    speechRecognizer.stopListening();
+                }
+                notifySpeechState("idle");
+            } catch (Exception ignored) {}
+        });
+    }
+
+    private void notifySpeechState(String state) {
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().post(() -> {
+                String js = "if(window._onSpeechState) window._onSpeechState('" + state + "');";
+                getBridge().getWebView().evaluateJavascript(js, null);
+            });
+        }
+    }
+
+    private void notifySpeechResult(String text) {
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().post(() -> {
+                String escaped = JSONObject.quote(text);
+                String js = "if(window._onSpeechResult) window._onSpeechResult(" + escaped + ");";
+                getBridge().getWebView().evaluateJavascript(js, null);
+            });
         }
     }
 
@@ -252,6 +387,22 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void stopVoice() {
             runOnUiThread(AudioEngine::cleanup);
+        }
+
+        @JavascriptInterface
+        public void startVoiceRecognition(String language) {
+            Log.d(TAG, "startVoiceRecognition called via JavascriptInterface with lang=" + language);
+            startListening(language);
+        }
+
+        @JavascriptInterface
+        public void stopVoiceRecognition() {
+            stopListening();
+        }
+
+        @JavascriptInterface
+        public boolean isVoiceRecognitionAvailable() {
+            return SpeechRecognizer.isRecognitionAvailable(MainActivity.this);
         }
 
         @JavascriptInterface

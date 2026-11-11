@@ -61,30 +61,30 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 6,
-      versionName: '1.5',
+      versionCode: 7,
+      versionName: '1.6',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Contador e intervalo dinâmicos, e deteção em tempo real de auriculares Bluetooth.',
+      releaseNotes: 'Comandos de voz ("Tomei gel"), alertas preditivos de hipo, botões nos fones e resumo de treino.',
       features: [
         {
-          icon: '⏱️',
-          title: 'Contador & Intervalo Dinâmico',
-          desc: 'O ecrã e o botão refletem imediatamente o intervalo configurado (1, 2, 3 ou 5 min) mesmo com o treino parado.'
+          icon: '🎙️',
+          title: 'Comando de Voz & Registo de Gel',
+          desc: 'Diz "Tomei gel" ou clica no botão rápido para registar 20g HC. O treinador faz pausa inteligente para não mandar tomar outro gel enquanto absorve.'
+        },
+        {
+          icon: '🚨',
+          title: 'Alerta Preditivo de Hipoglicemia',
+          desc: 'Aviso urgente com 15 minutos de antecedência se a glicemia estiver em queda rápida.'
         },
         {
           icon: '🎧',
-          title: 'Estado Real dos Fones Bluetooth',
-          desc: 'O indicador no topo mostra em tempo real se os auriculares Bluetooth estão ligados (com nome do dispositivo) ou se o áudio sai pelo altifalante.'
+          title: 'Atalho no Botão dos Auscultadores',
+          desc: 'Carrega no botão dos fones Bluetooth (passar faixa) para ouvir a glicemia sob demanda durante a corrida.'
         },
         {
-          icon: '🛑',
-          title: 'Paragem Total do Treino',
-          desc: 'Ao clicar em Parar Treino, o serviço em segundo plano e a notificação são terminados imediatamente sem ficarem presos.'
-        },
-        {
-          icon: '⚡',
-          title: 'Disparo Fiável e Instantâneo',
-          desc: 'Testar Som e Falar Agora tocam sem qualquer atraso com áudio ducking na música.'
+          icon: '🏃‍♂️',
+          title: 'Perfis de Treino & Resumo Final',
+          desc: 'Alvos com 1 toque (Longo, Séries, Caminhada) e relatório com % Time in Range ao parar o treino.'
         }
       ]
     }));

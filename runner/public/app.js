@@ -20,12 +20,27 @@ const defaultConfig = {
   nsUrl: 'https://diabetes.gatoescondido.com',
   intervalMinutes: 2,
   language: 'pt-PT', // Authentic European Portuguese by default
-  targetMin: 110,
+  targetMin: 130,
   targetMax: 170,
   urgentLow: 75,
+  workoutProfile: 'zone2',
   wakeLockEnabled: true,
-  enableEarbudShortcuts: false // Keep disabled so background music apps (Yuma, Spotify) keep earbud controls
+  enableEarbudShortcuts: false,
+  voiceOptions: {
+    sgv: true,
+    trend: true,
+    delta: true,
+    coach: true,
+    duration: false
+  }
 };
+
+// Workout Session Analytics Tracking
+let sessionStartTime = null;
+let sessionReadings = [];
+let sessionCarbsTotal = 0;
+let sessionCarbsEntries = [];
+let lastCarbIntake = null;
 
 let config = { ...defaultConfig };
 
@@ -235,6 +250,278 @@ const I18N = {
 };
 
 // Sports Carb Coach Decision Engine
+
+// ========================================================
+// Voice Commands, Carb Logging & Workout Analytics (v1.6)
+// ========================================================
+
+function recordCarbsIntake(grams, source = 'manual') {
+  const g = parseInt(grams, 10) || 20;
+  sessionCarbsTotal += g;
+  const now = Date.now();
+  const entry = { timestamp: now, grams: g, source };
+  sessionCarbsEntries.push(entry);
+  lastCarbIntake = entry;
+
+  const lang = config.language || 'pt-PT';
+  const isPt = lang === 'pt-PT';
+
+  const msg = isPt
+    ? `Registei ${g} gramas de hidratos. Boa corrida!`
+    : `Recorded ${g} grams of carbs. Keep running strong!`;
+
+  if (typeof playStudioVoice === 'function') {
+    playStudioVoice(msg);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 max-w-[90vw] bg-amber-950/95 text-amber-200 border border-amber-500/50 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl z-50 transition-opacity duration-300 backdrop-blur text-center flex items-center gap-2';
+  toast.innerHTML = `<span>🍬</span><span>${isPt ? `Registo efetuado: ${g}g de hidratos!` : `Logged: ${g}g of carbs!`}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 400);
+  }, 4000);
+
+  if (lastEntry) {
+    const delta = prevEntry ? lastEntry.sgv - prevEntry.sgv : null;
+    const advice = evaluateCarbAdvice(lastEntry.sgv, lastEntry.direction, delta);
+    updateUIWithReading(lastEntry, prevEntry, delta, advice);
+  }
+}
+
+let speechRecognizerInstance = null;
+let isVoiceListening = false;
+
+function setVoiceListeningBanner(show, title, sub) {
+  const banner = document.getElementById('voiceListeningBanner');
+  if (!banner) return;
+  if (show) {
+    banner.classList.remove('hidden');
+    if (title) document.getElementById('voiceBannerTitle').textContent = title;
+    if (sub) document.getElementById('voiceBannerSub').textContent = sub;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+function startVoiceListening() {
+  const lang = config.language || 'pt-PT';
+  const isPt = lang === 'pt-PT';
+
+  // 1. Android Native Voice Recognition
+  if (window.AndroidVoice && typeof window.AndroidVoice.startVoiceRecognition === 'function') {
+    try {
+      window.AndroidVoice.startVoiceRecognition(lang);
+      setVoiceListeningBanner(true, isPt ? 'A ouvir comando de voz...' : 'Listening for voice command...', isPt ? 'Diz "Tomei gel", "15 gramas" ou "Como estou"' : 'Say "Took gel", "15 grams" or "How am I"');
+      return;
+    } catch (e) {
+      console.warn('Native voice recognition error:', e);
+    }
+  }
+
+  // 2. Web Speech API (Chrome / WebView fallback)
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    try {
+      if (speechRecognizerInstance) {
+        speechRecognizerInstance.abort();
+      }
+      speechRecognizerInstance = new SpeechRecognition();
+      speechRecognizerInstance.lang = lang;
+      speechRecognizerInstance.continuous = false;
+      speechRecognizerInstance.interimResults = false;
+
+      speechRecognizerInstance.onstart = () => {
+        isVoiceListening = true;
+        setVoiceListeningBanner(true, isPt ? 'A ouvir comando de voz...' : 'Listening for voice command...', isPt ? 'Diz "Tomei gel", "15 gramas" ou "Como estou"' : 'Say "Took gel", "15 grams" or "How am I"');
+      };
+
+      speechRecognizerInstance.onresult = (event) => {
+        if (event.results && event.results.length > 0) {
+          const text = event.results[0][0].transcript;
+          handleVoiceCommandResult(text);
+        }
+      };
+
+      speechRecognizerInstance.onerror = (e) => {
+        console.warn('SpeechRecognition error:', e);
+        setVoiceListeningBanner(false);
+      };
+
+      speechRecognizerInstance.onend = () => {
+        isVoiceListening = false;
+        setTimeout(() => setVoiceListeningBanner(false), 2000);
+      };
+
+      speechRecognizerInstance.start();
+      return;
+    } catch (e) {
+      console.warn('Web Speech API error:', e);
+    }
+  }
+
+  openCustomCarbModal();
+}
+
+function stopVoiceListening() {
+  if (window.AndroidVoice && typeof window.AndroidVoice.stopVoiceRecognition === 'function') {
+    window.AndroidVoice.stopVoiceRecognition();
+  }
+  if (speechRecognizerInstance) {
+    try { speechRecognizerInstance.stop(); } catch (e) {}
+  }
+  setVoiceListeningBanner(false);
+}
+
+function handleVoiceCommandResult(text) {
+  if (!text) return;
+  console.log('[VoiceCommand] Recognized text:', text);
+  const lang = config.language || 'pt-PT';
+  const isPt = lang === 'pt-PT';
+
+  setVoiceListeningBanner(true, `🎤 "${text}"`, isPt ? 'Comando processado!' : 'Command processed!');
+  setTimeout(() => setVoiceListeningBanner(false), 2500);
+
+  const clean = text.toLowerCase();
+
+  // Carb intake matches
+  if (/tomei|toma|comi|gel|hidrato|carbo|hc|grama|\bg\b/.test(clean)) {
+    const numMatch = clean.match(/\b(\d+)\b/);
+    const grams = numMatch ? parseInt(numMatch[1], 10) : 20;
+    recordCarbsIntake(grams, 'voice');
+    return;
+  }
+
+  // Speak Now matches
+  if (/falar|glicemia|como estou|leitura|valor|diz|ouvir|speak/.test(clean)) {
+    announceCurrent(true);
+    return;
+  }
+
+  // Stop Workout matches
+  if (/parar treino|terminar treino|fim do treino|stop workout/.test(clean)) {
+    stopWorkout();
+    return;
+  }
+
+  recordCarbsIntake(20, 'voice');
+}
+
+window._onSpeechResult = handleVoiceCommandResult;
+window._onSpeechState = (state) => {
+  const isPt = (config.language || 'pt-PT') === 'pt-PT';
+  if (state === 'listening') {
+    setVoiceListeningBanner(true, isPt ? 'A ouvir comando de voz...' : 'Listening...', isPt ? 'Diz "Tomei gel", "15g", ou "Como estou"' : 'Say "Took gel", "15g", or "How am I"');
+  } else if (state === 'processing') {
+    setVoiceListeningBanner(true, isPt ? 'A processar...' : 'Processing...', '');
+  } else if (state === 'error' || state === 'idle') {
+    setTimeout(() => setVoiceListeningBanner(false), 1500);
+  }
+};
+
+window._onHeadsetButton = () => {
+  console.log('[Headset] Earbud media button pressed! Triggering Speak Now.');
+  announceCurrent(true);
+};
+
+function openCustomCarbModal() {
+  document.getElementById('customCarbModal')?.classList.remove('hidden');
+}
+function closeCustomCarbModal() {
+  document.getElementById('customCarbModal')?.classList.add('hidden');
+}
+
+// Workout Profiles
+function setWorkoutProfile(profileKey) {
+  config.workoutProfile = profileKey;
+  if (profileKey === 'zone2') {
+    config.targetMin = 130;
+    config.targetMax = 170;
+  } else if (profileKey === 'hiit') {
+    config.targetMin = 110;
+    config.targetMax = 150;
+  } else if (profileKey === 'walk') {
+    config.targetMin = 90;
+    config.targetMax = 140;
+  }
+  saveConfig();
+  updateProfileButtonsUI();
+
+  const minInput = document.getElementById('cfgTargetMin');
+  const maxInput = document.getElementById('cfgTargetMax');
+  if (minInput) minInput.value = config.targetMin;
+  if (maxInput) maxInput.value = config.targetMax;
+
+  if (lastEntry) {
+    const delta = prevEntry ? lastEntry.sgv - prevEntry.sgv : null;
+    const advice = evaluateCarbAdvice(lastEntry.sgv, lastEntry.direction, delta);
+    updateUIWithReading(lastEntry, prevEntry, delta, advice);
+  }
+}
+
+function updateProfileButtonsUI() {
+  const p = config.workoutProfile || 'zone2';
+  const setBtn = (id, active) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (active) {
+      el.className = 'profile-btn flex-1 py-1.5 px-2 rounded-xl font-bold text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer';
+    } else {
+      el.className = 'profile-btn flex-1 py-1.5 px-2 rounded-xl font-medium text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer';
+    }
+  };
+  setBtn('profZone2', p === 'zone2');
+  setBtn('profHIIT', p === 'hiit');
+  setBtn('profWalk', p === 'walk');
+}
+
+// Workout Summary Modal
+function showWorkoutSummaryModal() {
+  const modal = document.getElementById('workoutSummaryModal');
+  if (!modal) return;
+
+  const durationSec = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+  const mins = Math.floor(durationSec / 60);
+  const secs = durationSec % 60;
+  const durStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+  const durEl = document.getElementById('sumDuration');
+  if (durEl) durEl.textContent = durStr;
+
+  const carbsEl = document.getElementById('sumCarbs');
+  if (carbsEl) carbsEl.textContent = `${sessionCarbsTotal} gramas`;
+
+  const carbsCountEl = document.getElementById('sumCarbsCount');
+  if (carbsCountEl) carbsCountEl.textContent = `${sessionCarbsEntries.length} registos`;
+
+  if (sessionReadings.length > 0) {
+    const first = sessionReadings[0];
+    const last = sessionReadings[sessionReadings.length - 1];
+    const min = Math.min(...sessionReadings);
+    const max = Math.max(...sessionReadings);
+    const avg = Math.round(sessionReadings.reduce((a, b) => a + b, 0) / sessionReadings.length);
+
+    const inRange = sessionReadings.filter(s => s >= (config.targetMin || 110) && s <= (config.targetMax || 170)).length;
+    const tir = Math.round((inRange / sessionReadings.length) * 100);
+
+    const startEndEl = document.getElementById('sumStartEnd');
+    if (startEndEl) startEndEl.textContent = `${first} ➔ ${last} mg/dL`;
+
+    const avgEl = document.getElementById('sumAvg');
+    if (avgEl) avgEl.textContent = `${avg} mg/dL (${min}-${max})`;
+
+    const tirEl = document.getElementById('sumTIR');
+    if (tirEl) tirEl.textContent = `${tir}%`;
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeWorkoutSummaryModal() {
+  document.getElementById('workoutSummaryModal')?.classList.add('hidden');
+}
+
 function evaluateCarbAdvice(sgv, direction, delta) {
   const lang = config.language || 'en';
   const dirKey = direction || 'Flat';
@@ -244,6 +531,66 @@ function evaluateCarbAdvice(sgv, direction, delta) {
   const isDroppingFast = dirKey === 'SingleDown' || dirKey === 'DoubleDown' || (delta !== null && delta <= -6);
   const isDroppingSlow = dirKey === 'FortyFiveDown' || (delta !== null && delta < -2 && delta > -6);
   const isDropping = isDroppingFast || isDroppingSlow;
+  // 1. Carb Absorption Window (Prevent repeat gel recommendations within 15 min)
+  if (lastCarbIntake && (Date.now() - lastCarbIntake.timestamp) < 15 * 60 * 1000) {
+    const minsAgo = Math.max(1, Math.round((Date.now() - lastCarbIntake.timestamp) / 60000));
+    if (sgv < (config.targetMin || 110)) {
+      if (lang === 'pt-PT') {
+        return {
+          status: 'absorbing',
+          badge: `⏳ EM ABSORÇÃO (${lastCarbIntake.grams}g há ${minsAgo}m)`,
+          badgeColor: 'bg-amber-600 text-white animate-pulse',
+          cardBorder: 'border-amber-500 shadow-amber-900/40',
+          carbs: `Aguardar (${lastCarbIntake.grams}g)`,
+          title: 'Hidratos em absorção',
+          adviceText: `Tomaste ${lastCarbIntake.grams}g há ${minsAgo}m. A digestão demora 10 a 15 min. Aguarda pela subida da glicémia.`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Hidratos em absorção, tomaste ${lastCarbIntake.grams} gramas há ${minsAgo} minutos. Aguarda pela subida.`
+        };
+      } else {
+        return {
+          status: 'absorbing',
+          badge: `⏳ ABSORBING (${lastCarbIntake.grams}g ${minsAgo}m ago)`,
+          badgeColor: 'bg-amber-600 text-white animate-pulse',
+          cardBorder: 'border-amber-500 shadow-amber-900/40',
+          carbs: `Wait (${lastCarbIntake.grams}g)`,
+          title: 'Carbs absorbing',
+          adviceText: `You took ${lastCarbIntake.grams}g ${minsAgo}m ago. Takes 10-15m to absorb. Wait for the rise.`,
+          spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Carbs absorbing, you took ${lastCarbIntake.grams} grams ${minsAgo} minutes ago. Waiting for rise.`
+        };
+      }
+    }
+  }
+
+  // 2. Predictive Hypoglycemia Alert (15 minutes advance warning)
+  if (delta !== null && delta <= -5 && sgv <= 135) {
+    const dropPerMin = Math.abs(delta) / 5.0;
+    const minutesTo70 = Math.round((sgv - 70) / dropPerMin);
+    if (minutesTo70 > 0 && minutesTo70 <= 15) {
+      if (lang === 'pt-PT') {
+        return {
+          status: 'predictive_hypo',
+          badge: `🚨 HIPO EM ~${minutesTo70} MIN`,
+          badgeColor: 'bg-rose-600 text-white animate-pulse',
+          cardBorder: 'border-rose-500 shadow-rose-900/60',
+          carbs: '15g a 20g HC Imediatos',
+          title: 'Alerta Preditivo: Risco de Hipo',
+          adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em aproximadamente ${minutesTo70} minutos.`,
+          spokenText: `Atenção urgente! Queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Toma 15 a 20 gramas de hidratos agora!`
+        };
+      } else {
+        return {
+          status: 'predictive_hypo',
+          badge: `🚨 HYPO IN ~${minutesTo70} MIN`,
+          badgeColor: 'bg-rose-600 text-white animate-pulse',
+          cardBorder: 'border-rose-500 shadow-rose-900/60',
+          carbs: '15g to 20g Fast Carbs',
+          title: 'Predictive Alert: Hypo Risk Ahead',
+          adviceText: `Fast drop of ${Math.abs(delta)} mg/dL in 5m. Projected to hit 70 mg/dL in about ${minutesTo70} minutes.`,
+          spokenText: `Urgent warning! Rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take 15 to 20 grams of carbs now!`
+        };
+      }
+    }
+  }
 
   if (lang === 'pt-PT') {
     // PORTUGUÊS DE PORTUGAL
@@ -608,13 +955,33 @@ function applyLanguageUI() {
   setT('labelInterval', texts.labelInterval);
   setT('btnSaveSettings', texts.btnSaveSettings);
 
+  const isPt = lang === 'pt-PT';
+  setT('labelQuickGel', isPt ? 'Tomei Gel (20g)' : 'Took Gel (20g)');
+  setT('labelMicBtn', isPt ? 'Voz' : 'Voice');
+  setT('labelProfZone2', isPt ? 'Longo (130-170)' : 'Long Run (130-170)');
+  setT('labelProfHIIT', isPt ? 'Séries (110-150)' : 'Intervals (110-150)');
+  setT('labelProfWalk', isPt ? 'Caminhada (90-140)' : 'Walk (90-140)');
+  setT('summaryTitle', isPt ? 'Resumo do Treino' : 'Workout Summary');
+  setT('summarySub', isPt ? 'Treino Concluído' : 'Workout Completed');
+  setT('labelSumDuration', isPt ? 'Duração' : 'Duration');
+  setT('labelSumTIR', isPt ? 'Tempo no Alvo' : 'Time in Range');
+  setT('labelSumStartEnd', isPt ? 'Inicial ➔ Final' : 'Start ➔ Finish');
+  setT('labelSumAvg', isPt ? 'Média (Mín/Máx)' : 'Average (Min/Max)');
+  setT('labelSumCarbs', isPt ? 'Hidratos Consumidos' : 'Carbs Consumed');
+  setT('labelVoiceContent', isPt ? 'Conteúdo do Anúncio de Voz' : 'Voice Announcement Content');
+  setT('labelOptSgv', isPt ? 'Glicémia Atual (ex: 135)' : 'Current Glucose (e.g. 135)');
+  setT('labelOptTrend', isPt ? 'Tendência / Seta' : 'Trend Arrow');
+  setT('labelOptDelta', isPt ? 'Variação 5m' : '5m Delta');
+  setT('labelOptCoach', isPt ? 'Recomendação do Treinador (Carb Coach)' : 'Coach Recommendation');
+  setT('labelOptDuration', isPt ? 'Duração da Corrida' : 'Workout Duration');
+
   const footerWhatsNew = document.getElementById('btnFooterWhatsNew');
   if (footerWhatsNew) {
-    footerWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ O que há de novo (v1.5)</span>' : "<span>✨ What's New (v1.5)</span>";
+    footerWhatsNew.innerHTML = isPt ? '<span>✨ O que há de novo (v1.6)</span>' : "<span>✨ What's New (v1.6)</span>";
   }
   const settingsWhatsNew = document.getElementById('btnSettingsWhatsNew');
   if (settingsWhatsNew) {
-    settingsWhatsNew.innerHTML = lang === 'pt-PT' ? '<span>✨ Ver o que há de novo na v1.5</span>' : "<span>✨ See What's New in v1.5</span>";
+    settingsWhatsNew.innerHTML = isPt ? '<span>✨ Ver o que há de novo na v1.6</span>' : "<span>✨ See What's New in v1.6</span>";
   }
 
   const startBtn = document.getElementById('startBtnText');
@@ -654,7 +1021,14 @@ function applyLanguageUI() {
 // Toggle language
 function toggleLanguage() {
   config.language = config.language === 'en' ? 'pt-PT' : 'en';
-  saveConfig();
+      config.voiceOptions = {
+      sgv: !!document.getElementById('cfgOptSgv')?.checked,
+      trend: !!document.getElementById('cfgOptTrend')?.checked,
+      delta: !!document.getElementById('cfgOptDelta')?.checked,
+      coach: !!document.getElementById('cfgOptCoach')?.checked,
+      duration: !!document.getElementById('cfgOptDuration')?.checked
+    };
+    saveConfig();
   applyLanguageUI();
   if (lastEntry) {
     const delta = prevEntry ? lastEntry.sgv - prevEntry.sgv : null;
@@ -762,7 +1136,22 @@ async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = 
       announcementCount++;
       const countEl = document.getElementById('announcementCount');
       if (countEl) countEl.textContent = announcementCount;
-      playStudioVoice(advice.spokenText);
+      let voiceMsg = advice.spokenText;
+      const vOpts = config.voiceOptions || {};
+      if (vOpts.duration && isRunning && workoutStartTime) {
+        const elapsedMins = Math.floor((Date.now() - workoutStartTime) / 60000);
+        if (elapsedMins > 0) {
+          voiceMsg += (config.language === 'pt-PT') ? ` ${elapsedMins} minutos de corrida.` : ` ${elapsedMins} minutes of running.`;
+        }
+      }
+      if (current && (Date.now() - current.date) >= 10 * 60 * 1000) {
+        const staleM = Math.floor((Date.now() - current.date) / 60000);
+        const staleMsg = (config.language === 'pt-PT')
+          ? ` Atenção, sinal do sensor com ${staleM} minutos de atraso.`
+          : ` Warning, sensor signal delayed by ${staleM} minutes.`;
+        voiceMsg += staleMsg;
+      }
+      playStudioVoice(voiceMsg);
     }
   } catch (err) {
     console.error('Error polling Nightscout:', err);
@@ -774,6 +1163,11 @@ async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = 
 }
 
 function updateUIWithReading(current, previous, delta, advice) {
+  if (isRunning && current && current.sgv) {
+    sessionReadings.push(current.sgv);
+  }
+  const ageMinutes = Math.floor((Date.now() - current.date) / (60 * 1000));
+
   const lang = config.language || 'en';
   const sgvEl = document.getElementById('currentSgv');
   const trendEl = document.getElementById('currentTrend');
@@ -821,6 +1215,13 @@ function updateUIWithReading(current, previous, delta, advice) {
 async function startWorkout() {
   isRunning = true;
   workoutStartTime = Date.now();
+  sessionStartTime = Date.now();
+  sessionReadings = [];
+  sessionCarbsTotal = 0;
+  sessionCarbsEntries = [];
+  if (lastEntry && lastEntry.sgv) {
+    sessionReadings.push(lastEntry.sgv);
+  }
   lastAnnouncementTimestamp = Date.now();
   announcementCount = 0;
   const countEl = document.getElementById('announcementCount');
@@ -892,6 +1293,10 @@ function stopWorkout(fromNative = false) {
   document.getElementById('workoutStatusBadge').className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5';
   document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span> ' + I18N[lang].ui.workoutStopped;
   updateCountdownDisplay();
+
+  if (sessionReadings.length > 0 || sessionStartTime) {
+    showWorkoutSummaryModal();
+  }
 }
 
 function resetCountdown() {
@@ -945,59 +1350,59 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 6,
-  versionName: '1.5',
+  versionCode: 7,
+  versionName: '1.6',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.5 • Atualização Recente',
+    sub: 'Versão 1.6 • Atualização de Elite',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
       {
-        icon: '⏱️',
-        title: 'Contador & Intervalo Dinâmico',
-        desc: 'O ecrã e o botão refletem imediatamente o intervalo configurado (1, 2, 3 ou 5 min) mesmo com o treino parado.'
+        icon: '🎙️',
+        title: 'Comando de Voz & Registo de Gel',
+        desc: 'Diz "Tomei gel" ou clica no botão rápido para registar 20g HC. O treinador faz pausa inteligente para não mandar tomar outro gel enquanto absorve.'
+      },
+      {
+        icon: '🚨',
+        title: 'Alerta Preditivo de Hipo a 15 Minutos',
+        desc: 'Aviso sonoro e urgente antecipado com tempo estimado até atingir 70 mg/dL.'
       },
       {
         icon: '🎧',
-        title: 'Estado Real dos Fones Bluetooth',
-        desc: 'O indicador no topo mostra em tempo real se os auriculares Bluetooth estão ligados (com nome do dispositivo) ou se o áudio sai pelo altifalante.'
+        title: 'Atalho no Botão dos Auscultadores',
+        desc: 'Carrega no botão dos teus fones Bluetooth (passar faixa) para ouvir a glicémia sob demanda a qualquer momento.'
       },
       {
-        icon: '🛑',
-        title: 'Paragem Completa do Treino',
-        desc: 'Ao clicar em Parar Treino, o serviço em segundo plano e a notificação são terminados imediatamente sem ficarem presos.'
-      },
-      {
-        icon: '⚡',
-        title: 'Disparo Fiável e Instantâneo',
-        desc: 'Testar Som e Falar Agora tocam sem qualquer atraso com áudio ducking na música.'
+        icon: '🏃‍♂️',
+        title: 'Perfis de Treino & Resumo Final',
+        desc: 'Perfis Longo (130-170), Séries (110-150) e Caminhada (90-140), com relatório final e % Tempo no Alvo ao parar.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.5 • Recent Update',
+    sub: 'Version 1.6 • Elite Update',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
       {
-        icon: '⏱️',
-        title: 'Dynamic Countdown & Interval',
-        desc: 'The display and button immediately reflect your chosen interval (1, 2, 3, or 5 min) even before starting a workout.'
+        icon: '🎙️',
+        title: 'Voice Commands & Gel Logging',
+        desc: 'Say "Took gel" or tap the quick button to log 20g carbs. Intelligent cooldown avoids repeat alerts during digestion.'
+      },
+      {
+        icon: '🚨',
+        title: '15-Minute Predictive Hypo Warning',
+        desc: 'Advance audio alarm with estimated time until reaching 70 mg/dL during rapid drops.'
       },
       {
         icon: '🎧',
-        title: 'Live Bluetooth Earbuds Detection',
-        desc: 'The top badge reflects real-time connection status and shows your Bluetooth earbud model name.'
+        title: 'Earbud Button Shortcut',
+        desc: 'Press your Bluetooth earbud button to hear glucose on-demand anytime while running.'
       },
       {
-        icon: '🛑',
-        title: 'Complete Workout Stop',
-        desc: 'Stopping the workout immediately dismisses the notification and halts the background service cleanly.'
-      },
-      {
-        icon: '⚡',
-        title: 'Instant Voice & Music Ducking',
-        desc: 'Instant voice triggers with local caching and automatic ducking of Spotify, Yuma, and background music.'
+        icon: '🏃‍♂️',
+        title: 'Workout Profiles & Final Summary',
+        desc: 'Long Run, Intervals, and Walk profiles, plus post-workout report with % Time In Range.'
       }
     ]
   }
@@ -1227,6 +1632,42 @@ window.addEventListener('DOMContentLoaded', () => {
     updateCountdownDisplay();
     checkInitialAudioOutput();
     document.getElementById('audioStatusBadge')?.addEventListener('click', showAudioStatusToast);
+    // Profile buttons
+    document.getElementById('profZone2')?.addEventListener('click', () => setWorkoutProfile('zone2'));
+    document.getElementById('profHIIT')?.addEventListener('click', () => setWorkoutProfile('hiit'));
+    document.getElementById('profWalk')?.addEventListener('click', () => setWorkoutProfile('walk'));
+    updateProfileButtonsUI();
+
+    // Quick Carb Intake & Voice
+    document.getElementById('btnQuickGel')?.addEventListener('click', () => recordCarbsIntake(20, 'button'));
+    document.getElementById('btnVoiceCommand')?.addEventListener('click', startVoiceListening);
+    document.getElementById('btnCancelVoice')?.addEventListener('click', stopVoiceListening);
+    document.getElementById('btnCustomCarb')?.addEventListener('click', openCustomCarbModal);
+    document.getElementById('btnCancelCustomCarb')?.addEventListener('click', closeCustomCarbModal);
+
+    document.querySelectorAll('.carb-choice').forEach(b => {
+      b.addEventListener('click', (e) => {
+        const grams = parseInt(e.currentTarget.getAttribute('data-grams'), 10) || 20;
+        recordCarbsIntake(grams, 'custom_picker');
+        closeCustomCarbModal();
+      });
+    });
+
+    // Workout Summary modal
+    document.getElementById('btnCloseSummary')?.addEventListener('click', closeWorkoutSummaryModal);
+    document.getElementById('btnDismissSummary')?.addEventListener('click', closeWorkoutSummaryModal);
+
+    // Sync settings voice checkboxes
+    const vOpts = config.voiceOptions || {};
+    const setChk = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = (val !== false);
+    };
+    setChk('cfgOptSgv', vOpts.sgv);
+    setChk('cfgOptTrend', vOpts.trend);
+    setChk('cfgOptDelta', vOpts.delta);
+    setChk('cfgOptCoach', vOpts.coach);
+    setChk('cfgOptDuration', !!vOpts.duration);
 
   const nsInput = document.getElementById('cfgNsUrl');
   const intervalSelect = document.getElementById('cfgInterval');
