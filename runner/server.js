@@ -61,10 +61,10 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 10,
-      versionName: '1.9',
+      versionCode: 11,
+      versionName: '2.0',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Assistente interativo de emparelhamento BLE para HUAWEI WATCH GT 6 Pro e monitorização de ritmo cardíaco (BPM).',
+      releaseNotes: 'Integração direta e automática com HUAWEI WATCH GT 6 Pro (BLE), nova barra cardíaca no ecrã e voz com ritmo cardíaco.',
       features: [
         {
           icon: '📡',

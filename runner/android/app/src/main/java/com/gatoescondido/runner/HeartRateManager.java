@@ -244,9 +244,11 @@ public class HeartRateManager {
             int rssi = result.getRssi();
             MainActivity.notifyDiscoveredDevice(name, device.getAddress(), rssi, hasHrService);
 
-            // Auto-connect if it explicitly broadcasts Heart Rate Service or is an exact match
-            if (hasHrService && !isConnected && bluetoothGatt == null) {
-                Log.d(TAG, "Auto-connecting to device with HR Service: " + name + " [" + device.getAddress() + "]");
+            // Auto-connect if it explicitly broadcasts Heart Rate Service or is the Huawei Watch
+            boolean isTargetWatch = name.toUpperCase().contains("HUAWEI") &&
+                                   (name.toUpperCase().contains("WATCH") || name.toUpperCase().contains("GT"));
+            if ((hasHrService || isTargetWatch) && !isConnected && bluetoothGatt == null) {
+                Log.d(TAG, "Auto-connecting to candidate HR device: " + name + " [" + device.getAddress() + "]");
                 stopBleScan();
                 connectToDevice(device);
             }
@@ -317,8 +319,14 @@ public class HeartRateManager {
                     notifyState(true, connectedDeviceName);
                 } else {
                     Log.w(TAG, "Heart Rate measurement characteristic 0x2A37 not found on " + connectedDeviceName);
-                    notifyState(false, "Ritmo Cardíaco não detetado. Ativa 'Transmissão da FC' no relógio!");
+                    notifyState(false, "Ativa 'Transmissão da FC' no relógio!");
                     disconnect();
+                    // Resume scanning to catch the watch once broadcast is started on the watch
+                    mainHandler.postDelayed(() -> {
+                        if (!isConnected && !isScanning) {
+                            startBleScan("");
+                        }
+                    }, 2500);
                 }
             } else {
                 Log.w(TAG, "discoverServices failed with status=" + status);

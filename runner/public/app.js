@@ -150,10 +150,16 @@ window._onNativeHeartRate = function(bpm, deviceName) {
 
 window._onNativeHeartRateStatus = function(connected, deviceName, bpm) {
   isHeartRateConnected = !!connected;
-  if (deviceName) heartRateDeviceName = deviceName;
+  if (connected && deviceName) heartRateDeviceName = deviceName;
   if (bpm) currentHeartRate = bpm;
   updateHeartRateUI();
   updateHeartRateModalUI(connected, deviceName, bpm);
+
+  if (!connected && deviceName && (deviceName.includes('Ativa') || deviceName.includes('relógio') || deviceName.includes('obter'))) {
+    showToast('⚠️ ' + deviceName);
+    const qSub = document.getElementById('quickBarHrSub');
+    if (qSub) qSub.textContent = '⚠️ ' + deviceName;
+  }
 };
 
 window._onNativeDeviceDiscovered = function(name, address, rssi, isHr) {
@@ -354,6 +360,10 @@ function updateHeartRateUI() {
   const hrBox = document.getElementById('glucoseCardHrBox');
   const hrVal = document.getElementById('glucoseCardHrValue');
   const hrZone = document.getElementById('glucoseCardHrZone');
+  const qVal = document.getElementById('quickBarHrValue');
+  const qZone = document.getElementById('quickBarHrZone');
+  const qSub = document.getElementById('quickBarHrSub');
+  const qBtn = document.getElementById('btnQuickConnectHr');
   const maxHr = config.maxHr || 185;
 
   if (isHeartRateConnected && currentHeartRate > 0) {
@@ -370,15 +380,39 @@ function updateHeartRateUI() {
       hrZone.textContent = zone.label;
       hrZone.className = `text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase border ${zone.badgeClass}`;
     }
+    if (qVal) qVal.textContent = `${currentHeartRate} bpm`;
+    if (qZone && zone) {
+      qZone.textContent = zone.label;
+      qZone.className = `text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase border ${zone.badgeClass}`;
+      qZone.classList.remove('hidden');
+    }
+    if (qSub) qSub.textContent = `${heartRateDeviceName || 'HUAWEI WATCH'} · Ligado em tempo real ✓`;
+    if (qBtn) {
+      qBtn.textContent = 'Ligado ✓';
+      qBtn.className = 'px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[10px] transition shrink-0';
+    }
   } else if (isHeartRateConnected) {
     if (label) label.textContent = 'Ligado (aguardar)';
     if (hrBox) hrBox.classList.add('hidden');
+    if (qVal) qVal.textContent = 'A aguardar...';
+    if (qSub) qSub.textContent = `${heartRateDeviceName || 'HUAWEI WATCH'} · A receber dados...`;
+    if (qBtn) {
+      qBtn.textContent = 'Ligado';
+      qBtn.className = 'px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-bold text-[10px] transition shrink-0';
+    }
   } else {
     if (badge) {
       badge.className = 'flex items-center gap-1 text-[11px] text-rose-300 font-semibold bg-rose-950/40 border border-rose-800/60 px-2 py-0.5 rounded-full transition-all cursor-pointer active:scale-95 select-none';
     }
     if (label) label.textContent = 'Ligar Watch';
     if (hrBox) hrBox.classList.add('hidden');
+    if (qVal) qVal.textContent = '-- bpm';
+    if (qZone) qZone.classList.add('hidden');
+    if (qSub) qSub.textContent = 'HUAWEI WATCH GT 6 Pro · Toca para ligar';
+    if (qBtn) {
+      qBtn.textContent = 'Ligar Watch';
+      qBtn.className = 'px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-[10px] transition shrink-0';
+    }
   }
 }
 
@@ -1592,6 +1626,13 @@ async function startWorkout() {
   triggerNativeForegroundStart();
   checkInitialAudioOutput();
 
+  // Auto-connect to Huawei Watch on workout start if not connected yet
+  if (!isHeartRateConnected && isRunningNative()) {
+    if (window.AndroidVoice && typeof window.AndroidVoice.startHeartRateScan === 'function') {
+      window.AndroidVoice.startHeartRateScan();
+    }
+  }
+
   if (config.wakeLockEnabled && 'wakeLock' in navigator) {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
@@ -1724,59 +1765,59 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 10,
-  versionName: '1.9',
+  versionCode: 11,
+  versionName: '2.0',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.9 • Assistente Cardíaco HUAWEI WATCH',
+    sub: 'Versão 2.0 • Integração Total HUAWEI WATCH GT',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
       {
-        icon: '📡',
-        title: 'Assistente de Ligação HUAWEI WATCH (BLE)',
-        desc: 'Novo painel interativo de deteção em tempo real. Vê os dispositivos detetados e liga diretamente ao teu relógio com instruções passo a passo ("Transmissão de ritmo cardíaco").'
+        icon: '❤️',
+        title: 'Barra Cardíaca em Tempo Real no Ecrã Principal',
+        desc: 'Nova barra dedicada no ecrã com batimentos cardíacos (BPM) e zonas de esforço Z1-Z5 em direto do teu HUAWEI WATCH GT 6 Pro.'
       },
       {
-        icon: '❤️',
-        title: 'Ritmo Cardíaco & Zonas em Tempo Real',
-        desc: 'O treinador de áudio anuncia os teus batimentos cardíacos (BPM) e a zona atual (Z1 a Z5) a cada intervalo programado.'
+        icon: '⚡',
+        title: 'Ligação Automática por Bluetooth LE',
+        desc: 'A app inicia a pesquisa e ligação automática ao relógio assim que arranca ou inicia um treino.'
+      },
+      {
+        icon: '💡',
+        title: 'Instruções Claras no Relógio',
+        desc: 'Guia visual passo a passo para ativar "Transmissão de ritmo cardíaco" nas definições do relógio para emitir via BLE.'
       },
       {
         icon: '🛑',
-        title: 'Paragem Imediata de Treino',
-        desc: 'Ao carregar em "Parar Treino", o serviço de fundo nativo, notificações e temporizadores são cancelados instantaneamente.'
-      },
-      {
-        icon: '🎧',
-        title: 'Deteção de Fones & Auscultadores',
-        desc: 'Suporte alargado para auscultadores Lenovo VoIP, perfis SCO, Headset e Bluetooth em tempo real.'
+        title: 'Paragem Limpa de Fundo',
+        desc: 'Cancelamento imediato de serviços de fundo, áudio e notificações ao parar o treino.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.9 • HUAWEI WATCH HR Assistant',
+    sub: 'Version 2.0 • Full HUAWEI WATCH GT Integration',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
       {
-        icon: '📡',
-        title: 'HUAWEI WATCH Pairing Assistant (BLE)',
-        desc: 'Interactive live device scanner. Discover and connect directly to your Huawei Watch with step-by-step guidance ("HR Data Broadcasts").'
+        icon: '❤️',
+        title: 'Live Heart Rate Bar on Main Screen',
+        desc: 'Dedicated real-time heart rate display and Z1-Z5 effort zones directly from your HUAWEI WATCH GT 6 Pro.'
       },
       {
-        icon: '❤️',
-        title: 'Heart Rate & Training Zones',
-        desc: 'Voice coach announces your heart rate (BPM) and zone (Z1 to Z5) at every scheduled workout interval.'
+        icon: '⚡',
+        title: 'Auto-Discovery & Pairing over BLE',
+        desc: 'The app automatically discovers and links to your watch on launch or workout start.'
+      },
+      {
+        icon: '💡',
+        title: 'Step-by-Step Watch Guide',
+        desc: 'Clear guidance on turning on "HR Data Broadcasts" in your watch settings.'
       },
       {
         icon: '🛑',
-        title: 'Immediate Clean Workout Stop',
-        desc: 'Stopping the workout immediately terminates background service, audio, and notification tray icons.'
-      },
-      {
-        icon: '🎧',
-        title: 'Universal Headset Detection',
-        desc: 'Full real-time detection for Lenovo VoIP, SCO and Bluetooth earbuds.'
+        title: 'Clean Background Stop',
+        desc: 'Instant cancellation of background services and notifications.'
       }
     ]
   }
@@ -2131,6 +2172,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('hrStatusBadge')?.addEventListener('click', triggerHeartRateConnect);
     document.getElementById('btnConnectHrSettings')?.addEventListener('click', triggerHeartRateConnect);
+    document.getElementById('heartRateQuickBar')?.addEventListener('click', triggerHeartRateConnect);
+    document.getElementById('btnQuickConnectHr')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      triggerHeartRateConnect();
+    });
 
   const nsInput = document.getElementById('cfgNsUrl');
   const intervalSelect = document.getElementById('cfgInterval');
@@ -2227,6 +2273,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Initial fetch on page load
   performPollAndAnnouncement(false);
+
+  // Auto-discover and connect to HUAWEI WATCH on app launch
+  if (isRunningNative()) {
+    setTimeout(() => {
+      if (!isHeartRateConnected) {
+        console.log('[HeartRate] Auto-starting background BLE scan for Huawei Watch on launch');
+        if (window.AndroidVoice && typeof window.AndroidVoice.startHeartRateScan === 'function') {
+          window.AndroidVoice.startHeartRateScan();
+        }
+      }
+    }, 1500);
+  }
 
   // Update visual audio engine badge (Native vs Web)
   function updateAudioEngineDisplay() {

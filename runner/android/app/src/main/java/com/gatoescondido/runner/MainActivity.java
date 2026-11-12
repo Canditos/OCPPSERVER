@@ -141,8 +141,15 @@ public class MainActivity extends BridgeActivity {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
                 perms.add(Manifest.permission.BLUETOOTH_SCAN);
             }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.ACCESS_FINE_LOCATION);
+            }
             if (!perms.isEmpty()) {
                 ActivityCompat.requestPermissions(this, perms.toArray(new String[0]), 102);
+            }
+        } else { // Android 11 and below
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 104);
             }
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)

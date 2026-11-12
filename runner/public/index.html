@@ -110,6 +110,24 @@
       </button>
     </div>
 
+    <!-- Dedicated Heart Rate Quick Bar -->
+    <div id="heartRateQuickBar" class="flex items-center justify-between gap-2 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-rose-900/40 text-xs shrink-0 cursor-pointer hover:border-rose-700/60 transition active:scale-[0.99]" title="Configurar e ligar HUAWEI WATCH / Sensor Cardíaco">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-base text-rose-500 animate-pulse shrink-0">❤️</span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span id="quickBarHrTitle" class="text-[11px] font-bold text-white">Ritmo Cardíaco:</span>
+            <span id="quickBarHrValue" class="text-xs font-black text-rose-300 font-mono">-- bpm</span>
+            <span id="quickBarHrZone" class="hidden text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase bg-rose-950 text-rose-300 border border-rose-800/50">--</span>
+          </div>
+          <p id="quickBarHrSub" class="text-[10px] text-slate-400 truncate">HUAWEI WATCH GT 6 Pro · Toca para ligar</p>
+        </div>
+      </div>
+      <button id="btnQuickConnectHr" type="button" class="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-[10px] transition shrink-0 cursor-pointer">
+        Ligar Watch
+      </button>
+    </div>
+
     <!-- Glucose Big High-Contrast Card -->
     <div id="glucoseCard" class="relative overflow-hidden rounded-2xl bg-slate-900/90 border-2 border-slate-800 px-4 py-2 sm:py-3 backdrop-blur-xl shadow-xl transition-all duration-300 shrink-0">
       <div class="flex justify-between items-center mb-0.5">
@@ -596,6 +614,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=30"></script>
+  <script src="/app.js?v=31"></script>
 </body>
 </html>
