@@ -185,7 +185,13 @@ public class RunnerService extends Service {
             }
         }
 
-        // 3. Start recurring background timer in Java (immune to WebView sleep!)
+        // 3. Connect to Heart Rate sensor if enabled
+        if (tellHeartRate && !HeartRateManager.getInstance(this).isConnected()) {
+            Log.d(TAG, "Starting Heart Rate peripheral search for workout");
+            HeartRateManager.getInstance(this).startConnect("");
+        }
+
+        // 4. Start recurring background timer in Java (immune to WebView sleep!)
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(this::pollAndAnnounce, 2, intervalMinutes * 60L, TimeUnit.SECONDS);
     }

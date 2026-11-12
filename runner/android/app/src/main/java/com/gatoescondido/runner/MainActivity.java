@@ -500,6 +500,25 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    public static void notifyDiscoveredDevice(String name, String address, int rssi, boolean isHr) {
+        try {
+            if (currentActivityRef != null && currentActivityRef.get() != null) {
+                MainActivity act = currentActivityRef.get();
+                if (act.getBridge() != null && act.getBridge().getWebView() != null) {
+                    act.runOnUiThread(() -> {
+                        String js = "if(window._onNativeDeviceDiscovered) { window._onNativeDeviceDiscovered(" +
+                                JSONObject.quote(name != null ? name : "Dispositivo") + ", " +
+                                JSONObject.quote(address != null ? address : "") + ", " +
+                                rssi + ", " + isHr + "); }";
+                        act.getBridge().getWebView().evaluateJavascript(js, null);
+                    });
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in notifyDiscoveredDevice", e);
+        }
+    }
+
     public class AudioBridge {
         @JavascriptInterface
         public void playVoice(String url) {
@@ -566,6 +585,24 @@ public class MainActivity extends BridgeActivity {
         public void connectHeartRate(String preferredName) {
             Log.d(TAG, "connectHeartRate requested with preferredName=" + preferredName);
             HeartRateManager.getInstance(MainActivity.this).startConnect(preferredName);
+        }
+
+        @JavascriptInterface
+        public void connectHeartRateAddress(String address) {
+            Log.d(TAG, "connectHeartRateAddress requested for address=" + address);
+            HeartRateManager.getInstance(MainActivity.this).connectDeviceByAddress(address);
+        }
+
+        @JavascriptInterface
+        public void startHeartRateScan() {
+            Log.d(TAG, "startHeartRateScan requested");
+            HeartRateManager.getInstance(MainActivity.this).startConnect("");
+        }
+
+        @JavascriptInterface
+        public void stopHeartRateScan() {
+            Log.d(TAG, "stopHeartRateScan requested");
+            HeartRateManager.getInstance(MainActivity.this).stopBleScan();
         }
 
         @JavascriptInterface

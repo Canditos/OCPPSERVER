@@ -61,15 +61,20 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 9,
-      versionName: '1.8',
+      versionCode: 10,
+      versionName: '1.9',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Suporte para ritmo cardíaco (BPM) e Zonas Z1-Z5 com HUAWEI WATCH GT e fitas Bluetooth.',
+      releaseNotes: 'Assistente interativo de emparelhamento BLE para HUAWEI WATCH GT 6 Pro e monitorização de ritmo cardíaco (BPM).',
       features: [
         {
+          icon: '📡',
+          title: 'Assistente HUAWEI WATCH GT (BLE)',
+          desc: 'Pesquisa e ligação direta com painel interativo ao vivo e instruções passo a passo para o relógio.'
+        },
+        {
           icon: '❤️',
-          title: 'Ritmo Cardíaco HUAWEI WATCH GT',
-          desc: 'Lê os batimentos cardíacos diretamente do teu HUAWEI WATCH GT 6 Pro por Bluetooth BLE e anuncia a FC e Zonas de Treino durante a corrida.'
+          title: 'Ritmo Cardíaco & Zonas Z1-Z5',
+          desc: 'Anúncio por voz dos batimentos cardíacos (BPM) e zonas de esforço durante corridas e caminhadas.'
         },
         {
           icon: '🎙️',

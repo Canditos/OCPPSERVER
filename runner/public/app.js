@@ -132,6 +132,18 @@ window._onNativeWorkoutStopped = function() {
   stopWorkout(true);
 };
 
+const discoveredDevicesMap = new Map();
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 window._onNativeHeartRate = function(bpm, deviceName) {
   handleHeartRateUpdate(bpm, deviceName);
 };
@@ -141,7 +153,172 @@ window._onNativeHeartRateStatus = function(connected, deviceName, bpm) {
   if (deviceName) heartRateDeviceName = deviceName;
   if (bpm) currentHeartRate = bpm;
   updateHeartRateUI();
+  updateHeartRateModalUI(connected, deviceName, bpm);
 };
+
+window._onNativeDeviceDiscovered = function(name, address, rssi, isHr) {
+  if (!address) return;
+  discoveredDevicesMap.set(address, {
+    name: name || 'Dispositivo Bluetooth',
+    address: address,
+    rssi: rssi || -70,
+    isHr: !!isHr,
+    timestamp: Date.now()
+  });
+  renderDiscoveredDevices();
+};
+
+function renderDiscoveredDevices() {
+  const container = document.getElementById('hrDeviceList');
+  if (!container) return;
+
+  if (discoveredDevicesMap.size === 0) {
+    container.innerHTML = `
+      <div id="hrEmptyState" class="p-4 rounded-xl bg-slate-950/50 border border-dashed border-slate-800 text-center text-xs text-slate-500">
+        A procurar HUAWEI WATCH e outros sensores BLE...
+      </div>
+    `;
+    return;
+  }
+
+  const list = Array.from(discoveredDevicesMap.values()).sort((a, b) => {
+    if (a.isHr && !b.isHr) return -1;
+    if (!a.isHr && b.isHr) return 1;
+    const isWatchA = a.name.toUpperCase().includes('WATCH') || a.name.toUpperCase().includes('GT') || a.name.toUpperCase().includes('HUAWEI');
+    const isWatchB = b.name.toUpperCase().includes('WATCH') || b.name.toUpperCase().includes('GT') || b.name.toUpperCase().includes('HUAWEI');
+    if (isWatchA && !isWatchB) return -1;
+    if (!isWatchA && isWatchB) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  let html = '';
+  for (const dev of list) {
+    const isWatch = dev.name.toUpperCase().includes('WATCH') || dev.name.toUpperCase().includes('GT') || dev.name.toUpperCase().includes('HUAWEI');
+    const icon = dev.isHr ? '❤️' : (isWatch ? '⌚' : '📡');
+    const isConnectedThis = isHeartRateConnected && (dev.name === heartRateDeviceName || dev.address === heartRateDeviceName);
+
+    html += `
+      <div class="p-2.5 rounded-xl bg-slate-950/70 border ${isConnectedThis ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-slate-800 hover:border-slate-700'} flex items-center justify-between gap-2 transition">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="text-lg shrink-0">${icon}</span>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-xs font-bold text-white truncate max-w-[150px]">${escapeHtml(dev.name)}</span>
+              ${dev.isHr ? '<span class="text-[9px] px-1.5 py-0.2 rounded-full font-extrabold bg-rose-950 text-rose-300 border border-rose-600/50">Sensor FC</span>' : ''}
+              ${isWatch && !dev.isHr ? '<span class="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-sky-950 text-sky-300 border border-sky-600/40">Watch</span>' : ''}
+            </div>
+            <p class="text-[10px] text-slate-500 font-mono truncate">${escapeHtml(dev.address)}</p>
+          </div>
+        </div>
+        <button type="button" class="btn-connect-hr-device shrink-0 px-3 py-1.5 rounded-xl ${isConnectedThis ? 'bg-emerald-600 text-white font-black' : 'bg-rose-600 hover:bg-rose-500 text-white font-bold'} text-xs active:scale-95 transition cursor-pointer" data-address="${dev.address}" data-name="${escapeHtml(dev.name)}">
+          ${isConnectedThis ? 'Ligado ✓' : 'Ligar'}
+        </button>
+      </div>
+    `;
+  }
+  container.innerHTML = html;
+
+  container.querySelectorAll('.btn-connect-hr-device').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const addr = btn.getAttribute('data-address');
+      const name = btn.getAttribute('data-name');
+      connectSpecificHeartRateDevice(addr, name);
+    });
+  });
+}
+
+function updateHeartRateModalUI(connected, deviceName, bpm) {
+  const box = document.getElementById('hrConnectedBox');
+  const nameEl = document.getElementById('hrConnectedName');
+  const bpmEl = document.getElementById('hrConnectedBpm');
+  const zoneEl = document.getElementById('hrConnectedZone');
+  const statusEl = document.getElementById('hrModalStatus');
+  const pulseEl = document.getElementById('hrScanPulse');
+
+  if (connected) {
+    if (box) box.classList.remove('hidden');
+    if (nameEl) nameEl.textContent = deviceName || 'Sensor Cardíaco';
+    if (bpmEl) bpmEl.textContent = bpm > 0 ? bpm : '--';
+    if (statusEl) statusEl.textContent = `Ligado a ${deviceName || 'Sensor'}!`;
+    if (pulseEl) {
+      pulseEl.className = 'inline-block w-2 h-2 rounded-full bg-emerald-400';
+    }
+    if (zoneEl) {
+      if (bpm > 0) {
+        const zone = getHeartRateZone(bpm, config.maxHr || 185);
+        if (zone) {
+          zoneEl.textContent = zone.label;
+          zoneEl.className = `text-[10px] px-1.5 py-0.5 rounded font-extrabold uppercase border ${zone.badgeClass} ml-1`;
+          zoneEl.classList.remove('hidden');
+        }
+      } else {
+        zoneEl.classList.add('hidden');
+      }
+    }
+  } else {
+    if (box) box.classList.add('hidden');
+    if (statusEl && statusEl.textContent.includes('Ligado')) {
+      statusEl.textContent = 'Desconectado';
+    }
+    if (pulseEl) {
+      pulseEl.className = 'inline-block w-2 h-2 rounded-full bg-sky-400 animate-ping';
+    }
+  }
+}
+
+function openHeartRateModal() {
+  const modal = document.getElementById('heartRateModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  updateHeartRateModalUI(isHeartRateConnected, heartRateDeviceName, currentHeartRate);
+  renderDiscoveredDevices();
+  startHeartRateScanFromUI();
+}
+
+function closeHeartRateModal() {
+  const modal = document.getElementById('heartRateModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function startHeartRateScanFromUI() {
+  const statusEl = document.getElementById('hrModalStatus');
+  const pulseEl = document.getElementById('hrScanPulse');
+  if (pulseEl) pulseEl.className = 'inline-block w-2 h-2 rounded-full bg-sky-400 animate-ping';
+  if (statusEl) statusEl.textContent = 'A pesquisar sensores Bluetooth...';
+
+  if (window.AndroidVoice && typeof window.AndroidVoice.startHeartRateScan === 'function') {
+    window.AndroidVoice.startHeartRateScan();
+  } else if (window.AndroidVoice && typeof window.AndroidVoice.connectHeartRate === 'function') {
+    window.AndroidVoice.connectHeartRate('');
+  }
+}
+
+function connectSpecificHeartRateDevice(address, name) {
+  const statusEl = document.getElementById('hrModalStatus');
+  if (statusEl) statusEl.textContent = `A ligar a ${name}...`;
+  showToast(`❤️ A ligar a ${name}...`);
+
+  if (window.AndroidVoice && typeof window.AndroidVoice.connectHeartRateAddress === 'function') {
+    window.AndroidVoice.connectHeartRateAddress(address);
+  } else if (window.AndroidVoice && typeof window.AndroidVoice.connectHeartRate === 'function') {
+    window.AndroidVoice.connectHeartRate(name);
+  }
+}
+
+function disconnectHeartRateDevice() {
+  if (window.AndroidVoice && typeof window.AndroidVoice.disconnectHeartRate === 'function') {
+    window.AndroidVoice.disconnectHeartRate();
+  }
+  if (webBluetoothDevice && webBluetoothDevice.gatt) {
+    try { webBluetoothDevice.gatt.disconnect(); } catch (ignored) {}
+  }
+  isHeartRateConnected = false;
+  currentHeartRate = 0;
+  updateHeartRateUI();
+  updateHeartRateModalUI(false, '', 0);
+  showToast('Sensor cardíaco desligado');
+}
 
 function handleHeartRateUpdate(bpm, deviceName) {
   if (!bpm || bpm <= 30 || bpm > 250) return;
@@ -152,6 +329,7 @@ function handleHeartRateUpdate(bpm, deviceName) {
     sessionHeartRates.push(bpm);
   }
   updateHeartRateUI();
+  updateHeartRateModalUI(true, deviceName, bpm);
 }
 
 function getHeartRateZone(bpm, maxHr = 185) {
@@ -210,10 +388,9 @@ let webBluetoothServer = null;
 async function triggerHeartRateConnect() {
   const isPt = (config.language || 'pt-PT') === 'pt-PT';
 
-  // 1. Android Native BLE bridge (Primary for APK & phone in pocket!)
-  if (window.AndroidVoice && typeof window.AndroidVoice.connectHeartRate === 'function') {
-    showToast(isPt ? '❤️ A procurar e ligar ao HUAWEI WATCH GT 6 Pro...' : '❤️ Connecting to HUAWEI WATCH GT 6 Pro...');
-    window.AndroidVoice.connectHeartRate('HUAWEI WATCH');
+  // 1. Android Native BLE bridge -> Open visual pairing assistant modal
+  if (window.AndroidVoice) {
+    openHeartRateModal();
     return;
   }
 
@@ -245,10 +422,12 @@ async function triggerHeartRateConnect() {
         isHeartRateConnected = false;
         currentHeartRate = 0;
         updateHeartRateUI();
+        updateHeartRateModalUI(false, '', 0);
         showToast(isPt ? 'Sensor cardíaco desligado' : 'Heart rate monitor disconnected');
       });
       isHeartRateConnected = true;
       updateHeartRateUI();
+      updateHeartRateModalUI(true, heartRateDeviceName, currentHeartRate);
       showToast(isPt ? `❤️ Ligado a ${heartRateDeviceName}!` : `❤️ Connected to ${heartRateDeviceName}!`);
     } catch (e) {
       console.warn('Web Bluetooth error:', e);
@@ -258,6 +437,9 @@ async function triggerHeartRateConnect() {
     }
     return;
   }
+
+  showToast(isPt ? 'Bluetooth não suportado neste navegador' : 'Bluetooth not supported in this browser');
+}
 
   showToast(isPt ? 'Bluetooth não suportado neste navegador' : 'Bluetooth not supported in this browser');
 }
@@ -1545,17 +1727,22 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 9,
-  versionName: '1.8',
+  versionCode: 10,
+  versionName: '1.9',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.8 • HUAWEI WATCH GT & Ritmo Cardíaco',
+    sub: 'Versão 1.9 • Assistente Cardíaco HUAWEI WATCH',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
       {
+        icon: '📡',
+        title: 'Assistente de Ligação HUAWEI WATCH (BLE)',
+        desc: 'Novo painel interativo de deteção em tempo real. Vê os dispositivos detetados e liga diretamente ao teu relógio com instruções passo a passo ("Transmissão de ritmo cardíaco").'
+      },
+      {
         icon: '❤️',
-        title: 'Ritmo Cardíaco HUAWEI WATCH GT (BPM)',
-        desc: 'Ligação direta ao teu HUAWEI WATCH GT 6 Pro por Bluetooth BLE. O treinador passa a dizer os teus batimentos e zonas de esforço (Z1 a Z5).'
+        title: 'Ritmo Cardíaco & Zonas em Tempo Real',
+        desc: 'O treinador de áudio anuncia os teus batimentos cardíacos (BPM) e a zona atual (Z1 a Z5) a cada intervalo programado.'
       },
       {
         icon: '🛑',
@@ -1564,25 +1751,25 @@ const CHANGELOG_DATA = {
       },
       {
         icon: '🎧',
-        title: 'Deteção Universal de Fones & VoIP',
-        desc: 'Suporte total para auscultadores Lenovo VoIP, perfis SCO, Headset e Bluetooth em tempo real.'
-      },
-      {
-        icon: '🎙️',
-        title: 'Comando de Voz & Registo de Gel',
-        desc: 'Diz "Tomei gel" ou clica no botão rápido para registar 20g HC. O treinador faz pausa inteligente para não mandar tomar outro gel enquanto absorve.'
+        title: 'Deteção de Fones & Auscultadores',
+        desc: 'Suporte alargado para auscultadores Lenovo VoIP, perfis SCO, Headset e Bluetooth em tempo real.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.8 • HUAWEI WATCH GT Heart Rate',
+    sub: 'Version 1.9 • HUAWEI WATCH HR Assistant',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
       {
+        icon: '📡',
+        title: 'HUAWEI WATCH Pairing Assistant (BLE)',
+        desc: 'Interactive live device scanner. Discover and connect directly to your Huawei Watch with step-by-step guidance ("HR Data Broadcasts").'
+      },
+      {
         icon: '❤️',
-        title: 'HUAWEI WATCH GT Heart Rate (BPM)',
-        desc: 'Direct connection to your HUAWEI WATCH GT 6 Pro over BLE. The voice coach announces your heart rate and training zones (Z1 to Z5).'
+        title: 'Heart Rate & Training Zones',
+        desc: 'Voice coach announces your heart rate (BPM) and zone (Z1 to Z5) at every scheduled workout interval.'
       },
       {
         icon: '🛑',
@@ -1591,13 +1778,8 @@ const CHANGELOG_DATA = {
       },
       {
         icon: '🎧',
-        title: 'Universal Headset & VoIP Detection',
+        title: 'Universal Headset Detection',
         desc: 'Full real-time detection for Lenovo VoIP, SCO and Bluetooth earbuds.'
-      },
-      {
-        icon: '🎙️',
-        title: 'Voice Commands & Gel Logging',
-        desc: 'Say "Took gel" or tap the quick button to log 20g carbs. Intelligent cooldown avoids repeat alerts during digestion.'
       }
     ]
   }
@@ -2027,6 +2209,15 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnDismissWhatsNew')?.addEventListener('click', closeWhatsNewModal);
   document.getElementById('whatsNewModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'whatsNewModal') closeWhatsNewModal();
+  });
+
+  // Heart Rate Modal listeners
+  document.getElementById('btnCloseHrModal')?.addEventListener('click', closeHeartRateModal);
+  document.getElementById('btnDismissHrModal')?.addEventListener('click', closeHeartRateModal);
+  document.getElementById('btnRefreshHrScan')?.addEventListener('click', startHeartRateScanFromUI);
+  document.getElementById('btnDisconnectHr')?.addEventListener('click', disconnectHeartRateDevice);
+  document.getElementById('heartRateModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'heartRateModal') closeHeartRateModal();
   });
 
   // Automatically show What's New notification on launch if the user hasn't seen this version yet

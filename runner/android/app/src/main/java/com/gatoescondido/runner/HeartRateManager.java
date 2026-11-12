@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Context;
@@ -21,10 +22,10 @@ import android.os.Looper;
 import android.os.ParcelUuid;
 import android.util.Log;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -83,8 +84,7 @@ public class HeartRateManager {
     }
 
     public int getLatestBpm() {
-        // If reading is older than 30 seconds, consider stale
-        if (System.currentTimeMillis() - lastReadingTime > 30000) {
+        if (System.currentTimeMillis() - lastReadingTime > 60000) {
             return 0;
         }
         return latestBpm;
@@ -99,9 +99,8 @@ public class HeartRateManager {
     }
 
     /**
-     * Attempts to connect to a Heart Rate device:
-     * 1. Checks bonded (paired) devices first (e.g. "HUAWEI WATCH GT 6 Pro").
-     * 2. If not found among bonded, launches a BLE scan for Heart Rate Service 0x180D.
+     * Starts discovering Heart Rate peripherals:
+     * Broadcasts discovered devices in real time to WebView.
      */
     public synchronized void startConnect(String preferredName) {
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
@@ -111,42 +110,47 @@ public class HeartRateManager {
             return;
         }
 
-        // 1. Look for paired devices that match preferred name or known fitness wearables
+        // Notify bonded devices first for quick display in UI list
         Set<BluetoothDevice> bonded = adapter.getBondedDevices();
         if (bonded != null) {
             for (BluetoothDevice dev : bonded) {
                 String name = dev.getName();
-                if (name != null) {
-                    name = name.trim();
-                    boolean match = false;
-                    if (preferredName != null && !preferredName.isEmpty() && name.toLowerCase().contains(preferredName.toLowerCase())) {
-                        match = true;
-                    } else if (name.toUpperCase().contains("HUAWEI WATCH") ||
-                               name.toUpperCase().contains("WATCH GT") ||
-                               name.toUpperCase().contains("POLAR") ||
-                               name.toUpperCase().contains("GARMIN") ||
-                               name.toUpperCase().contains("HRM") ||
-                               name.toUpperCase().contains("TICKR")) {
-                        match = true;
-                    }
-                    if (match) {
-                        Log.d(TAG, "Found paired candidate device: " + name + " [" + dev.getAddress() + "]");
-                        connectToDevice(dev);
-                        return;
-                    }
+                if (name != null && !name.isEmpty()) {
+                    boolean isFitness = name.toUpperCase().contains("HUAWEI") ||
+                                       name.toUpperCase().contains("WATCH") ||
+                                       name.toUpperCase().contains("GT") ||
+                                       name.toUpperCase().contains("POLAR") ||
+                                       name.toUpperCase().contains("GARMIN") ||
+                                       name.toUpperCase().contains("HRM");
+                    MainActivity.notifyDiscoveredDevice(name, dev.getAddress(), -50, isFitness);
                 }
             }
         }
 
-        // 2. Start BLE scan for devices advertising standard Heart Rate service
-        startBleScan();
+        // Always run active BLE scan to find the live HR broadcast
+        startBleScan(preferredName);
+    }
+
+    public synchronized void connectDeviceByAddress(String address) {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null || !adapter.isEnabled() || address == null || address.isEmpty()) return;
+        try {
+            stopBleScan();
+            BluetoothDevice device = adapter.getRemoteDevice(address);
+            if (device != null) {
+                connectToDevice(device);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "connectDeviceByAddress error", e);
+            notifyState(false, "Erro ao ligar ao dispositivo selecionado");
+        }
     }
 
     private synchronized void connectToDevice(BluetoothDevice device) {
         disconnect();
         connectedDevice = device;
         connectedDeviceName = device.getName() != null ? device.getName() : "Sensor Cardíaco";
-        Log.d(TAG, "Connecting to GATT on: " + connectedDeviceName);
+        Log.d(TAG, "Connecting to GATT on: " + connectedDeviceName + " [" + device.getAddress() + "]");
         notifyState(false, "A ligar a " + connectedDeviceName + "...");
 
         try {
@@ -157,11 +161,11 @@ public class HeartRateManager {
             }
         } catch (Exception e) {
             Log.e(TAG, "connectGatt error", e);
-            notifyState(false, "Erro ao ligar");
+            notifyState(false, "Erro na ligação GATT");
         }
     }
 
-    private void startBleScan() {
+    private void startBleScan(String preferredName) {
         if (isScanning) return;
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null || !adapter.isEnabled()) return;
@@ -173,11 +177,11 @@ public class HeartRateManager {
         }
 
         isScanning = true;
-        Log.d(TAG, "Starting BLE scan for Heart Rate Service...");
-        notifyState(false, "A procurar sensor / relógio...");
+        Log.d(TAG, "Starting BLE scan for Heart Rate devices...");
+        notifyState(false, "A pesquisar dispositivos Bluetooth...");
 
+        // Scan without restrictive filters so we receive all advertising wearables
         List<ScanFilter> filters = new ArrayList<>();
-        filters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(UUID_HR_SERVICE)).build());
 
         ScanSettings settings = new ScanSettings.Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -185,25 +189,30 @@ public class HeartRateManager {
 
         try {
             scanner.startScan(filters, settings, scanCallback);
-            // Stop scanning after 12 seconds if nothing found
-            mainHandler.postDelayed(() -> stopBleScan(scanner), 12000);
+            // Stop scanning after 18 seconds if user doesn't pick
+            mainHandler.postDelayed(() -> {
+                if (isScanning) {
+                    stopBleScan();
+                    if (!isConnected) {
+                        notifyState(false, "Pesquisa concluída. Verifica se a 'Transmissão da FC' está ligada no relógio.");
+                    }
+                }
+            }, 18000);
         } catch (Exception e) {
             Log.e(TAG, "startScan error", e);
             isScanning = false;
         }
     }
 
-    private void stopBleScan(BluetoothLeScanner scanner) {
+    public synchronized void stopBleScan() {
         if (!isScanning) return;
         isScanning = false;
         try {
-            if (scanner != null) {
-                scanner.stopScan(scanCallback);
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            if (adapter != null && adapter.getBluetoothLeScanner() != null) {
+                adapter.getBluetoothLeScanner().stopScan(scanCallback);
             }
         } catch (Exception ignored) {}
-        if (!isConnected) {
-            notifyState(false, "Nenhum sensor encontrado");
-        }
     }
 
     private final ScanCallback scanCallback = new ScanCallback() {
@@ -211,20 +220,43 @@ public class HeartRateManager {
         public void onScanResult(int callbackType, ScanResult result) {
             if (result == null || result.getDevice() == null) return;
             BluetoothDevice device = result.getDevice();
+            ScanRecord record = result.getScanRecord();
+
             String name = device.getName();
-            Log.d(TAG, "BLE scan found candidate: " + name + " [" + device.getAddress() + "]");
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter != null && adapter.getBluetoothLeScanner() != null) {
-                stopBleScan(adapter.getBluetoothLeScanner());
+            if (name == null && record != null) {
+                name = record.getDeviceName();
             }
-            connectToDevice(device);
+            if (name == null || name.trim().isEmpty()) {
+                return; // skip unnamed raw beacons
+            }
+            name = name.trim();
+
+            boolean hasHrService = false;
+            if (record != null && record.getServiceUuids() != null) {
+                for (ParcelUuid pu : record.getServiceUuids()) {
+                    if (pu != null && UUID_HR_SERVICE.equals(pu.getUuid())) {
+                        hasHrService = true;
+                        break;
+                    }
+                }
+            }
+
+            int rssi = result.getRssi();
+            MainActivity.notifyDiscoveredDevice(name, device.getAddress(), rssi, hasHrService);
+
+            // Auto-connect if it explicitly broadcasts Heart Rate Service or is an exact match
+            if (hasHrService && !isConnected && bluetoothGatt == null) {
+                Log.d(TAG, "Auto-connecting to device with HR Service: " + name + " [" + device.getAddress() + "]");
+                stopBleScan();
+                connectToDevice(device);
+            }
         }
 
         @Override
         public void onScanFailed(int errorCode) {
             Log.w(TAG, "BLE scan failed with code: " + errorCode);
             isScanning = false;
-            notifyState(false, "Falha na pesquisa Bluetooth");
+            notifyState(false, "Falha ao iniciar pesquisa Bluetooth (" + errorCode + ")");
         }
     };
 
@@ -233,28 +265,23 @@ public class HeartRateManager {
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             Log.d(TAG, "GATT connection state: status=" + status + ", newState=" + newState);
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
-                isConnected = true;
-                notifyState(true, connectedDeviceName);
-                Log.d(TAG, "Connected to GATT, discovering services...");
-                // Delay discovery slightly for Huawei firmware stability
+                Log.d(TAG, "Connected to GATT server, discovering services...");
+                notifyState(false, "Ligado. A obter ritmo cardíaco...");
                 mainHandler.postDelayed(() -> {
                     if (bluetoothGatt != null) {
                         bluetoothGatt.discoverServices();
                     }
-                }, 300);
+                }, 400);
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.d(TAG, "Disconnected from GATT");
                 isConnected = false;
                 latestBpm = 0;
                 notifyState(false, "Desconectado");
-                // Auto-reconnect attempt
-                if (connectedDevice != null) {
-                    mainHandler.postDelayed(() -> {
-                        if (!isConnected && connectedDevice != null) {
-                            Log.d(TAG, "Attempting auto-reconnect to " + connectedDevice.getName());
-                            connectToDevice(connectedDevice);
-                        }
-                    }, 4000);
+                try {
+                    gatt.close();
+                } catch (Exception ignored) {}
+                if (bluetoothGatt == gatt) {
+                    bluetoothGatt = null;
                 }
             }
         }
@@ -263,17 +290,40 @@ public class HeartRateManager {
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             Log.d(TAG, "Services discovered with status: " + status);
             if (status == BluetoothGatt.GATT_SUCCESS) {
+                BluetoothGattCharacteristic hrChar = null;
+
+                // 1. Look under official Heart Rate service 0x180D
                 BluetoothGattService hrService = gatt.getService(UUID_HR_SERVICE);
                 if (hrService != null) {
-                    BluetoothGattCharacteristic hrChar = hrService.getCharacteristic(UUID_HR_MEASUREMENT);
-                    if (hrChar != null) {
-                        enableHrNotifications(gatt, hrChar);
-                    } else {
-                        Log.w(TAG, "Heart rate measurement characteristic not found in service");
-                    }
-                } else {
-                    Log.w(TAG, "Heart rate service 0x180D not found on device");
+                    hrChar = hrService.getCharacteristic(UUID_HR_MEASUREMENT);
                 }
+
+                // 2. Search all services for 0x2A37 if not found under 0x180D
+                if (hrChar == null) {
+                    for (BluetoothGattService s : gatt.getServices()) {
+                        for (BluetoothGattCharacteristic c : s.getCharacteristics()) {
+                            if (UUID_HR_MEASUREMENT.equals(c.getUuid())) {
+                                hrChar = c;
+                                break;
+                            }
+                        }
+                        if (hrChar != null) break;
+                    }
+                }
+
+                if (hrChar != null) {
+                    enableHrNotifications(gatt, hrChar);
+                    isConnected = true;
+                    notifyState(true, connectedDeviceName);
+                } else {
+                    Log.w(TAG, "Heart Rate measurement characteristic 0x2A37 not found on " + connectedDeviceName);
+                    notifyState(false, "Ritmo Cardíaco não detetado. Ativa 'Transmissão da FC' no relógio!");
+                    disconnect();
+                }
+            } else {
+                Log.w(TAG, "discoverServices failed with status=" + status);
+                notifyState(false, "Erro ao descobrir serviços");
+                disconnect();
             }
         }
 
@@ -309,10 +359,8 @@ public class HeartRateManager {
         int flags = data[0] & 0xFF;
         int bpm;
         if ((flags & 0x01) != 0) {
-            // 16-bit UINT
             bpm = (data[1] & 0xFF) | ((data[2] & 0xFF) << 8);
         } else {
-            // 8-bit UINT
             bpm = data[1] & 0xFF;
         }
 
@@ -349,6 +397,7 @@ public class HeartRateManager {
             } catch (Exception ignored) {}
             bluetoothGatt = null;
         }
+        connectedDevice = null;
         isConnected = false;
         latestBpm = 0;
     }
