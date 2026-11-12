@@ -26,21 +26,29 @@ const defaultConfig = {
   workoutProfile: 'zone2',
   wakeLockEnabled: true,
   enableEarbudShortcuts: false,
+  maxHr: 185,
   voiceOptions: {
     sgv: true,
     trend: true,
     delta: true,
     coach: true,
-    duration: false
+    duration: false,
+    heartRate: true
   }
 };
 
 // Workout Session Analytics Tracking
 let sessionStartTime = null;
 let sessionReadings = [];
+let sessionHeartRates = [];
 let sessionCarbsTotal = 0;
 let sessionCarbsEntries = [];
 let lastCarbIntake = null;
+
+// Heart Rate State
+let currentHeartRate = 0;
+let heartRateDeviceName = '';
+let isHeartRateConnected = false;
 
 let config = { ...defaultConfig };
 
@@ -63,12 +71,16 @@ let lastHeartbeatProcessTime = 0;
 
 // Native Android Foreground Service integration (Capacitor & Android JavascriptInterface)
 function triggerNativeForegroundStart() {
+  const tellHr = (config.voiceOptions && config.voiceOptions.heartRate !== false);
+  const maxHr = config.maxHr || 185;
   const payload = {
     intervalMinutes: config.intervalMinutes || 2,
     language: config.language || 'pt-PT',
     apiBase: API_BASE,
     targetMin: config.targetMin || 110,
-    targetMax: config.targetMax || 170
+    targetMax: config.targetMax || 170,
+    tellHeartRate: tellHr,
+    maxHr: maxHr
   };
   if (window.AndroidVoice && typeof window.AndroidVoice.startWorkoutService === 'function') {
     try {
@@ -77,7 +89,9 @@ function triggerNativeForegroundStart() {
         payload.language,
         payload.apiBase,
         payload.targetMin,
-        payload.targetMax
+        payload.targetMax,
+        payload.tellHeartRate,
+        payload.maxHr
       );
     } catch (e) {
       console.warn('AndroidVoice.startWorkoutService error:', e);
@@ -117,6 +131,136 @@ window._onNativeWorkoutStopped = function() {
   console.log('Received native workout stopped');
   stopWorkout(true);
 };
+
+window._onNativeHeartRate = function(bpm, deviceName) {
+  handleHeartRateUpdate(bpm, deviceName);
+};
+
+window._onNativeHeartRateStatus = function(connected, deviceName, bpm) {
+  isHeartRateConnected = !!connected;
+  if (deviceName) heartRateDeviceName = deviceName;
+  if (bpm) currentHeartRate = bpm;
+  updateHeartRateUI();
+};
+
+function handleHeartRateUpdate(bpm, deviceName) {
+  if (!bpm || bpm <= 30 || bpm > 250) return;
+  currentHeartRate = bpm;
+  isHeartRateConnected = true;
+  if (deviceName) heartRateDeviceName = deviceName;
+  if (isRunning) {
+    sessionHeartRates.push(bpm);
+  }
+  updateHeartRateUI();
+}
+
+function getHeartRateZone(bpm, maxHr = 185) {
+  if (!bpm || bpm <= 0) return null;
+  const pct = bpm / maxHr;
+  if (pct < 0.60) {
+    return { zone: 1, label: 'Z1', namePt: 'Recuperação', nameEn: 'Recovery', spokenPt: 'zona um', spokenEn: 'zone one', color: 'text-sky-400', badgeClass: 'bg-sky-950 text-sky-300 border-sky-800/50' };
+  } else if (pct < 0.70) {
+    return { zone: 2, label: 'Z2', namePt: 'Aeróbica (Fat Burn)', nameEn: 'Aerobic (Fat Burn)', spokenPt: 'zona dois', spokenEn: 'zone two', color: 'text-emerald-400', badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-800/50' };
+  } else if (pct < 0.80) {
+    return { zone: 3, label: 'Z3', namePt: 'Ritmo / Tempo', nameEn: 'Tempo / Aerobic', spokenPt: 'zona três', spokenEn: 'zone three', color: 'text-amber-400', badgeClass: 'bg-amber-950 text-amber-300 border-amber-800/50' };
+  } else if (pct < 0.90) {
+    return { zone: 4, label: 'Z4', namePt: 'Limiar Anaeróbico', nameEn: 'Threshold', spokenPt: 'zona quatro', spokenEn: 'zone four', color: 'text-orange-400', badgeClass: 'bg-orange-950 text-orange-300 border-orange-800/50' };
+  } else {
+    return { zone: 5, label: 'Z5', namePt: 'Esforço Máximo', nameEn: 'Maximum Effort', spokenPt: 'zona cinco', spokenEn: 'zone five', color: 'text-rose-500', badgeClass: 'bg-rose-950 text-rose-300 border-rose-800/50' };
+  }
+}
+
+function updateHeartRateUI() {
+  const badge = document.getElementById('hrStatusBadge');
+  const label = document.getElementById('labelHr');
+  const hrBox = document.getElementById('glucoseCardHrBox');
+  const hrVal = document.getElementById('glucoseCardHrValue');
+  const hrZone = document.getElementById('glucoseCardHrZone');
+  const maxHr = config.maxHr || 185;
+
+  if (isHeartRateConnected && currentHeartRate > 0) {
+    const zone = getHeartRateZone(currentHeartRate, maxHr);
+    if (badge) {
+      badge.className = 'flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full transition-all cursor-pointer select-none bg-rose-950/80 text-rose-300 border border-rose-600/70 shadow-sm';
+    }
+    if (label) {
+      label.textContent = `${currentHeartRate} bpm (${zone.label})`;
+    }
+    if (hrBox) hrBox.classList.remove('hidden');
+    if (hrVal) hrVal.textContent = `${currentHeartRate} bpm`;
+    if (hrZone && zone) {
+      hrZone.textContent = zone.label;
+      hrZone.className = `text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase border ${zone.badgeClass}`;
+    }
+  } else if (isHeartRateConnected) {
+    if (label) label.textContent = 'Ligado (aguardar)';
+    if (hrBox) hrBox.classList.add('hidden');
+  } else {
+    if (badge) {
+      badge.className = 'flex items-center gap-1 text-[11px] text-rose-300 font-semibold bg-rose-950/40 border border-rose-800/60 px-2 py-0.5 rounded-full transition-all cursor-pointer active:scale-95 select-none';
+    }
+    if (label) label.textContent = 'Ligar Watch';
+    if (hrBox) hrBox.classList.add('hidden');
+  }
+}
+
+let webBluetoothDevice = null;
+let webBluetoothServer = null;
+
+async function triggerHeartRateConnect() {
+  const isPt = (config.language || 'pt-PT') === 'pt-PT';
+
+  // 1. Android Native BLE bridge (Primary for APK & phone in pocket!)
+  if (window.AndroidVoice && typeof window.AndroidVoice.connectHeartRate === 'function') {
+    showToast(isPt ? '❤️ A procurar e ligar ao HUAWEI WATCH GT 6 Pro...' : '❤️ Connecting to HUAWEI WATCH GT 6 Pro...');
+    window.AndroidVoice.connectHeartRate('HUAWEI WATCH');
+    return;
+  }
+
+  // 2. Web Bluetooth API (for browser in Chrome / Chromium)
+  if (navigator.bluetooth && typeof navigator.bluetooth.requestDevice === 'function') {
+    try {
+      showToast(isPt ? 'A abrir emparelhamento Bluetooth...' : 'Opening Bluetooth pairing...');
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ['heart_rate'] }],
+        optionalServices: ['heart_rate']
+      });
+      webBluetoothDevice = device;
+      heartRateDeviceName = device.name || 'Sensor Cardíaco';
+      showToast(isPt ? `A ligar a ${heartRateDeviceName}...` : `Connecting to ${heartRateDeviceName}...`);
+
+      const server = await device.gatt.connect();
+      webBluetoothServer = server;
+      const service = await server.getPrimaryService('heart_rate');
+      const characteristic = await service.getCharacteristic('heart_rate_measurement');
+      await characteristic.startNotifications();
+      characteristic.addEventListener('characteristicvaluechanged', (event) => {
+        const val = event.target.value;
+        const flags = val.getUint8(0);
+        const rate16 = flags & 0x1;
+        const bpm = rate16 ? val.getUint16(1, true) : val.getUint8(1);
+        handleHeartRateUpdate(bpm, heartRateDeviceName);
+      });
+      device.addEventListener('gattserverdisconnected', () => {
+        isHeartRateConnected = false;
+        currentHeartRate = 0;
+        updateHeartRateUI();
+        showToast(isPt ? 'Sensor cardíaco desligado' : 'Heart rate monitor disconnected');
+      });
+      isHeartRateConnected = true;
+      updateHeartRateUI();
+      showToast(isPt ? `❤️ Ligado a ${heartRateDeviceName}!` : `❤️ Connected to ${heartRateDeviceName}!`);
+    } catch (e) {
+      console.warn('Web Bluetooth error:', e);
+      if (e.name !== 'NotFoundError') {
+        showToast(isPt ? 'Erro ao ligar ao sensor Bluetooth' : 'Error connecting to Bluetooth sensor');
+      }
+    }
+    return;
+  }
+
+  showToast(isPt ? 'Bluetooth não suportado neste navegador' : 'Bluetooth not supported in this browser');
+}
 
 function onHeartbeatTick() {
   const now = Date.now();
@@ -518,6 +662,25 @@ function showWorkoutSummaryModal() {
 
     const tirEl = document.getElementById('sumTIR');
     if (tirEl) tirEl.textContent = `${tir}%`;
+  }
+
+  const hrBox = document.getElementById('sumHeartRateBox');
+  const hrEl = document.getElementById('sumHeartRate');
+  const hrZoneEl = document.getElementById('sumHeartRateZone');
+  if (sessionHeartRates.length > 0) {
+    const validHrs = sessionHeartRates.filter(h => h > 30 && h < 250);
+    if (validHrs.length > 0) {
+      const avgHr = Math.round(validHrs.reduce((a, b) => a + b, 0) / validHrs.length);
+      const maxHr = Math.max(...validHrs);
+      const avgZone = getHeartRateZone(avgHr, config.maxHr || 185);
+      if (hrEl) hrEl.textContent = `${avgHr} bpm (máx ${maxHr})`;
+      if (hrZoneEl && avgZone) hrZoneEl.textContent = `${avgZone.label} • ${heartRateDeviceName || 'HUAWEI WATCH'}`;
+      if (hrBox) hrBox.classList.remove('hidden');
+    } else if (hrBox) {
+      hrBox.classList.add('hidden');
+    }
+  } else if (hrBox) {
+    hrBox.classList.add('hidden');
   }
 
   modal.classList.remove('hidden');
@@ -1143,6 +1306,16 @@ async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = 
       if (countEl) countEl.textContent = announcementCount;
       let voiceMsg = advice.spokenText;
       const vOpts = config.voiceOptions || {};
+      if (vOpts.heartRate !== false && currentHeartRate > 0) {
+        const hrZone = getHeartRateZone(currentHeartRate, config.maxHr || 185);
+        if (hrZone) {
+          if (config.language === 'pt-PT') {
+            voiceMsg += ` ${currentHeartRate} batimentos por minuto, ${hrZone.spokenPt}.`;
+          } else {
+            voiceMsg += ` Heart rate ${currentHeartRate} bpm, ${hrZone.spokenEn}.`;
+          }
+        }
+      }
       if (vOpts.duration && isRunning && workoutStartTime) {
         const elapsedMins = Math.floor((Date.now() - workoutStartTime) / 60000);
         if (elapsedMins > 0) {
@@ -1222,6 +1395,10 @@ async function startWorkout() {
   workoutStartTime = Date.now();
   sessionStartTime = Date.now();
   sessionReadings = [];
+  sessionHeartRates = [];
+  if (currentHeartRate > 0) {
+    sessionHeartRates.push(currentHeartRate);
+  }
   sessionCarbsTotal = 0;
   sessionCarbsEntries = [];
   if (lastEntry && lastEntry.sgv) {
@@ -1368,13 +1545,18 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 8,
-  versionName: '1.7',
+  versionCode: 9,
+  versionName: '1.8',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 1.7 • Encerramento Perfeito & Bluetooth',
+    sub: 'Versão 1.8 • HUAWEI WATCH GT & Ritmo Cardíaco',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
+      {
+        icon: '❤️',
+        title: 'Ritmo Cardíaco HUAWEI WATCH GT (BPM)',
+        desc: 'Ligação direta ao teu HUAWEI WATCH GT 6 Pro por Bluetooth BLE. O treinador passa a dizer os teus batimentos e zonas de esforço (Z1 a Z5).'
+      },
       {
         icon: '🛑',
         title: 'Paragem Imediata de Treino',
@@ -1389,19 +1571,19 @@ const CHANGELOG_DATA = {
         icon: '🎙️',
         title: 'Comando de Voz & Registo de Gel',
         desc: 'Diz "Tomei gel" ou clica no botão rápido para registar 20g HC. O treinador faz pausa inteligente para não mandar tomar outro gel enquanto absorve.'
-      },
-      {
-        icon: '🚨',
-        title: 'Alerta Preditivo de Hipo a 15 Minutos',
-        desc: 'Aviso sonoro e urgente antecipado com tempo estimado até atingir 70 mg/dL.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 1.7 • Clean Shutdown & Bluetooth',
+    sub: 'Version 1.8 • HUAWEI WATCH GT Heart Rate',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
+      {
+        icon: '❤️',
+        title: 'HUAWEI WATCH GT Heart Rate (BPM)',
+        desc: 'Direct connection to your HUAWEI WATCH GT 6 Pro over BLE. The voice coach announces your heart rate and training zones (Z1 to Z5).'
+      },
       {
         icon: '🛑',
         title: 'Immediate Clean Workout Stop',
@@ -1416,11 +1598,6 @@ const CHANGELOG_DATA = {
         icon: '🎙️',
         title: 'Voice Commands & Gel Logging',
         desc: 'Say "Took gel" or tap the quick button to log 20g carbs. Intelligent cooldown avoids repeat alerts during digestion.'
-      },
-      {
-        icon: '🚨',
-        title: '15-Minute Predictive Hypo Warning',
-        desc: 'Advance audio alarm with estimated time until reaching 70 mg/dL during rapid drops.'
       }
     ]
   }
@@ -1768,6 +1945,13 @@ window.addEventListener('DOMContentLoaded', () => {
     setChk('cfgOptDelta', vOpts.delta);
     setChk('cfgOptCoach', vOpts.coach);
     setChk('cfgOptDuration', !!vOpts.duration);
+    setChk('cfgOptHeartRate', vOpts.heartRate !== false);
+
+    const maxHrInput = document.getElementById('cfgMaxHr');
+    if (maxHrInput) maxHrInput.value = config.maxHr || 185;
+
+    document.getElementById('hrStatusBadge')?.addEventListener('click', triggerHeartRateConnect);
+    document.getElementById('btnConnectHrSettings')?.addEventListener('click', triggerHeartRateConnect);
 
   const nsInput = document.getElementById('cfgNsUrl');
   const intervalSelect = document.getElementById('cfgInterval');
@@ -1808,6 +1992,15 @@ window.addEventListener('DOMContentLoaded', () => {
     config.language = document.getElementById('cfgLanguage').value || 'en';
     config.targetMin = parseInt(document.getElementById('cfgTargetMin').value, 10) || 110;
     config.targetMax = parseInt(document.getElementById('cfgTargetMax').value, 10) || 170;
+    config.maxHr = parseInt(document.getElementById('cfgMaxHr')?.value, 10) || 185;
+    config.voiceOptions = {
+      sgv: !!document.getElementById('cfgOptSgv')?.checked,
+      trend: !!document.getElementById('cfgOptTrend')?.checked,
+      delta: !!document.getElementById('cfgOptDelta')?.checked,
+      coach: !!document.getElementById('cfgOptCoach')?.checked,
+      duration: !!document.getElementById('cfgOptDuration')?.checked,
+      heartRate: !!document.getElementById('cfgOptHeartRate')?.checked
+    };
     saveConfig();
     applyLanguageUI();
     updateCountdownDisplay();

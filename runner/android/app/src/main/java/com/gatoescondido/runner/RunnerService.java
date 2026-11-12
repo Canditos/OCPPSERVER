@@ -38,6 +38,8 @@ public class RunnerService extends Service {
     public static final String EXTRA_API_BASE = "apiBase";
     public static final String EXTRA_TARGET_MIN = "targetMin";
     public static final String EXTRA_TARGET_MAX = "targetMax";
+    public static final String EXTRA_TELL_HR = "tellHeartRate";
+    public static final String EXTRA_MAX_HR = "maxHr";
 
     private static volatile RunnerService activeInstance = null;
     private static volatile boolean isServiceRunning = false;
@@ -49,6 +51,8 @@ public class RunnerService extends Service {
     private String apiBase = "https://runner.gatoescondido.com";
     private int targetMin = 110;
     private int targetMax = 170;
+    private boolean tellHeartRate = true;
+    private int maxHr = 185;
 
     private int lastSgv = -1;
     private int announcementCount = 0;
@@ -134,8 +138,10 @@ public class RunnerService extends Service {
         if (base != null && !base.isEmpty()) apiBase = base;
         targetMin = intent.getIntExtra(EXTRA_TARGET_MIN, 110);
         targetMax = intent.getIntExtra(EXTRA_TARGET_MAX, 170);
+        tellHeartRate = intent.getBooleanExtra(EXTRA_TELL_HR, true);
+        maxHr = intent.getIntExtra(EXTRA_MAX_HR, 185);
 
-        Log.d(TAG, "Starting RunnerService in foreground with interval=" + intervalMinutes + "m, lang=" + language);
+        Log.d(TAG, "Starting RunnerService in foreground with interval=" + intervalMinutes + "m, lang=" + language + ", tellHR=" + tellHeartRate);
         startWorkoutForeground();
         return START_NOT_STICKY;
     }
@@ -218,13 +224,26 @@ public class RunnerService extends Service {
             // Evaluate carb advice
             CarbAdvice advice = evaluateAdvice(sgv, direction, delta, language, targetMin, targetMax);
 
+            // Fetch live Heart Rate from HeartRateManager
+            int bpm = HeartRateManager.getInstance(this).getLatestBpm();
+            String hrSpeech = "";
+            if (bpm > 0 && tellHeartRate) {
+                String zoneLabel = getHrZoneLabel(bpm, maxHr, language);
+                if (language.equals("pt-PT")) {
+                    hrSpeech = " " + bpm + " batimentos por minuto" + (zoneLabel.isEmpty() ? "" : ", " + zoneLabel) + ".";
+                } else {
+                    hrSpeech = " Heart rate " + bpm + " bpm" + (zoneLabel.isEmpty() ? "" : ", " + zoneLabel) + ".";
+                }
+            }
+
             // Update Notification on Lock Screen
-            String title = "🏃 " + sgv + " mg/dL " + advice.symbol + " (" + advice.trendLabel + ")";
+            String hrSuffix = (bpm > 0 ? " · ❤️ " + bpm + " bpm" : "");
+            String title = "🏃 " + sgv + " mg/dL " + advice.symbol + " (" + advice.trendLabel + ")" + hrSuffix;
             String content = advice.dose + " · " + advice.title;
             updateNotification(title, content);
 
             // Play voice via AudioEngine (routes to Bluetooth and ducks music!)
-            String cleanText = advice.spokenText.replaceAll("[⇈↑↗→↘↓⇊—?]", "").trim();
+            String cleanText = (advice.spokenText.replaceAll("[⇈↑↗→↘↓⇊—?]", "").trim() + hrSpeech).trim();
             String ttsUrl = apiBase + "/api/tts?text=" + URLEncoder.encode(cleanText, "UTF-8") + "&lang=" + URLEncoder.encode(language, "UTF-8");
             AudioEngine.playVoice(getApplicationContext(), ttsUrl, null);
 
@@ -236,6 +255,9 @@ public class RunnerService extends Service {
             readingEvent.put("adviceTitle", advice.title);
             readingEvent.put("adviceCarbs", advice.dose);
             readingEvent.put("announcementCount", announcementCount);
+            if (bpm > 0) {
+                readingEvent.put("heartRate", bpm);
+            }
             MainActivity.notifyReading(readingEvent);
 
         } catch (Exception e) {
@@ -495,5 +517,22 @@ public class RunnerService extends Service {
         }
 
         return a;
+    }
+
+    private String getHrZoneLabel(int bpm, int maxHr, String language) {
+        if (maxHr <= 0) maxHr = 185;
+        double pct = (double) bpm / maxHr;
+        boolean isPt = language.equals("pt-PT");
+        if (pct < 0.60) {
+            return isPt ? "zona um" : "zone one";
+        } else if (pct < 0.70) {
+            return isPt ? "zona dois" : "zone two";
+        } else if (pct < 0.80) {
+            return isPt ? "zona três" : "zone three";
+        } else if (pct < 0.90) {
+            return isPt ? "zona quatro" : "zone four";
+        } else {
+            return isPt ? "zona cinco" : "zone five";
+        }
     }
 }

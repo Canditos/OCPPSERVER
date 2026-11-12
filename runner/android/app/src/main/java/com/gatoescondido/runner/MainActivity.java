@@ -134,9 +134,15 @@ public class MainActivity extends BridgeActivity {
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-                    != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 102);
+            java.util.List<String> perms = new java.util.ArrayList<>();
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.BLUETOOTH_CONNECT);
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.BLUETOOTH_SCAN);
+            }
+            if (!perms.isEmpty()) {
+                ActivityCompat.requestPermissions(this, perms.toArray(new String[0]), 102);
             }
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -462,6 +468,38 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    public static void notifyHeartRate(int bpm, String deviceName) {
+        try {
+            if (currentActivityRef != null && currentActivityRef.get() != null) {
+                MainActivity act = currentActivityRef.get();
+                if (act.getBridge() != null && act.getBridge().getWebView() != null) {
+                    act.runOnUiThread(() -> {
+                        String js = "if(window._onNativeHeartRate) { window._onNativeHeartRate(" + bpm + ", " + JSONObject.quote(deviceName != null ? deviceName : "") + "); }";
+                        act.getBridge().getWebView().evaluateJavascript(js, null);
+                    });
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in notifyHeartRate", e);
+        }
+    }
+
+    public static void notifyHeartRateStatus(boolean connected, String deviceName, int bpm) {
+        try {
+            if (currentActivityRef != null && currentActivityRef.get() != null) {
+                MainActivity act = currentActivityRef.get();
+                if (act.getBridge() != null && act.getBridge().getWebView() != null) {
+                    act.runOnUiThread(() -> {
+                        String js = "if(window._onNativeHeartRateStatus) { window._onNativeHeartRateStatus(" + connected + ", " + JSONObject.quote(deviceName != null ? deviceName : "") + ", " + bpm + "); }";
+                        act.getBridge().getWebView().evaluateJavascript(js, null);
+                    });
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in notifyHeartRateStatus", e);
+        }
+    }
+
     public class AudioBridge {
         @JavascriptInterface
         public void playVoice(String url) {
@@ -498,7 +536,12 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void startWorkoutService(int intervalMinutes, String language, String apiBase, int targetMin, int targetMax) {
-            Log.d(TAG, "startWorkoutService called via JavascriptInterface with interval=" + intervalMinutes);
+            startWorkoutService(intervalMinutes, language, apiBase, targetMin, targetMax, true, 185);
+        }
+
+        @JavascriptInterface
+        public void startWorkoutService(int intervalMinutes, String language, String apiBase, int targetMin, int targetMax, boolean tellHeartRate, int maxHr) {
+            Log.d(TAG, "startWorkoutService called with interval=" + intervalMinutes + ", tellHR=" + tellHeartRate);
             try {
                 Intent serviceIntent = new Intent(MainActivity.this, RunnerService.class);
                 serviceIntent.putExtra(RunnerService.EXTRA_INTERVAL, intervalMinutes);
@@ -506,6 +549,8 @@ public class MainActivity extends BridgeActivity {
                 serviceIntent.putExtra(RunnerService.EXTRA_API_BASE, apiBase);
                 serviceIntent.putExtra(RunnerService.EXTRA_TARGET_MIN, targetMin);
                 serviceIntent.putExtra(RunnerService.EXTRA_TARGET_MAX, targetMax);
+                serviceIntent.putExtra(RunnerService.EXTRA_TELL_HR, tellHeartRate);
+                serviceIntent.putExtra(RunnerService.EXTRA_MAX_HR, maxHr);
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(serviceIntent);
@@ -515,6 +560,23 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception e) {
                 Log.e(TAG, "Failed to start RunnerService", e);
             }
+        }
+
+        @JavascriptInterface
+        public void connectHeartRate(String preferredName) {
+            Log.d(TAG, "connectHeartRate requested with preferredName=" + preferredName);
+            HeartRateManager.getInstance(MainActivity.this).startConnect(preferredName);
+        }
+
+        @JavascriptInterface
+        public void disconnectHeartRate() {
+            Log.d(TAG, "disconnectHeartRate requested");
+            HeartRateManager.getInstance(MainActivity.this).disconnect();
+        }
+
+        @JavascriptInterface
+        public String getHeartRateStatus() {
+            return HeartRateManager.getInstance(MainActivity.this).getStatusJson().toString();
         }
 
         @JavascriptInterface

@@ -61,11 +61,16 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 8,
-      versionName: '1.7',
+      versionCode: 9,
+      versionName: '1.8',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Paragem imediata do treino e serviço de fundo, deteção universal de fones Bluetooth/VoIP Lenovo.',
+      releaseNotes: 'Suporte para ritmo cardíaco (BPM) e Zonas Z1-Z5 com HUAWEI WATCH GT e fitas Bluetooth.',
       features: [
+        {
+          icon: '❤️',
+          title: 'Ritmo Cardíaco HUAWEI WATCH GT',
+          desc: 'Lê os batimentos cardíacos diretamente do teu HUAWEI WATCH GT 6 Pro por Bluetooth BLE e anuncia a FC e Zonas de Treino durante a corrida.'
+        },
         {
           icon: '🎙️',
           title: 'Comando de Voz & Registo de Gel',
