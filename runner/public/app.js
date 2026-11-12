@@ -441,9 +441,6 @@ async function triggerHeartRateConnect() {
   showToast(isPt ? 'Bluetooth não suportado neste navegador' : 'Bluetooth not supported in this browser');
 }
 
-  showToast(isPt ? 'Bluetooth não suportado neste navegador' : 'Bluetooth not supported in this browser');
-}
-
 function onHeartbeatTick() {
   const now = Date.now();
   if (now - lastHeartbeatProcessTime < 400) return;
