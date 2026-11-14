@@ -44,6 +44,15 @@ let sessionHeartRates = [];
 let sessionCarbsTotal = 0;
 let sessionCarbsEntries = [];
 let lastCarbIntake = null;
+try {
+  const savedCarb = localStorage.getItem('ns_last_carb_intake');
+  if (savedCarb) {
+    const parsed = JSON.parse(savedCarb);
+    if (parsed && parsed.timestamp && (Date.now() - parsed.timestamp) < 20 * 60 * 1000) {
+      lastCarbIntake = parsed;
+    }
+  }
+} catch (e) {}
 
 // Heart Rate State
 let currentHeartRate = 0;
@@ -84,6 +93,8 @@ function triggerNativeForegroundStart() {
   };
   if (window.AndroidVoice && typeof window.AndroidVoice.startWorkoutService === 'function') {
     try {
+      const lastG = (lastCarbIntake && (Date.now() - lastCarbIntake.timestamp < 15 * 60 * 1000)) ? (lastCarbIntake.grams || 20) : 0;
+      const lastT = (lastCarbIntake && (Date.now() - lastCarbIntake.timestamp < 15 * 60 * 1000)) ? lastCarbIntake.timestamp : 0;
       window.AndroidVoice.startWorkoutService(
         payload.intervalMinutes,
         payload.language,
@@ -91,7 +102,9 @@ function triggerNativeForegroundStart() {
         payload.targetMin,
         payload.targetMax,
         payload.tellHeartRate,
-        payload.maxHr
+        payload.maxHr,
+        lastG,
+        lastT
       );
     } catch (e) {
       console.warn('AndroidVoice.startWorkoutService error:', e);
@@ -653,6 +666,7 @@ function onHeartbeatTick() {
 
   // 1. Duration display
   updateWorkoutDuration();
+  updateCarbButtonUI();
 
   // 2. Periodic Bluetooth output state sync (every ~8 seconds)
   if (now % 8000 < 500) {
@@ -786,6 +800,24 @@ const I18N = {
 // Voice Commands, Carb Logging & Workout Analytics (v1.6)
 // ========================================================
 
+function updateCarbButtonUI() {
+  const btn = document.getElementById('btnQuickGel');
+  const label = document.getElementById('labelQuickGel');
+  if (!btn || !label) return;
+
+  const now = Date.now();
+  if (lastCarbIntake && (now - lastCarbIntake.timestamp < 15 * 60 * 1000)) {
+    const minsAgo = Math.max(0, Math.floor((now - lastCarbIntake.timestamp) / 60000));
+    const minsLeft = Math.max(1, 15 - minsAgo);
+    label.textContent = `✅ Gel Tomado (${minsLeft}m)`;
+    btn.className = 'flex-1 py-1.5 sm:py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-sky-300 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer';
+  } else {
+    const isPt = (config.language || 'pt-PT') === 'pt-PT';
+    label.textContent = isPt ? 'Tomei Gel (20g)' : 'Took Gel (20g)';
+    btn.className = 'flex-1 py-1.5 sm:py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer';
+  }
+}
+
 function recordCarbsIntake(grams, source = 'manual') {
   const g = parseInt(grams, 10) || 20;
   sessionCarbsTotal += g;
@@ -794,26 +826,46 @@ function recordCarbsIntake(grams, source = 'manual') {
   sessionCarbsEntries.push(entry);
   lastCarbIntake = entry;
 
+  try {
+    localStorage.setItem('ns_last_carb_intake', JSON.stringify(lastCarbIntake));
+  } catch (e) {}
+
   const lang = config.language || 'pt-PT';
   const isPt = lang === 'pt-PT';
 
-  const msg = isPt
-    ? `Registei ${g} gramas de hidratos. Boa corrida!`
-    : `Recorded ${g} grams of carbs. Keep running strong!`;
+  // 1. Notify Native Android Background Service immediately
+  if (window.AndroidVoice && typeof window.AndroidVoice.notifyCarbIntake === 'function') {
+    try {
+      window.AndroidVoice.notifyCarbIntake(g, now);
+    } catch (e) {
+      console.warn('Failed AndroidVoice.notifyCarbIntake', e);
+    }
+  } else if (NativeVoice && typeof NativeVoice.notifyCarbIntake === 'function') {
+    NativeVoice.notifyCarbIntake({ grams: g, timestamp: now }).catch(e => console.warn(e));
+  }
 
-  if (typeof playStudioVoice === 'function') {
+  // 2. Play confirmation audio only if not running native (native plays via AudioEngine)
+  if (!isRunningNative() && typeof playStudioVoice === 'function') {
+    const msg = isPt
+      ? `Gel registado! ${g} gramas em absorção. Alerta silenciado durante quinze minutos.`
+      : `Carbs logged! ${g} grams absorbing. Alerts paused for fifteen minutes.`;
     playStudioVoice(msg);
   }
 
+  // 3. Visual toast
   const toast = document.createElement('div');
-  toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 max-w-[90vw] bg-amber-950/95 text-amber-200 border border-amber-500/50 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl z-50 transition-opacity duration-300 backdrop-blur text-center flex items-center gap-2';
-  toast.innerHTML = `<span>🍬</span><span>${isPt ? `Registo efetuado: ${g}g de hidratos!` : `Logged: ${g}g of carbs!`}</span>`;
+  toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 max-w-[90vw] bg-sky-950/95 text-sky-200 border border-sky-500/60 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl z-50 transition-opacity duration-300 backdrop-blur text-center flex items-center gap-2';
+  toast.innerHTML = `<span>⏳</span><span>${isPt ? `Gel registado: ${g}g em absorção! Alerta pausado 15m.` : `Logged: ${g}g absorbing! Alert paused 15m.`}</span>`;
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
     setTimeout(() => toast.remove(), 400);
   }, 4000);
 
+  // 4. Update button UI immediately
+  updateCarbButtonUI();
+
+  // 5. Immediately re-evaluate advice and update UI so the alert vanishes!
   if (lastEntry) {
     const delta = prevEntry ? lastEntry.sgv - prevEntry.sgv : null;
     const advice = evaluateCarbAdvice(lastEntry.sgv, lastEntry.direction, delta);
@@ -1073,59 +1125,85 @@ function closeWorkoutSummaryModal() {
 }
 
 function evaluateCarbAdvice(sgv, direction, delta) {
-  const lang = config.language || 'en';
+  const lang = config.language || 'pt-PT';
+  const isPt = lang === 'pt-PT';
   const dirKey = direction || 'Flat';
   const dirInfo = I18N[lang]?.directions[dirKey] || I18N[lang]?.directions.Flat;
   const dirSpoken = dirInfo.spoken;
 
-  const isDroppingFast = dirKey === 'SingleDown' || dirKey === 'DoubleDown' || (delta !== null && delta <= -6);
-  const isDroppingSlow = dirKey === 'FortyFiveDown' || (delta !== null && delta < -2 && delta > -6);
+  const isDroppingFast = dirKey === 'SingleDown' || dirKey === 'DoubleDown' || (delta !== null && delta <= -5);
+  const isDroppingSlow = dirKey === 'FortyFiveDown' || (delta !== null && delta < -2 && delta > -5);
   const isDropping = isDroppingFast || isDroppingSlow;
-  // 1. Carb Absorption Window (Prevent repeat gel recommendations within 15 min)
+
+  // 1. Carb Absorption Window (15 minutes silence for carb alarms!)
   if (lastCarbIntake && (Date.now() - lastCarbIntake.timestamp) < 15 * 60 * 1000) {
-    const minsAgo = Math.max(1, Math.round((Date.now() - lastCarbIntake.timestamp) / 60000));
-    if (sgv < (config.targetMin || 110)) {
-      if (lang === 'pt-PT') {
+    const minsAgo = Math.max(0, Math.floor((Date.now() - lastCarbIntake.timestamp) / 60000));
+    if (sgv < 65) {
+      if (isPt) {
         return {
-          status: 'absorbing',
-          badge: `⏳ EM ABSORÇÃO (${lastCarbIntake.grams}g há ${minsAgo}m)`,
-          badgeColor: 'bg-amber-600 text-white animate-pulse',
-          cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: `Aguardar (${lastCarbIntake.grams}g)`,
-          title: 'Hidratos em absorção',
-          adviceText: `Tomaste ${lastCarbIntake.grams}g há ${minsAgo}m. A digestão demora 10 a 15 min. Aguarda pela subida da glicémia.`,
-          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Hidratos em absorção, tomaste ${lastCarbIntake.grams} gramas há ${minsAgo} minutos. Aguarda pela subida.`
+          status: 'urgent',
+          badge: `🚨 HIPO SEVERA (${lastCarbIntake.grams}g há ${minsAgo}m)`,
+          badgeColor: 'bg-red-600 text-white animate-pulse',
+          cardBorder: 'border-red-500 shadow-red-900/50',
+          carbs: 'PÁRA E AGUARDA',
+          title: 'Hipo severa: Pára a corrida e descansa',
+          adviceText: `Glicémia muito baixa nos ${sgv}. Já tomaste ${lastCarbIntake.grams}g há ${minsAgo}m. Pára totalmente e aguarda pela digestão.`,
+          spokenText: `Atenção urgente! Glicémia baixa a ${sgv}. Pára a corrida e descansa, os hidratos estão a ser absorvidos.`
         };
       } else {
         return {
-          status: 'absorbing',
-          badge: `⏳ ABSORBING (${lastCarbIntake.grams}g ${minsAgo}m ago)`,
-          badgeColor: 'bg-amber-600 text-white animate-pulse',
-          cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: `Wait (${lastCarbIntake.grams}g)`,
-          title: 'Carbs absorbing',
-          adviceText: `You took ${lastCarbIntake.grams}g ${minsAgo}m ago. Takes 10-15m to absorb. Wait for the rise.`,
-          spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Carbs absorbing, you took ${lastCarbIntake.grams} grams ${minsAgo} minutes ago. Waiting for rise.`
+          status: 'urgent',
+          badge: `🚨 SEVERE HYPO (${lastCarbIntake.grams}g ${minsAgo}m ago)`,
+          badgeColor: 'bg-red-600 text-white animate-pulse',
+          cardBorder: 'border-red-500 shadow-red-900/50',
+          carbs: 'STOP & WAIT',
+          title: 'Severe Hypo: Stop and rest',
+          adviceText: `Very low glucose at ${sgv}. You took ${lastCarbIntake.grams}g ${minsAgo}m ago. Stop and wait for absorption.`,
+          spokenText: `Urgent! Blood glucose low at ${sgv}. Stop running and rest, carbs are absorbing.`
         };
       }
     }
+
+    if (isPt) {
+      return {
+        status: 'absorbing',
+        badge: `⏳ EM ABSORÇÃO (${lastCarbIntake.grams}g há ${minsAgo}m)`,
+        badgeColor: 'bg-sky-600 text-white animate-pulse',
+        cardBorder: 'border-sky-500 shadow-sky-900/40',
+        carbs: `Aguardar digestão (${lastCarbIntake.grams}g)`,
+        title: 'Gel em absorção (Alerta silenciado)',
+        adviceText: `Tomaste ${lastCarbIntake.grams}g há ${minsAgo}m. O Dexcom G7 e a digestão demoram 10 a 15 min. Alertas de hidratos pausados.`,
+        spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Hidratos em absorção, tomaste ${lastCarbIntake.grams} gramas há ${minsAgo} minutos. Aguarda pela subida.`
+      };
+    } else {
+      return {
+        status: 'absorbing',
+        badge: `⏳ ABSORBING (${lastCarbIntake.grams}g ${minsAgo}m ago)`,
+        badgeColor: 'bg-sky-600 text-white animate-pulse',
+        cardBorder: 'border-sky-500 shadow-sky-900/40',
+        carbs: `Waiting (${lastCarbIntake.grams}g)`,
+        title: 'Carbs absorbing (Alert paused)',
+        adviceText: `You took ${lastCarbIntake.grams}g ${minsAgo}m ago. Takes 10-15m to absorb. Carb alerts paused.`,
+        spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Carbs absorbing, you took ${lastCarbIntake.grams} grams ${minsAgo} minutes ago. Waiting for rise.`
+      };
+    }
   }
 
-  // 2. Predictive Hypoglycemia Alert (15 minutes advance warning)
-  if (delta !== null && delta <= -5 && sgv <= 135) {
+  // 2. Predictive Hypoglycemia Alert (Projected <= 70 within 15 min)
+  if (delta !== null && delta <= -5 && sgv <= 140) {
     const dropPerMin = Math.abs(delta) / 5.0;
     const minutesTo70 = Math.round((sgv - 70) / dropPerMin);
     if (minutesTo70 > 0 && minutesTo70 <= 15) {
-      if (lang === 'pt-PT') {
+      if (isPt) {
         return {
           status: 'predictive_hypo',
           badge: `🚨 HIPO EM ~${minutesTo70} MIN`,
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/60',
-          carbs: '15g a 20g HC Imediatos',
-          title: 'Alerta Preditivo: Risco de Hipo',
-          adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em aproximadamente ${minutesTo70} minutos.`,
-          spokenText: `Atenção urgente! Queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Toma 15 a 20 gramas de hidratos agora!`
+          carbs: '20g Gel Rápido Já',
+          title: 'Alerta Preditivo: Risco de Hipo Iminente',
+          adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em ~${minutesTo70}m. Antecipa o atraso do sensor!`,
+          spokenText: `Atenção urgente! Queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Antecipa o sensor: toma um gel de vinte gramas já!`
         };
       } else {
         return {
@@ -1133,256 +1211,301 @@ function evaluateCarbAdvice(sgv, direction, delta) {
           badge: `🚨 HYPO IN ~${minutesTo70} MIN`,
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/60',
-          carbs: '15g to 20g Fast Carbs',
+          carbs: '20g Fast Gel Now',
           title: 'Predictive Alert: Hypo Risk Ahead',
-          adviceText: `Fast drop of ${Math.abs(delta)} mg/dL in 5m. Projected to hit 70 mg/dL in about ${minutesTo70} minutes.`,
-          spokenText: `Urgent warning! Rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take 15 to 20 grams of carbs now!`
+          adviceText: `Fast drop of ${Math.abs(delta)} mg/dL in 5m. Projected to hit 70 mg/dL in about ${minutesTo70} minutes. Anticipate sensor lag!`,
+          spokenText: `Urgent warning! Rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take 20 grams of gel now!`
         };
       }
     }
   }
 
-  if (lang === 'pt-PT') {
-    // PORTUGUÊS DE PORTUGAL
-    if (sgv < config.urgentLow) {
+  // 3. Clinical Hypoglycemia (< 75 mg/dL)
+  if (sgv < 75) {
+    if (isPt) {
       return {
         status: 'urgent',
         badge: '🚨 HIPOGLICÉMIA',
         badgeColor: 'bg-red-600 text-white animate-pulse',
         cardBorder: 'border-red-500 shadow-red-900/50',
-        carbs: '15g a 20g HC rápidos',
-        title: 'Pára a corrida e ingere 15g a 20g de hidratos rápidos',
-        adviceText: 'Glicémia perigosa durante esforço. Pára ou caminha agora. Toma 1 gel ou açúcar.',
-        spokenText: `Atenção urgente! Glicémia perigosamente baixa a ${sgv}. Pára a corrida e consome quinze a vinte gramas de hidratos de absorção rápida já.`
+        carbs: '20g a 25g HC rápidos',
+        title: 'Pára a corrida e ingere 20g a 25g de hidratos rápidos',
+        adviceText: 'Glicémia perigosa durante esforço. Pára a corrida imediatamente. Toma 1 gel ou glicose.',
+        spokenText: `Atenção urgente! Glicémia perigosamente baixa a ${sgv}, ${dirSpoken}. Pára imediatamente a corrida e consome vinte a vinte e cinco gramas de hidratos rápidos já!`
       };
-    }
-    if (sgv >= config.urgentLow && sgv < 95) {
-      if (isDropping) {
-        return {
-          status: 'urgent',
-          badge: '⚠️ AVISO DE DESCIDA',
-          badgeColor: 'bg-orange-600 text-white animate-pulse',
-          cardBorder: 'border-orange-500 shadow-orange-900/40',
-          carbs: '15g HC rápidos',
-          title: 'Ingerir 15g de hidratos rápidos já',
-          adviceText: 'Glicémia baixa e a cair. Toma 1 gel imediatamente para travar a descida.',
-          spokenText: `Aviso. Glicémia a ${sgv}, ${dirSpoken}. Consome quinze gramas de hidratos de absorção rápida imediatamente.`
-        };
-      }
+    } else {
       return {
-        status: 'warning',
-        badge: '⚠️ LIMIAR INFERIOR',
-        badgeColor: 'bg-amber-500 text-gray-900',
-        cardBorder: 'border-amber-500 shadow-amber-900/30',
-        carbs: '10g a 15g HC',
-        title: 'Ingerir 10g a 15g de hidratos',
-        adviceText: 'Glicémia no limite inferior para corrida. Consome 10 a 15g para manter energia.',
-        spokenText: `Glicémia a ${sgv}, no limiar inferior. Consome dez a quinze gramas de hidratos de carbono.`
+        status: 'urgent',
+        badge: '🚨 HYPOGLYCEMIA',
+        badgeColor: 'bg-red-600 text-white animate-pulse',
+        cardBorder: 'border-red-500 shadow-red-900/50',
+        carbs: '20g to 25g Fast Carbs',
+        title: 'Stop running and take 20g to 25g fast carbs',
+        adviceText: 'Dangerous low during workout. Stop running immediately. Take 1 gel or liquid carbs.',
+        spokenText: `Urgent warning! Blood glucose low at ${sgv}, ${dirSpoken}. Stop running immediately and take 20 to 25 grams of fast carbs!`
       };
     }
-    if (sgv >= 95 && sgv < 120) {
-      if (isDroppingFast) {
+  }
+
+  // 4. Imminent Hypo Zone (75 - 110 mg/dL) - Interstitial lag means real capillary blood is < 90!
+  if (sgv <= 110) {
+    if (isPt) {
+      return {
+        status: 'urgent',
+        badge: '⚠️ QUEBRA IMINENTE',
+        badgeColor: 'bg-orange-600 text-white animate-pulse',
+        cardBorder: 'border-orange-500 shadow-orange-900/40',
+        carbs: '20g a 25g HC (Gel)',
+        title: 'Quebra iminente: Toma gel de 20g a 25g já',
+        adviceText: `Glicémia nos ${sgv}. O sensor Dexcom G7 tem 10-15m de atraso; o teu sangue real já está abaixo de 90. Toma gel agora!`,
+        spokenText: `Aviso urgente! Glicémia a ${sgv}, ${dirSpoken}. Sangue real está em quebra iminente. Toma vinte a vinte e cinco gramas de gel agora mesmo!`
+      };
+    } else {
+      return {
+        status: 'urgent',
+        badge: '⚠️ IMMINENT HYPO',
+        badgeColor: 'bg-orange-600 text-white animate-pulse',
+        cardBorder: 'border-orange-500 shadow-orange-900/40',
+        carbs: '20g to 25g Carbs (Gel)',
+        title: 'Imminent hypo: Take 20g-25g gel now',
+        adviceText: `Glucose at ${sgv}. With Dexcom G7 lag, capillary blood is already below 90. Take a gel immediately!`,
+        spokenText: `Warning! Blood glucose ${sgv}, ${dirSpoken}. Real blood is below 90. Take 20 to 25 grams of carbs now!`
+      };
+    }
+  }
+
+  // 5. Proactive Carb Action Zone (110 - 140 mg/dL) - Dexcom G7 ISF lag compensation!
+  if (sgv <= 140) {
+    if (isDroppingFast) {
+      if (isPt) {
         return {
           status: 'warning',
-          badge: '⚠️ QUEDA RÁPIDA',
-          badgeColor: 'bg-amber-600 text-white',
-          cardBorder: 'border-amber-500 shadow-amber-900/30',
-          carbs: '15g HC',
-          title: 'Queda rápida: Toma 15g de hidratos',
-          adviceText: 'Queda acentuada. Antecipa antes de descer abaixo de 80.',
-          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Toma quinze gramas de hidratos para travar a descida.`
+          badge: '⚠️ QUEDA RÁPIDA: ANTECIPAÇÃO',
+          badgeColor: 'bg-amber-600 text-white animate-pulse',
+          cardBorder: 'border-amber-500 shadow-amber-900/40',
+          carbs: '20g Gel Agressivo',
+          title: 'Queda rápida: Toma gel de 20g antecipado',
+          adviceText: `Glicémia nos ${sgv} em queda rápida. O gel demora 12-15m a atuar; toma agora para travar a quebra antes de bater nos 90.`,
+          spokenText: `Glicémia a ${sgv}, em descida rápida. Antecipa o atraso do sensor: toma um gel de vinte gramas já para travar a quebra!`
+        };
+      } else {
+        return {
+          status: 'warning',
+          badge: '⚠️ FAST DROP: PROACTIVE',
+          badgeColor: 'bg-amber-600 text-white animate-pulse',
+          cardBorder: 'border-amber-500 shadow-amber-900/40',
+          carbs: '20g Proactive Gel',
+          title: 'Fast drop: Take 20g proactive gel now',
+          adviceText: `Glucose at ${sgv} dropping fast. Gels take 12-15m to absorb; take now before dropping into hypo.`,
+          spokenText: `Blood glucose ${sgv}, falling fast. Anticipate sensor lag: take a 20 gram gel now to stop the crash!`
         };
       }
-      if (isDroppingSlow) {
+    }
+    if (isDroppingSlow) {
+      if (isPt) {
         return {
           status: 'warning',
           badge: 'ℹ️ DESCIDA SUAVE',
-          badgeColor: 'bg-yellow-500 text-gray-900',
-          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
-          carbs: '10g HC',
-          title: 'Toma 10g de hidratos ou meio gel',
-          adviceText: 'A descer suavemente. 10g mantêm a glicémia estável.',
-          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Sugiro dez gramas de hidratos.`
+          badgeColor: 'bg-amber-500 text-gray-900 font-bold',
+          cardBorder: 'border-amber-500 shadow-amber-900/30',
+          carbs: '15g a 20g HC / Gel',
+          title: 'Descida suave: Reforça com 15g a 20g',
+          adviceText: `Glicémia nos ${sgv} com tendência de descida. 15g a 20g sustentam o esforço sem risco de hipo.`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Toma quinze a vinte gramas de hidratos para proteger a tua corrida.`
+        };
+      } else {
+        return {
+          status: 'warning',
+          badge: 'ℹ️ DOWNWARD DRIFT',
+          badgeColor: 'bg-amber-500 text-gray-900 font-bold',
+          cardBorder: 'border-amber-500 shadow-amber-900/30',
+          carbs: '15g to 20g Carbs / Chews',
+          title: 'Downward drift: Top up 15g to 20g',
+          adviceText: `Glucose at ${sgv} drifting down. Take 15-20g carbs to sustain your run.`,
+          spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Take 15 to 20 grams of carbs to sustain your run.`
         };
       }
+    }
+    if (sgv <= 125) {
+      if (isPt) {
+        return {
+          status: 'warning',
+          badge: '⚠️ LIMIAR INFERIOR',
+          badgeColor: 'bg-yellow-500 text-gray-900 font-bold',
+          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
+          carbs: '10g a 15g Isotónico / Gomas',
+          title: 'Limiar inferior: Reforço preventivo',
+          adviceText: `Glicémia nos ${sgv}, estável mas no limite inferior para corrida. Toma 10 a 15g de hidratos de reserva.`,
+          spokenText: `Glicémia a ${sgv}, estável mas no limite inferior de corrida. Toma dez a quinze gramas de hidratos de reforço.`
+        };
+      } else {
+        return {
+          status: 'warning',
+          badge: '⚠️ LOWER BOUNDARY',
+          badgeColor: 'bg-yellow-500 text-gray-900 font-bold',
+          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
+          carbs: '10g to 15g Drink / Chews',
+          title: 'Lower boundary: Preventive reinforcement',
+          adviceText: `Glucose at ${sgv}, steady but near lower running buffer. Sip 10-15g sports drink.`,
+          spokenText: `Blood glucose ${sgv}, steady but at lower running limit. Sip 10 to 15 grams of sports drink.`
+        };
+      }
+    }
+    // 126 - 140 Flat
+    if (isPt) {
       return {
         status: 'ideal',
-        badge: '✅ ACEITÁVEL',
-        badgeColor: 'bg-emerald-600 text-white',
+        badge: '🎯 BASE ESTÁVEL',
+        badgeColor: 'bg-emerald-600 text-white font-bold',
         cardBorder: 'border-emerald-500 shadow-emerald-900/30',
-        carbs: '5g a 10g HC (opcional)',
-        title: 'Estável: mantém o ritmo',
-        adviceText: 'Valor aceitável. Se o treino for longo, podes ingerir 5 a 10g de hidratos.',
-        spokenText: `Glicémia a ${sgv}, estável. Valor aceitável. Se o treino for longo, podes ingerir cinco a dez gramas de hidratos de carbono.`
+        carbs: 'Manter / Hidratar',
+        title: 'Base estável: Mantém o ritmo',
+        adviceText: `Glicémia a ${sgv}. Boa base aeróbica. Se o treino for superior a 45 minutos, podes ir bebericando isotónico.`,
+        spokenText: `Glicémia a ${sgv}, estável. Ritmo seguro. Não precisas de hidratos de momento.`
+      };
+    } else {
+      return {
+        status: 'ideal',
+        badge: '🎯 STEADY BASE',
+        badgeColor: 'bg-emerald-600 text-white font-bold',
+        cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+        carbs: 'Maintain / Hydrate',
+        title: 'Steady base: Keep your pace',
+        adviceText: `Glucose at ${sgv}. Good aerobic baseline. Sip sports drink if running longer than 45m.`,
+        spokenText: `Blood glucose ${sgv}, steady. Safe running pace, no carbs needed right now.`
       };
     }
-    if (sgv >= 120 && sgv <= config.targetMax) {
-      if (isDroppingFast) {
+  }
+
+  // 6. Optimal Running Safety Buffer (140 - 175 mg/dL)
+  if (sgv <= 175) {
+    if (isDroppingFast) {
+      if (isPt) {
         return {
           status: 'warning',
           badge: '⚠️ QUEDA ACENTUADA',
-          badgeColor: 'bg-yellow-500 text-gray-900',
+          badgeColor: 'bg-yellow-500 text-gray-900 font-bold',
           cardBorder: 'border-yellow-500 shadow-yellow-900/20',
-          carbs: '10g HC preventivos',
-          title: 'Glicémia boa mas a cair rápido',
-          adviceText: 'Estás em boa faixa, mas previne a descida com 10g de hidratos.',
-          spokenText: `Glicémia a ${sgv}, boa mas a cair rápido. Toma dez gramas de hidratos preventivos.`
+          carbs: '15g Gel Preventivo',
+          title: 'No alvo mas a descer rápido',
+          adviceText: `Estás na faixa dos ${sgv} mas com queda acentuada. Antecipa com 15g de gel preventivo antes que atinja os 120.`,
+          spokenText: `Glicémia a ${sgv}, mas em descida acentuada. Toma quinze gramas de gel preventivo antes que chegue aos cento e vinte.`
+        };
+      } else {
+        return {
+          status: 'warning',
+          badge: '⚠️ BUFFER DROP',
+          badgeColor: 'bg-yellow-500 text-gray-900 font-bold',
+          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
+          carbs: '15g Preventive Gel',
+          title: 'In buffer but rapid drop',
+          adviceText: `In range at ${sgv} but dropping fast. Take a 15g preventive gel before reaching 120.`,
+          spokenText: `Blood glucose ${sgv}, but dropping fast. Take a 15 gram preventive gel before reaching 120.`
         };
       }
+    }
+    if (isDroppingSlow) {
+      if (isPt) {
+        return {
+          status: 'ideal',
+          badge: '🎯 ZONA SEGURA (DESCIDA LEVE)',
+          badgeColor: 'bg-emerald-600 text-white font-bold',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+          carbs: '10g Isotónico / Gomas',
+          title: 'Zona segura com ligeira descida',
+          adviceText: `Glicémia a ${sgv}. Margem confortável. Bebe um pouco de isotónico para compensar o gasto.`,
+          spokenText: `Glicémia a ${sgv}, com ligeira descida. Bebe um pouco de isotónico ou come uma goma de dez gramas.`
+        };
+      } else {
+        return {
+          status: 'ideal',
+          badge: '🎯 SAFE BUFFER (MILD DRIFT)',
+          badgeColor: 'bg-emerald-600 text-white font-bold',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+          carbs: '10g Drink / Chews',
+          title: 'Safe buffer with mild drift',
+          adviceText: `Glucose at ${sgv}. Comfortable margin. Sip sports drink to sustain.`,
+          spokenText: `Blood glucose ${sgv}, mild downward trend. Sip sports drink or take a 10 gram chew.`
+        };
+      }
+    }
+    // Steady or rising in ideal zone
+    if (isPt) {
       return {
         status: 'ideal',
         badge: '🎯 ZONA IDEAL',
-        badgeColor: 'bg-emerald-500 text-white',
+        badgeColor: 'bg-emerald-500 text-white font-bold',
         cardBorder: 'border-emerald-500 shadow-emerald-900/30',
         carbs: 'Sem hidratos necessários',
         title: 'Zona ideal para corrida: Continua sem hidratos',
-        adviceText: 'Glicémia perfeita para treino aeróbico com boa margem de segurança.',
-        spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Zona ideal para correr. Não precisas de hidratos.`
+        adviceText: 'Glicémia excelente para corrida com ampla margem de segurança. Mantém o ritmo!',
+        spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Zona ideal para correr com excelente margem. Continua assim sem hidratos!`
+      };
+    } else {
+      return {
+        status: 'ideal',
+        badge: '🎯 IDEAL ZONE',
+        badgeColor: 'bg-emerald-500 text-white font-bold',
+        cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+        carbs: 'No carbs needed',
+        title: 'Ideal running zone: Keep going',
+        adviceText: 'Perfect running glycemia with generous safety buffer. Keep it up!',
+        spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Perfect running zone with safety buffer. Keep going!`
       };
     }
-    if (sgv > config.targetMax && sgv <= 230) {
+  }
+
+  // 7. Elevated (> 175 and <= 230 mg/dL)
+  if (sgv <= 230) {
+    if (isPt) {
       return {
         status: 'high',
         badge: 'ℹ️ ELEVADA',
-        badgeColor: 'bg-purple-600 text-white',
+        badgeColor: 'bg-purple-600 text-white font-bold',
         cardBorder: 'border-purple-500 shadow-purple-900/30',
-        carbs: 'Sem hidratos + Água',
+        carbs: 'Sem hidratos + Água pura',
         title: 'Elevada: Bebe água e não consumas hidratos',
-        adviceText: 'Glicémia alta. Hidrata-te bem com água e acompanha a evolução.',
-        spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Bebe água, não precisas de hidratos.`
+        adviceText: 'Glicémia alta. Hidrata-te bem com água pura e acompanha a evolução.',
+        spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Bebe água pura e evita hidratos até estabilizar.`
+      };
+    } else {
+      return {
+        status: 'high',
+        badge: 'ℹ️ ELEVATED',
+        badgeColor: 'bg-purple-600 text-white font-bold',
+        cardBorder: 'border-purple-500 shadow-purple-900/30',
+        carbs: 'No carbs + Pure water',
+        title: 'Elevated: Drink water, avoid carbs',
+        adviceText: 'High glucose. Drink pure water and monitor trend.',
+        spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Drink plain water, avoid carbs until it normalizes.`
       };
     }
+  }
+
+  // 8. Very High (> 230 mg/dL)
+  if (isPt) {
     return {
       status: 'high',
       badge: '⚠️ MUITO ELEVADA',
-      badgeColor: 'bg-rose-700 text-white',
+      badgeColor: 'bg-rose-700 text-white font-bold',
       cardBorder: 'border-rose-500 shadow-rose-900/40',
       carbs: 'Sem hidratos + Hidratação',
       title: 'Muito elevada: Modera o ritmo e bebe água',
-      adviceText: 'Atenção ao esforço intenso com glicémia elevada. Hidratação abundante.',
-      spokenText: `Atenção. Glicémia muito alta a ${sgv}. Modera o ritmo, bebe água e evita hidratos.`
+      adviceText: 'Atenção ao esforço com glicémia muito elevada. Modera o ritmo e bebe água abundante.',
+      spokenText: `Atenção: Glicémia muito alta a ${sgv}. Modera o ritmo da corrida, bebe água abundante e evita hidratos.`
     };
-  }
-
-  // ENGLISH DEFAULT
-  if (sgv < config.urgentLow) {
-    return {
-      status: 'urgent',
-      badge: '🚨 HYPOGLYCEMIA',
-      badgeColor: 'bg-red-600 text-white animate-pulse',
-      cardBorder: 'border-red-500 shadow-red-900/50',
-      carbs: '15-20g fast carbs',
-      title: 'Stop running now and take 15 to 20g fast carbs',
-      adviceText: 'Critical low during running. Stop or walk immediately. Take 1 gel or dextrose.',
-      spokenText: `Urgent alert! Blood glucose critical at ${sgv}. Stop running and take 15 to 20 grams of fast-acting carbs now.`
-    };
-  }
-  if (sgv >= config.urgentLow && sgv < 95) {
-    if (isDropping) {
-      return {
-        status: 'urgent',
-        badge: '⚠️ FALLING LOW',
-        badgeColor: 'bg-orange-600 text-white animate-pulse',
-        cardBorder: 'border-orange-500 shadow-orange-900/40',
-        carbs: '15g fast carbs',
-        title: 'Take 15g fast carbs immediately',
-        adviceText: 'Low and falling during exercise. Take 1 gel now to prevent hypoglycemia.',
-        spokenText: `Warning. Blood glucose at ${sgv}, ${dirSpoken}. Take 15 grams of fast carbs immediately.`
-      };
-    }
-    return {
-      status: 'warning',
-      badge: '⚠️ BORDERLINE LOW',
-      badgeColor: 'bg-amber-500 text-gray-900',
-      cardBorder: 'border-amber-500 shadow-amber-900/30',
-      carbs: '10-15g carbs',
-      title: 'Take 10 to 15g carbs',
-      adviceText: 'Lower margin for running. Take 10-15g carbs to maintain energy.',
-      spokenText: `Blood glucose at ${sgv}, borderline low. Take 10 to 15 grams of carbs.`
-    };
-  }
-  if (sgv >= 95 && sgv < 120) {
-    if (isDroppingFast) {
-      return {
-        status: 'warning',
-        badge: '⚠️ RAPID DROP',
-        badgeColor: 'bg-amber-600 text-white',
-        cardBorder: 'border-amber-500 shadow-amber-900/30',
-        carbs: '15g carbs',
-        title: 'Rapid drop: Take 15g carbs',
-        adviceText: 'Sharp drop. Anticipate before dropping below 80.',
-        spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Take 15 grams of carbs to stop the drop.`
-      };
-    }
-    if (isDroppingSlow) {
-      return {
-        status: 'warning',
-        badge: 'ℹ️ SLOW DROP',
-        badgeColor: 'bg-yellow-500 text-gray-900',
-        cardBorder: 'border-yellow-500 shadow-yellow-900/20',
-        carbs: '10g carbs',
-        title: 'Take 10g carbs or half gel',
-        adviceText: 'Gradual drop. Half an energy gel keeps your glucose steady.',
-        spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Suggesting 10 grams of carbs or half a gel.`
-      };
-    }
-    return {
-      status: 'ideal',
-      badge: '✅ ACCEPTABLE',
-      badgeColor: 'bg-emerald-600 text-white',
-      cardBorder: 'border-emerald-500 shadow-emerald-900/30',
-      carbs: '5-10g carbs (optional)',
-      title: 'Steady: Keep your pace',
-      adviceText: 'Good level. If your run is longer than 45 min, consider light carbs.',
-      spokenText: `Blood glucose at ${sgv}, steady. Acceptable level. If your run is long, you can take 5 to 10 grams of carbs.`
-    };
-  }
-  if (sgv >= 120 && sgv <= config.targetMax) {
-    if (isDroppingFast) {
-      return {
-        status: 'warning',
-        badge: '⚠️ SHARP DROP',
-        badgeColor: 'bg-yellow-500 text-gray-900',
-        cardBorder: 'border-yellow-500 shadow-yellow-900/20',
-        carbs: '10g preventive carbs',
-        title: 'Good glucose but dropping quickly',
-        adviceText: 'Good range, but take 10g preventive carbs for safety.',
-        spokenText: `Blood glucose at ${sgv}, but dropping fast. Take 10 grams of preventive carbs.`
-      };
-    }
-    return {
-      status: 'ideal',
-      badge: '🎯 TARGET ZONE',
-      badgeColor: 'bg-emerald-500 text-white',
-      cardBorder: 'border-emerald-500 shadow-emerald-900/30',
-      carbs: 'No carbs needed',
-      title: 'Target running zone: No carbs needed',
-      adviceText: 'Perfect aerobic range with great safety margin.',
-      spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Target zone for running, no carbs needed.`
-    };
-  }
-  if (sgv > config.targetMax && sgv <= 230) {
+  } else {
     return {
       status: 'high',
-      badge: 'ℹ️ ELEVATED',
-      badgeColor: 'bg-purple-600 text-white',
-      cardBorder: 'border-purple-500 shadow-purple-900/30',
-      carbs: 'No carbs + Water',
-      title: 'Elevated: Drink water, avoid carbs',
-      adviceText: 'High for exercise. Stay well hydrated with water.',
-      spokenText: `Blood glucose elevated at ${sgv}, ${dirSpoken}. Drink water, no carbs needed.`
+      badge: '⚠️ VERY HIGH',
+      badgeColor: 'bg-rose-700 text-white font-bold',
+      cardBorder: 'border-rose-500 shadow-rose-900/40',
+      carbs: 'No carbs + Rest & hydrate',
+      title: 'Very high: Ease pace and hydrate',
+      adviceText: 'Caution with high glucose. Ease running pace and drink plenty of water.',
+      spokenText: `Warning: Blood glucose very high at ${sgv}. Ease your running pace, drink water and avoid carbs.`
     };
   }
-  return {
-    status: 'high',
-    badge: '⚠️ VERY HIGH',
-    badgeColor: 'bg-rose-700 text-white',
-    cardBorder: 'border-rose-500 shadow-rose-900/40',
-    carbs: 'No carbs + Hydration',
-    title: 'Very high: Ease pace and hydrate',
-    adviceText: 'Watch for dehydration and high exertion. Avoid carbs.',
-    spokenText: `Warning: Blood glucose very high at ${sgv}. Ease your pace, drink water and avoid carbs.`
-  };
 }
 
 // Studio Voice Audio Playback via Server TTS (Language-aware with Audio Ducking for Music)
@@ -1768,6 +1891,15 @@ function updateUIWithReading(current, previous, delta, advice) {
 
   if (mainCard) {
     mainCard.className = `relative overflow-hidden rounded-2xl bg-slate-900/90 border-2 px-4 py-2 sm:py-3 backdrop-blur-xl transition-all duration-300 shadow-xl ${advice.cardBorder}`;
+  }
+
+  const coachCard = document.getElementById('carbCoachCard');
+  if (coachCard) {
+    if (advice.status === 'absorbing') {
+      coachCard.className = 'rounded-2xl bg-gradient-to-b from-sky-950/90 to-slate-950/95 border-2 border-sky-500/80 p-2 sm:p-2.5 shadow-lg shadow-sky-900/30 shrink-0 transition-all';
+    } else {
+      coachCard.className = 'rounded-2xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border border-slate-800 p-2 sm:p-2.5 shadow-md shrink-0 transition-all';
+    }
   }
 }
 
@@ -2305,6 +2437,7 @@ window.addEventListener('DOMContentLoaded', () => {
     updateProfileButtonsUI();
 
     // Quick Carb Intake & Voice
+    updateCarbButtonUI();
     document.getElementById('btnQuickGel')?.addEventListener('click', () => recordCarbsIntake(20, 'button'));
     document.getElementById('btnVoiceCommand')?.addEventListener('click', startVoiceListening);
     document.getElementById('btnCancelVoice')?.addEventListener('click', stopVoiceListening);
