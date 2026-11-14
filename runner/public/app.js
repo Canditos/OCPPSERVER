@@ -197,6 +197,7 @@ async function fetchIntervalsWorkout() {
   const titleEl = document.getElementById('intervalsWorkoutTitle');
   const descEl = document.getElementById('intervalsWorkoutDesc');
   const badgeEl = document.getElementById('intervalsWorkoutBadge');
+  const startBtnText = document.getElementById('startBtnText');
 
   if (titleEl) titleEl.textContent = 'Intervals.icu: A sincronizar...';
 
@@ -207,7 +208,7 @@ async function fetchIntervalsWorkout() {
 
     if (data.found && data.workout) {
       currentIntervalsWorkout = data.workout;
-      if (titleEl) titleEl.textContent = data.workout.name || 'Treino de Hoje';
+      if (titleEl) titleEl.textContent = data.workout.name || 'Treino Intervals';
       if (badgeEl) badgeEl.textContent = data.workout.type || 'Run';
 
       let desc = '';
@@ -219,18 +220,39 @@ async function fetchIntervalsWorkout() {
       } else if (data.workout.duration > 0) {
         desc += (desc ? ' · ' : '') + `${Math.round(data.workout.duration / 60)} min`;
       }
-      if (descEl) descEl.textContent = desc || data.workout.description || 'Treino programado pronto!';
-      showToast(`📊 Treino Intervals: ${data.workout.name}`);
+      desc += ' · Z2 (136-144 bpm)';
+
+      if (descEl) descEl.textContent = desc;
+
+      if (startBtnText && !isRunning) {
+        startBtnText.textContent = `Iniciar ${data.workout.name} (${(data.workout.distance/1000).toFixed(1)}km)`;
+      }
+
+      showToast(`📊 Treino Intervals sincronizado: ${data.workout.name}`);
     } else {
       if (titleEl) titleEl.textContent = 'Intervals.icu: Sem treino hoje';
       if (descEl) descEl.textContent = 'Nenhum treino agendado para hoje. Podes correr livre!';
     }
   } catch (e) {
     console.warn('fetchIntervalsWorkout error:', e);
-    if (titleEl) titleEl.textContent = 'Intervals.icu: Ligado ✓';
-    if (descEl) descEl.textContent = 'Marco Nascimento · Toque para sincronizar';
+    if (titleEl) titleEl.textContent = 'Intervals.icu: Marco Nascimento';
+    if (descEl) descEl.textContent = 'Toque em Sync para sincronizar';
   }
 }
+
+function showIntervalsWorkoutDetails() {
+  if (!currentIntervalsWorkout) {
+    fetchIntervalsWorkout();
+    return;
+  }
+  const w = currentIntervalsWorkout;
+  let msg = `🏃 ${w.name}\n`;
+  if (w.distance > 0) msg += `Distância: ${(w.distance / 1000).toFixed(1)} km\n`;
+  if (w.targetPaceFormatted) msg += `Ritmo Alvo: ${w.targetPaceFormatted}\n`;
+  if (w.description) msg += `\nNotas:\n${w.description}`;
+  alert(msg);
+}
+
 
 async function fetchIntervalsAthlete() {
   try {
@@ -2448,6 +2470,21 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   updateAudioEngineDisplay();
+
+  // Intervals.icu listeners & sync
+  document.getElementById('btnRefreshIntervals')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fetchIntervalsWorkout();
+  });
+  document.getElementById('intervalsWorkoutCard')?.addEventListener('click', () => {
+    showIntervalsWorkoutDetails();
+  });
+  document.getElementById('btnUploadToIntervals')?.addEventListener('click', () => {
+    uploadWorkoutToIntervals();
+  });
+  fetchIntervalsAthlete();
+  fetchIntervalsWorkout();
+
   setTimeout(updateAudioEngineDisplay, 1000);
   setTimeout(updateAudioEngineDisplay, 3000);
 
