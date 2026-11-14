@@ -61,11 +61,21 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 12,
-      versionName: '2.1',
+      versionCode: 13,
+      versionName: '2.2',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Integração direta e automática com HUAWEI WATCH GT 6 Pro (BLE), nova barra cardíaca no ecrã e voz com ritmo cardíaco.',
+      releaseNotes: 'Treinador de hidratos antecipado para Dexcom G7, silenciamento imediato ao tomar gel e pausa de 15m.',
       features: [
+        {
+          icon: '🍬',
+          title: 'Treinador de Hidratos Agressivo (Dexcom G7)',
+          desc: 'Compensação do atraso fisiológico de 10-15m do Dexcom G7. Recomendações antecipadas antes de bater na hipo.'
+        },
+        {
+          icon: '⏳',
+          title: 'Silenciamento Imediato de Gel',
+          desc: 'Ao clicares "Tomei Gel (20g)" o alerta desliga de imediato no ecrã e nos auscultadores com temporizador de 15m.'
+        },
         {
           icon: '📡',
           title: 'Assistente HUAWEI WATCH GT (BLE)',
@@ -75,26 +85,6 @@ const server = http.createServer((req, res) => {
           icon: '❤️',
           title: 'Ritmo Cardíaco & Zonas Z1-Z5',
           desc: 'Anúncio por voz dos batimentos cardíacos (BPM) e zonas de esforço durante corridas e caminhadas.'
-        },
-        {
-          icon: '🎙️',
-          title: 'Comando de Voz & Registo de Gel',
-          desc: 'Diz "Tomei gel" ou clica no botão rápido para registar 20g HC. O treinador faz pausa inteligente para não mandar tomar outro gel enquanto absorve.'
-        },
-        {
-          icon: '🚨',
-          title: 'Alerta Preditivo de Hipoglicemia',
-          desc: 'Aviso urgente com 15 minutos de antecedência se a glicemia estiver em queda rápida.'
-        },
-        {
-          icon: '🎧',
-          title: 'Atalho no Botão dos Auscultadores',
-          desc: 'Carrega no botão dos fones Bluetooth (passar faixa) para ouvir a glicemia sob demanda durante a corrida.'
-        },
-        {
-          icon: '🏃‍♂️',
-          title: 'Perfis de Treino & Resumo Final',
-          desc: 'Alvos com 1 toque (Longo, Séries, Caminhada) e relatório com % Time in Range ao parar o treino.'
         }
       ]
     }));
