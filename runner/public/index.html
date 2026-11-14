@@ -110,15 +110,36 @@
       </button>
     </div>
 
+    <!-- Intervals.icu Today's Workout Card -->
+    <div id="intervalsWorkoutCard" class="flex items-center justify-between gap-2 bg-gradient-to-r from-sky-950/80 to-indigo-950/80 px-3 py-1.5 rounded-xl border border-sky-800/50 text-xs shrink-0">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-base text-sky-400 shrink-0">📊</span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span id="intervalsWorkoutTitle" class="text-[11px] font-extrabold text-white truncate max-w-[210px]">Intervals.icu: A sincronizar...</span>
+            <span id="intervalsWorkoutBadge" class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-sky-900 text-sky-300 border border-sky-700/50">Run</span>
+          </div>
+          <p id="intervalsWorkoutDesc" class="text-[10px] text-slate-300 truncate">Marco Nascimento · Zonas Z1-Z5 calibradas</p>
+        </div>
+      </div>
+      <button id="btnRefreshIntervals" type="button" class="px-2 py-0.5 rounded-lg bg-sky-600/80 hover:bg-sky-500 text-white font-bold text-[10px] transition shrink-0 cursor-pointer" title="Recarregar treino do Intervals.icu">
+        ↻ Sync
+      </button>
+    </div>
+
     <!-- Dedicated Heart Rate Quick Bar -->
     <div id="heartRateQuickBar" class="flex items-center justify-between gap-2 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-rose-900/40 text-xs shrink-0 cursor-pointer hover:border-rose-700/60 transition active:scale-[0.99]" title="Configurar e ligar HUAWEI WATCH / Sensor Cardíaco">
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-base text-rose-500 animate-pulse shrink-0">❤️</span>
         <div class="min-w-0">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <span id="quickBarHrTitle" class="text-[11px] font-bold text-white">Ritmo Cardíaco:</span>
+            <span id="quickBarHrTitle" class="text-[11px] font-bold text-white">FC:</span>
             <span id="quickBarHrValue" class="text-xs font-black text-rose-300 font-mono">-- bpm</span>
             <span id="quickBarHrZone" class="hidden text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase bg-rose-950 text-rose-300 border border-rose-800/50">--</span>
+            <span class="text-slate-600">|</span>
+            <span class="text-[11px] font-bold text-white">GPS:</span>
+            <span id="quickBarGpsPace" class="text-xs font-black text-emerald-400 font-mono">--/km</span>
+            <span id="quickBarGpsDist" class="text-[10px] font-bold text-slate-300 font-mono">0.00 km</span>
           </div>
           <p id="quickBarHrSub" class="text-[10px] text-slate-400 truncate">HUAWEI WATCH GT 6 Pro · Toca para ligar</p>
         </div>
@@ -608,12 +629,17 @@
         <span id="sumCarbsCount" class="text-xs font-mono text-amber-400/80">0 registos</span>
       </div>
 
+            <!-- Intervals.icu Upload Action Button -->
+      <button id="btnUploadToIntervals" type="button" class="w-full mb-2.5 py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 active:scale-95 text-white font-black text-sm shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2 transition cursor-pointer">
+        <span class="text-base">📊</span>
+        <span id="labelUploadIntervals">Enviar Treino para o Intervals.icu</span>
+      </button>
       <button id="btnDismissSummary" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 transition cursor-pointer">
         Excelente Treino! 💪
       </button>
     </div>
   </div>
 
-  <script src="/app.js?v=31"></script>
+  <script src="/app.js?v=32"></script>
 </body>
 </html>

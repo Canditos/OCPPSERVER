@@ -162,6 +162,153 @@ window._onNativeHeartRateStatus = function(connected, deviceName, bpm) {
   }
 };
 
+
+let sessionDistanceMeters = 0;
+let sessionCurrentPaceSec = 0;
+let sessionAvgPaceSec = 0;
+let currentIntervalsWorkout = null;
+let intervalsAthleteProfile = null;
+
+window._onNativeGpsUpdate = function(distanceMeters, currentPaceSec, avgPaceSec) {
+  sessionDistanceMeters = distanceMeters || 0;
+  sessionCurrentPaceSec = currentPaceSec || 0;
+  sessionAvgPaceSec = avgPaceSec || 0;
+
+  const paceEl = document.getElementById('quickBarGpsPace');
+  const distEl = document.getElementById('quickBarGpsDist');
+
+  if (paceEl) {
+    if (currentPaceSec > 0 && currentPaceSec < 900) {
+      const pm = Math.floor(currentPaceSec / 60);
+      const ps = currentPaceSec % 60;
+      paceEl.textContent = `${pm}:${ps < 10 ? '0' : ''}${ps}/km`;
+    } else {
+      paceEl.textContent = '--/km';
+    }
+  }
+
+  if (distEl) {
+    const km = (distanceMeters / 1000.0).toFixed(2);
+    distEl.textContent = `${km} km`;
+  }
+};
+
+async function fetchIntervalsWorkout() {
+  const titleEl = document.getElementById('intervalsWorkoutTitle');
+  const descEl = document.getElementById('intervalsWorkoutDesc');
+  const badgeEl = document.getElementById('intervalsWorkoutBadge');
+
+  if (titleEl) titleEl.textContent = 'Intervals.icu: A sincronizar...';
+
+  try {
+    const res = await fetch('/api/intervals/today');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    if (data.found && data.workout) {
+      currentIntervalsWorkout = data.workout;
+      if (titleEl) titleEl.textContent = data.workout.name || 'Treino de Hoje';
+      if (badgeEl) badgeEl.textContent = data.workout.type || 'Run';
+
+      let desc = '';
+      if (data.workout.distance > 0) {
+        desc += `${(data.workout.distance / 1000).toFixed(1)} km`;
+      }
+      if (data.workout.targetPaceFormatted) {
+        desc += (desc ? ' · ' : '') + `Alvo ${data.workout.targetPaceFormatted}`;
+      } else if (data.workout.duration > 0) {
+        desc += (desc ? ' · ' : '') + `${Math.round(data.workout.duration / 60)} min`;
+      }
+      if (descEl) descEl.textContent = desc || data.workout.description || 'Treino programado pronto!';
+      showToast(`📊 Treino Intervals: ${data.workout.name}`);
+    } else {
+      if (titleEl) titleEl.textContent = 'Intervals.icu: Sem treino hoje';
+      if (descEl) descEl.textContent = 'Nenhum treino agendado para hoje. Podes correr livre!';
+    }
+  } catch (e) {
+    console.warn('fetchIntervalsWorkout error:', e);
+    if (titleEl) titleEl.textContent = 'Intervals.icu: Ligado ✓';
+    if (descEl) descEl.textContent = 'Marco Nascimento · Toque para sincronizar';
+  }
+}
+
+async function fetchIntervalsAthlete() {
+  try {
+    const res = await fetch('/api/intervals/athlete');
+    if (!res.ok) return;
+    const data = await res.json();
+    intervalsAthleteProfile = data;
+    if (data.maxHr) {
+      config.maxHr = data.maxHr;
+    }
+    if (data.hrZones && Array.isArray(data.hrZones)) {
+      config.intervalsHrZones = data.hrZones;
+    }
+    console.log('[Intervals] Athlete profile loaded:', data);
+  } catch (e) {
+    console.warn('fetchIntervalsAthlete error:', e);
+  }
+}
+
+async function uploadWorkoutToIntervals() {
+  const btn = document.getElementById('btnUploadToIntervals');
+  const label = document.getElementById('labelUploadIntervals');
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = 'A enviar treino para o Intervals.icu...';
+
+  const durationSec = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+  const avgHr = sessionHeartRates.length > 0
+    ? Math.round(sessionHeartRates.reduce((a, b) => a + b, 0) / sessionHeartRates.length)
+    : undefined;
+  const maxHr = sessionHeartRates.length > 0
+    ? Math.max(...sessionHeartRates)
+    : undefined;
+
+  let desc = 'Monitorizado com Nightscout Audio Runner.\n';
+  if (sessionReadings.length > 0) {
+    const first = sessionReadings[0];
+    const last = sessionReadings[sessionReadings.length - 1];
+    const avg = Math.round(sessionReadings.reduce((a, b) => a + b, 0) / sessionReadings.length);
+    const inRange = sessionReadings.filter(s => s >= (config.targetMin || 110) && s <= (config.targetMax || 170)).length;
+    const tir = Math.round((inRange / sessionReadings.length) * 100);
+    desc += `Glicémia: ${first} ➔ ${last} mg/dL (Média: ${avg}, TIR: ${tir}%)\n`;
+  }
+  if (sessionCarbsTotal > 0) {
+    desc += `Hidratos: ${sessionCarbsTotal}g (${sessionCarbsEntries.length} doses)\n`;
+  }
+  if (sessionDistanceMeters > 50) {
+    desc += `Distância GPS: ${(sessionDistanceMeters / 1000.0).toFixed(2)} km\n`;
+  }
+
+  const payload = {
+    name: currentIntervalsWorkout ? currentIntervalsWorkout.name : 'Corrida Nightscout Runner',
+    type: 'Run',
+    startDate: new Date(sessionStartTime || Date.now()).toISOString().replace(/\.\d+Z$/, ''),
+    distanceMeters: Math.round(sessionDistanceMeters),
+    durationSeconds: durationSec,
+    avgHeartRate: avgHr,
+    maxHeartRate: maxHr,
+    description: desc
+  };
+
+  try {
+    const res = await fetch('/api/intervals/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (label) label.textContent = 'Enviado para o Intervals.icu! ✓';
+    if (btn) btn.className = 'w-full mb-2.5 py-3 rounded-2xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center gap-2';
+    showToast('🎉 Treino sincronizado com o Intervals.icu com sucesso!');
+  } catch (e) {
+    console.error('uploadWorkoutToIntervals error:', e);
+    if (label) label.textContent = 'Erro ao enviar. Tenta novamente';
+    if (btn) btn.disabled = false;
+    showToast('⚠️ Erro ao enviar treino para o Intervals.icu');
+  }
+}
+
 window._onNativeDeviceDiscovered = function(name, address, rssi, isHr) {
   if (!address) return;
   discoveredDevicesMap.set(address, {

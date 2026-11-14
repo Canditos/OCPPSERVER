@@ -16,13 +16,13 @@ import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.util.Log;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -98,6 +98,16 @@ public class HeartRateManager {
         return connectedDeviceName;
     }
 
+    private void saveLastConnectedDevice(String address, String name) {
+        try {
+            SharedPreferences sp = appContext.getSharedPreferences("ns_runner_prefs", Context.MODE_PRIVATE);
+            sp.edit()
+                    .putString("last_hr_device_address", address)
+                    .putString("last_hr_device_name", name)
+                    .apply();
+        } catch (Exception ignored) {}
+    }
+
     /**
      * Starts discovering Heart Rate peripherals:
      * Broadcasts discovered devices in real time to WebView.
@@ -127,7 +137,15 @@ public class HeartRateManager {
             }
         }
 
-        // Always run active BLE scan to find the live HR broadcast
+        // Check if we have a saved device address to auto-connect
+        SharedPreferences sp = appContext.getSharedPreferences("ns_runner_prefs", Context.MODE_PRIVATE);
+        String savedAddr = sp.getString("last_hr_device_address", null);
+        if (savedAddr != null && !savedAddr.isEmpty() && !isConnected && bluetoothGatt == null) {
+            Log.d(TAG, "Auto-connecting to previously paired device: " + savedAddr);
+            connectDeviceByAddress(savedAddr);
+        }
+
+        // Always run active BLE scan to catch the live HR broadcast
         startBleScan(preferredName);
     }
 
@@ -149,7 +167,7 @@ public class HeartRateManager {
     private synchronized void connectToDevice(BluetoothDevice device) {
         disconnect();
         connectedDevice = device;
-        connectedDeviceName = device.getName() != null ? device.getName() : "Sensor Cardíaco";
+        connectedDeviceName = device.getName() != null ? device.getName() : "HUAWEI WATCH GT";
         Log.d(TAG, "Connecting to GATT on: " + connectedDeviceName + " [" + device.getAddress() + "]");
         notifyState(false, "A ligar a " + connectedDeviceName + "...");
 
@@ -189,7 +207,7 @@ public class HeartRateManager {
 
         try {
             scanner.startScan(filters, settings, scanCallback);
-            // Stop scanning after 18 seconds if user doesn't pick
+            // Stop scanning after 20 seconds if user doesn't pick
             mainHandler.postDelayed(() -> {
                 if (isScanning) {
                     stopBleScan();
@@ -197,7 +215,7 @@ public class HeartRateManager {
                         notifyState(false, "Pesquisa concluída. Verifica se a 'Transmissão da FC' está ligada no relógio.");
                     }
                 }
-            }, 18000);
+            }, 20000);
         } catch (Exception e) {
             Log.e(TAG, "startScan error", e);
             isScanning = false;
@@ -226,10 +244,6 @@ public class HeartRateManager {
             if (name == null && record != null) {
                 name = record.getDeviceName();
             }
-            if (name == null || name.trim().isEmpty()) {
-                return; // skip unnamed raw beacons
-            }
-            name = name.trim();
 
             boolean hasHrService = false;
             if (record != null && record.getServiceUuids() != null) {
@@ -240,6 +254,15 @@ public class HeartRateManager {
                     }
                 }
             }
+
+            if (name == null || name.trim().isEmpty()) {
+                if (hasHrService) {
+                    name = "HUAWEI WATCH (Sensor FC)";
+                } else {
+                    return; // skip unnamed non-HR beacons
+                }
+            }
+            name = name.trim();
 
             int rssi = result.getRssi();
             MainActivity.notifyDiscoveredDevice(name, device.getAddress(), rssi, hasHrService);
@@ -316,6 +339,9 @@ public class HeartRateManager {
                 if (hrChar != null) {
                     enableHrNotifications(gatt, hrChar);
                     isConnected = true;
+                    if (connectedDevice != null) {
+                        saveLastConnectedDevice(connectedDevice.getAddress(), connectedDeviceName);
+                    }
                     notifyState(true, connectedDeviceName);
                 } else {
                     Log.w(TAG, "Heart Rate measurement characteristic 0x2A37 not found on " + connectedDeviceName);
@@ -336,6 +362,15 @@ public class HeartRateManager {
         }
 
         @Override
+        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+            Log.d(TAG, "onDescriptorWrite status=" + status + ", uuid=" + descriptor.getUuid());
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                isConnected = true;
+                notifyState(true, connectedDeviceName);
+            }
+        }
+
+        @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             if (UUID_HR_MEASUREMENT.equals(characteristic.getUuid())) {
                 parseHeartRateData(characteristic.getValue());
@@ -343,6 +378,7 @@ public class HeartRateManager {
         }
 
         // Android 13+ (API 33+) callback override
+        @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value) {
             if (UUID_HR_MEASUREMENT.equals(characteristic.getUuid())) {
                 parseHeartRateData(value);
@@ -356,8 +392,12 @@ public class HeartRateManager {
 
         BluetoothGattDescriptor descriptor = characteristic.getDescriptor(UUID_CCCD);
         if (descriptor != null) {
-            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-            gatt.writeDescriptor(descriptor);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            } else {
+                descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                gatt.writeDescriptor(descriptor);
+            }
             Log.d(TAG, "Wrote CCCD descriptor to enable HR streaming");
         }
     }
@@ -398,6 +438,7 @@ public class HeartRateManager {
     }
 
     public synchronized void disconnect() {
+        stopBleScan();
         if (bluetoothGatt != null) {
             try {
                 bluetoothGatt.disconnect();

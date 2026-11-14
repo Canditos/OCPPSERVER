@@ -1,5 +1,6 @@
 package com.gatoescondido.runner;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -8,7 +9,11 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.util.Log;
@@ -27,6 +32,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+@SuppressLint("MissingPermission")
 public class RunnerService extends Service {
     private static final String TAG = "RunnerService";
     private static final String CHANNEL_ID = "ns_runner_workout_channel";
@@ -52,10 +58,19 @@ public class RunnerService extends Service {
     private int targetMin = 110;
     private int targetMax = 170;
     private boolean tellHeartRate = true;
-    private int maxHr = 185;
+    private int maxHr = 179;
 
     private int lastSgv = -1;
     private int announcementCount = 0;
+
+    // GPS & Pace Tracking
+    private LocationManager locationManager = null;
+    private LocationListener locationListener = null;
+    private Location lastLocation = null;
+    private float totalDistanceMeters = 0.0f;
+    private int currentPaceSecondsPerKm = 0;
+    private int averagePaceSecondsPerKm = 0;
+    private long workoutStartTimestamp = 0;
 
     public static boolean isRunning() {
         return isServiceRunning;
@@ -66,7 +81,7 @@ public class RunnerService extends Service {
             Log.d(TAG, "stopServiceDirect called");
             isServiceRunning = false;
 
-            // 1. Direct synchronous stop if running in same process
+            // 1. Direct synchronous stop of active instance if running
             RunnerService instance = activeInstance;
             if (instance != null) {
                 Log.d(TAG, "Stopping activeInstance directly");
@@ -74,22 +89,10 @@ public class RunnerService extends Service {
                 activeInstance = null;
             }
 
-            // 2. Deliver ACTION_STOP to onStartCommand
+            // 2. Cleanly stop service without calling startForegroundService
             if (context != null) {
-                Intent stopIntent = new Intent(context, RunnerService.class);
-                stopIntent.setAction(ACTION_STOP);
                 try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(stopIntent);
-                    } else {
-                        context.startService(stopIntent);
-                    }
-                } catch (Exception e) {
-                    Log.w(TAG, "Failed sending startService with ACTION_STOP", e);
-                }
-
-                try {
-                    context.stopService(stopIntent);
+                    context.stopService(new Intent(context, RunnerService.class));
                 } catch (Exception e) {
                     Log.w(TAG, "Failed context.stopService", e);
                 }
@@ -125,59 +128,65 @@ public class RunnerService extends Service {
 
         String action = intent.getAction();
         if (ACTION_STOP.equals(action)) {
-            Log.d(TAG, "Stopping RunnerService via STOP action");
+            Log.d(TAG, "Received ACTION_STOP intent - stopping foreground service");
             stopForegroundService(true);
             return START_NOT_STICKY;
         }
 
+        activeInstance = this;
+        isServiceRunning = true;
+        workoutStartTimestamp = System.currentTimeMillis();
+        totalDistanceMeters = 0.0f;
+        currentPaceSecondsPerKm = 0;
+        averagePaceSecondsPerKm = 0;
+        lastLocation = null;
+
+        // Parse extras
         intervalMinutes = intent.getIntExtra(EXTRA_INTERVAL, 2);
-        if (intervalMinutes < 1) intervalMinutes = 1;
-        String lang = intent.getStringExtra(EXTRA_LANG);
-        if (lang != null && !lang.isEmpty()) language = lang;
-        String base = intent.getStringExtra(EXTRA_API_BASE);
-        if (base != null && !base.isEmpty()) apiBase = base;
+        if (intervalMinutes < 1) intervalMinutes = 2;
+        language = intent.getStringExtra(EXTRA_LANG);
+        if (language == null || language.isEmpty()) language = "pt-PT";
+        String customApiBase = intent.getStringExtra(EXTRA_API_BASE);
+        if (customApiBase != null && !customApiBase.isEmpty()) {
+            apiBase = customApiBase;
+        }
         targetMin = intent.getIntExtra(EXTRA_TARGET_MIN, 110);
         targetMax = intent.getIntExtra(EXTRA_TARGET_MAX, 170);
         tellHeartRate = intent.getBooleanExtra(EXTRA_TELL_HR, true);
-        maxHr = intent.getIntExtra(EXTRA_MAX_HR, 185);
+        maxHr = intent.getIntExtra(EXTRA_MAX_HR, 179);
 
-        Log.d(TAG, "Starting RunnerService in foreground with interval=" + intervalMinutes + "m, lang=" + language + ", tellHR=" + tellHeartRate);
-        startWorkoutForeground();
-        return START_NOT_STICKY;
-    }
+        Log.d(TAG, "Starting RunnerService with interval=" + intervalMinutes + "m, lang=" + language + ", apiBase=" + apiBase + ", maxHr=" + maxHr);
 
-    private void startWorkoutForeground() {
-        if (isServiceRunning) return;
-        isServiceRunning = true;
-        announcementCount = 0;
-
-        // 1. Acquire Partial WakeLock so CPU never sleeps while phone is locked in pocket
+        // 1. Acquire Partial WakeLock to keep CPU alive when screen is off
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            if (pm != null && wakeLock == null) {
+            if (pm != null && (wakeLock == null || !wakeLock.isHeld())) {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NightscoutRunner:WorkoutWakeLock");
                 wakeLock.acquire();
-                Log.d(TAG, "Partial WakeLock acquired successfully");
+                Log.d(TAG, "Partial WakeLock acquired");
             }
         } catch (Exception e) {
-            Log.e(TAG, "Failed to acquire wake lock", e);
+            Log.e(TAG, "Failed acquiring WakeLock", e);
         }
 
-        // 2. Start Foreground with initial notification (mediaPlayback type for audio runner)
-        Notification notification = buildNotification(
-                language.equals("en") ? "🏃 Nightscout Runner" : "🏃 Treino Ativo — NS Runner",
-                language.equals("en") ? "Connecting to Nightscout..." : "A ligar ao Nightscout..."
-        );
+        // 2. Start Foreground Service with notification immediately
+        String notifTitle = language.equals("en") ? "🏃 Nightscout Runner · Starting..." : "🏃 Nightscout Runner · A iniciar treino...";
+        String notifContent = language.equals("en") ? "Monitoring glucose and heart rate" : "A monitorizar glicémia, ritmo e batimentos";
+        Notification notification = buildNotification(notifTitle, notifContent);
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                int type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    type |= ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION;
+                }
+                startForeground(NOTIFICATION_ID, notification, type);
             } else {
                 startForeground(NOTIFICATION_ID, notification);
             }
-            Log.d(TAG, "startForeground succeeded with type mediaPlayback");
+            Log.d(TAG, "startForeground succeeded");
         } catch (Exception e) {
-            Log.e(TAG, "startForeground error", e);
+            Log.e(TAG, "startForeground with types failed, attempting simple startForeground", e);
             try {
                 startForeground(NOTIFICATION_ID, notification);
             } catch (Exception e2) {
@@ -185,18 +194,93 @@ public class RunnerService extends Service {
             }
         }
 
-        // 3. Connect to Heart Rate sensor if enabled
+        // 3. Start GPS Location tracking
+        startGpsTracking();
+
+        // 4. Connect to Heart Rate sensor if enabled
         if (tellHeartRate && !HeartRateManager.getInstance(this).isConnected()) {
-            Log.d(TAG, "Starting Heart Rate peripheral search for workout");
+            Log.d(TAG, "Starting HeartRateManager auto-connect in background...");
             HeartRateManager.getInstance(this).startConnect("");
         }
 
-        // 4. Start recurring background timer in Java (immune to WebView sleep!)
+        // 5. Schedule periodic glucose & heart rate polling + voice announcement
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdownNow();
+        }
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(this::pollAndAnnounce, 2, intervalMinutes * 60L, TimeUnit.SECONDS);
+
+        // Immediate first poll after 3 seconds
+        scheduler.schedule(this::pollAndAnnounce, 3, TimeUnit.SECONDS);
+
+        // Recurring interval
+        scheduler.scheduleAtFixedRate(this::pollAndAnnounce, intervalMinutes * 60L, intervalMinutes * 60L, TimeUnit.SECONDS);
+
+        return START_NOT_STICKY;
+    }
+
+    private void startGpsTracking() {
+        try {
+            locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            if (locationManager == null) return;
+
+            locationListener = new LocationListener() {
+                @Override
+                public void onLocationChanged(Location loc) {
+                    if (loc == null) return;
+                    if (loc.hasAccuracy() && loc.getAccuracy() > 35) return; // ignore inaccurate fixes
+
+                    if (lastLocation != null) {
+                        float dist = loc.distanceTo(lastLocation);
+                        if (dist > 1.5f && dist < 100.0f) { // legitimate movement between fixes
+                            totalDistanceMeters += dist;
+                        }
+                    }
+                    lastLocation = loc;
+
+                    // Calculate current pace from speed
+                    if (loc.hasSpeed() && loc.getSpeed() > 0.6f) { // > ~2.2 km/h
+                        currentPaceSecondsPerKm = (int) (1000.0f / loc.getSpeed());
+                    }
+
+                    // Calculate overall average pace
+                    long elapsedSec = (System.currentTimeMillis() - workoutStartTimestamp) / 1000;
+                    if (totalDistanceMeters > 40 && elapsedSec > 10) {
+                        float avgSpeed = totalDistanceMeters / elapsedSec;
+                        if (avgSpeed > 0.4f) {
+                            averagePaceSecondsPerKm = (int) (1000.0f / avgSpeed);
+                        }
+                    }
+
+                    // Forward GPS update to WebView
+                    MainActivity.notifyGpsUpdate(totalDistanceMeters, currentPaceSecondsPerKm, averagePaceSecondsPerKm);
+                }
+
+                @Override
+                public void onStatusChanged(String provider, int status, Bundle extras) {}
+                @Override
+                public void onProviderEnabled(String provider) {}
+                @Override
+                public void onProviderDisabled(String provider) {}
+            };
+
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 2.0f, locationListener);
+                Log.d(TAG, "Registered GPS_PROVIDER location updates");
+            }
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 4000, 5.0f, locationListener);
+                Log.d(TAG, "Registered NETWORK_PROVIDER location updates");
+            }
+        } catch (SecurityException se) {
+            Log.w(TAG, "Location permission not granted for GPS runner tracking", se);
+        } catch (Exception e) {
+            Log.e(TAG, "startGpsTracking error", e);
+        }
     }
 
     private void pollAndAnnounce() {
+        if (!isServiceRunning) return;
+
         try {
             Log.d(TAG, "pollAndAnnounce triggered");
             String entriesUrl = apiBase + "/api/entries";
@@ -242,14 +326,29 @@ public class RunnerService extends Service {
                 }
             }
 
+            // Running Pace speech if moving
+            String paceSpeech = "";
+            if (currentPaceSecondsPerKm > 0 && currentPaceSecondsPerKm < 900) {
+                int paceMins = currentPaceSecondsPerKm / 60;
+                int paceSecs = currentPaceSecondsPerKm % 60;
+                if (language.equals("pt-PT")) {
+                    paceSpeech = " Ritmo " + paceMins + " minutos e " + paceSecs + " por quilómetro.";
+                } else {
+                    paceSpeech = " Pace " + paceMins + " " + paceSecs + " per kilometer.";
+                }
+            }
+
             // Update Notification on Lock Screen
             String hrSuffix = (bpm > 0 ? " · ❤️ " + bpm + " bpm" : "");
-            String title = "🏃 " + sgv + " mg/dL " + advice.symbol + " (" + advice.trendLabel + ")" + hrSuffix;
-            String content = advice.dose + " · " + advice.title;
+            String paceSuffix = (currentPaceSecondsPerKm > 0 ? " · ⏱️ " + (currentPaceSecondsPerKm / 60) + ":" + String.format("%02d", currentPaceSecondsPerKm % 60) + "/km" : "");
+            String distSuffix = (totalDistanceMeters > 50 ? " · " + String.format("%.2f", totalDistanceMeters / 1000.0f) + "km" : "");
+
+            String title = "🏃 " + sgv + " mg/dL " + advice.symbol + hrSuffix + paceSuffix;
+            String content = advice.dose + " · " + advice.title + distSuffix;
             updateNotification(title, content);
 
             // Play voice via AudioEngine (routes to Bluetooth and ducks music!)
-            String cleanText = (advice.spokenText.replaceAll("[⇈↑↗→↘↓⇊—?]", "").trim() + hrSpeech).trim();
+            String cleanText = (advice.spokenText.replaceAll("[⇈↑↗→↘↓⇊—?]", "").trim() + paceSpeech + hrSpeech).trim();
             String ttsUrl = apiBase + "/api/tts?text=" + URLEncoder.encode(cleanText, "UTF-8") + "&lang=" + URLEncoder.encode(language, "UTF-8");
             AudioEngine.playVoice(getApplicationContext(), ttsUrl, null);
 
@@ -259,11 +358,11 @@ public class RunnerService extends Service {
             readingEvent.put("direction", direction);
             readingEvent.put("delta", delta != null ? delta : JSONObject.NULL);
             readingEvent.put("adviceTitle", advice.title);
-            readingEvent.put("adviceCarbs", advice.dose);
+            readingEvent.put("adviceDose", advice.dose);
             readingEvent.put("announcementCount", announcementCount);
-            if (bpm > 0) {
-                readingEvent.put("heartRate", bpm);
-            }
+            readingEvent.put("heartRate", bpm);
+            readingEvent.put("distanceMeters", totalDistanceMeters);
+            readingEvent.put("paceSecondsPerKm", currentPaceSecondsPerKm);
             MainActivity.notifyReading(readingEvent);
 
         } catch (Exception e) {
@@ -322,6 +421,13 @@ public class RunnerService extends Service {
                 scheduler.shutdownNow();
             } catch (Exception ignored) {}
             scheduler = null;
+        }
+
+        if (locationManager != null && locationListener != null) {
+            try {
+                locationManager.removeUpdates(locationListener);
+            } catch (Exception ignored) {}
+            locationListener = null;
         }
 
         AudioEngine.cleanup();
@@ -405,137 +511,151 @@ public class RunnerService extends Service {
                     "Nightscout Runner Workout",
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Mantém a leitura de glicémia e recomendações ativas durante o treino com ecrã desligado");
-            channel.setShowBadge(false);
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(channel);
+            channel.setDescription("Mantém a leitura de glicémia, ritmo e batimentos ativas durante o treino");
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
             }
         }
     }
 
-    // Advice Data Structure & Decision Engine
     private static class CarbAdvice {
+        String title;
+        String dose;
+        String spokenText;
         String symbol;
         String trendLabel;
-        String dose;
-        String title;
-        String spokenText;
     }
 
-    private static CarbAdvice evaluateAdvice(int sgv, String direction, Integer delta, String lang, int targetMin, int targetMax) {
+    private CarbAdvice evaluateAdvice(int sgv, String direction, Integer delta, String lang, int tMin, int tMax) {
         CarbAdvice a = new CarbAdvice();
-        boolean isEn = "en".equals(lang);
+        boolean isEn = lang.equals("en");
 
-        boolean isDroppingFast = "SingleDown".equals(direction) || "DoubleDown".equals(direction) || (delta != null && delta <= -6);
-        boolean isDroppingSlow = "FortyFiveDown".equals(direction) || (delta != null && delta <= -3 && delta > -6);
+        String dirKey = direction != null ? direction : "Flat";
+        String trendSpoken;
+        String sym;
+        switch (dirKey) {
+            case "DoubleUp":
+                sym = "⇈";
+                trendSpoken = isEn ? "rising fast" : "a subir rapidamente";
+                break;
+            case "SingleUp":
+                sym = "↑";
+                trendSpoken = isEn ? "rising" : "a subir";
+                break;
+            case "FortyFiveUp":
+                sym = "↗";
+                trendSpoken = isEn ? "rising slowly" : "a subir devagar";
+                break;
+            case "FortyFiveDown":
+                sym = "↘";
+                trendSpoken = isEn ? "dropping slowly" : "a descer devagar";
+                break;
+            case "SingleDown":
+                sym = "↓";
+                trendSpoken = isEn ? "dropping" : "a descer";
+                break;
+            case "DoubleDown":
+                sym = "⇊";
+                trendSpoken = isEn ? "dropping fast" : "a descer em queda livre";
+                break;
+            default:
+                sym = "→";
+                trendSpoken = isEn ? "steady" : "estável";
+                break;
+        }
+        a.symbol = sym;
+        a.trendLabel = trendSpoken;
 
-        // Direction mapping
-        if ("DoubleUp".equals(direction)) {
-            a.symbol = "⇈";
-            a.trendLabel = isEn ? "Rising sharply" : "A subir vertiginosamente";
-        } else if ("SingleUp".equals(direction)) {
-            a.symbol = "↑";
-            a.trendLabel = isEn ? "Rising fast" : "A subir rápido";
-        } else if ("FortyFiveUp".equals(direction)) {
-            a.symbol = "↗";
-            a.trendLabel = isEn ? "Rising slightly" : "A subir ligeiramente";
-        } else if ("FortyFiveDown".equals(direction)) {
-            a.symbol = "↘";
-            a.trendLabel = isEn ? "Slowly falling" : "A descer suavemente";
-        } else if ("SingleDown".equals(direction)) {
-            a.symbol = "↓";
-            a.trendLabel = isEn ? "Falling fast" : "A descer rápido";
-        } else if ("DoubleDown".equals(direction)) {
-            a.symbol = "⇊";
-            a.trendLabel = isEn ? "Dropping sharply" : "A cair a pique";
-        } else {
-            a.symbol = "→";
-            a.trendLabel = isEn ? "Steady" : "Estável";
+        boolean isDroppingFast = dirKey.equals("SingleDown") || dirKey.equals("DoubleDown") || (delta != null && delta <= -6);
+        boolean isDroppingSlow = dirKey.equals("FortyFiveDown") || (delta != null && delta < -2 && delta > -6);
+        boolean isDropping = isDroppingFast || isDroppingSlow;
+
+        if (sgv < 70) {
+            a.title = isEn ? "Hypo Alert: Stop and take fast carbs" : "Alerta de Hipo: Pára e consome hidratos rápidos";
+            a.dose = isEn ? "15-20g FAST CARBS" : "15 a 20g HIDRATOS RÁPIDOS";
+            a.spokenText = isEn
+                    ? "Warning: Blood glucose low at " + sgv + ", " + trendSpoken + ". Stop running and take 15 to 20 grams of fast carbs immediately."
+                    : "Atenção: Glicémia baixa nos " + sgv + ", " + trendSpoken + ". Pára a corrida e toma 15 a 20 gramas de hidratos de ação rápida imediatamente.";
+            return a;
         }
 
-        if (sgv < 75) {
-            a.dose = isEn ? "15-20g FAST CARBS" : "15g a 20g HC RÁPIDOS";
-            a.title = isEn ? "URGENT: Hypo Risk! Walk or stop" : "URGENTE: Risco de hipo! Caminha ou pára";
-            a.spokenText = isEn
-                    ? "Warning. Urgent hypo risk. Blood glucose is " + sgv + ". Stop running and take 15 to 20 grams of fast-acting carbs immediately."
-                    : "Atenção. Risco urgente de hipoglicémia. Glicémia a " + sgv + ". Pára a corrida e ingere já 15 a 20 gramas de hidratos de absorção rápida.";
-        } else if (sgv < 95) {
+        if (sgv < tMin) {
             if (isDroppingFast) {
-                a.dose = isEn ? "15g fast carbs" : "15g HC rápidos";
-                a.title = isEn ? "Warning: Fast drop! Take 15g carbs" : "Alerta: Queda rápida! Toma 15g HC";
+                a.title = isEn ? "Urgent: Fast drop below target" : "Urgente: Queda rápida abaixo do alvo";
+                a.dose = isEn ? "20-25g CARBS (Gel)" : "20 a 25g HIDRATOS (Gel)";
                 a.spokenText = isEn
-                        ? "Warning. Blood glucose at " + sgv + ", " + a.trendLabel + ". Take 15 grams of fast carbs immediately."
-                        : "Atenção. Glicémia a " + sgv + ", " + a.trendLabel + ". Ingere de imediato 15 gramas de hidratos rápidos.";
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Take 20 to 25 grams of carbs now, like an energy gel."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Toma 20 a 25 gramas de hidratos agora, toma um gel energético.";
             } else {
-                a.dose = isEn ? "10-15g carbs" : "10g a 15g HC";
-                a.title = isEn ? "Borderline low: Take 10-15g carbs" : "Valor baixo no limite: Toma 10 a 15g HC";
+                a.title = isEn ? "Low trend: Top up carbs" : "Tendência de descida: Reforça hidratos";
+                a.dose = isEn ? "15-20g CARBS (Gel/Chews)" : "15 a 20g HIDRATOS (Gel ou gomas)";
                 a.spokenText = isEn
-                        ? "Blood glucose at " + sgv + ", borderline low. Take 10 to 15 grams of carbs."
-                        : "Glicémia a " + sgv + ", valor no limite. Toma 10 a 15 gramas de hidratos para manter energia.";
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Take 15 to 20 grams of carbs to stay in the running zone."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Consome 15 a 20 gramas de hidratos para manteres a zona ideal de corrida.";
             }
-        } else if (sgv < 120) {
+            return a;
+        }
+
+        if (sgv <= tMax) {
             if (isDroppingFast) {
-                a.dose = isEn ? "15g carbs" : "15g HC";
-                a.title = isEn ? "Rapid drop: Take 15g carbs" : "Queda rápida: Toma 15g HC";
+                a.title = isEn ? "In range but rapid drop" : "No alvo mas em queda rápida";
+                a.dose = isEn ? "15-20g PREVENTIVE GEL" : "15 a 20g GEL PREVENTIVO";
                 a.spokenText = isEn
-                        ? "Blood glucose at " + sgv + ", " + a.trendLabel + ". Take 15 grams of carbs to stop the drop."
-                        : "Glicémia a " + sgv + ", " + a.trendLabel + ". Toma 15 gramas de hidratos para travar a descida.";
+                        ? "Blood glucose " + sgv + ", but " + trendSpoken + ". Take a preventive gel with 15 to 20 grams of carbs."
+                        : "Glicémia nos " + sgv + ", mas " + trendSpoken + ". Toma um gel preventivo com 15 a 20 gramas de hidratos para antecipar a quebra.";
             } else if (isDroppingSlow) {
-                a.dose = isEn ? "10g carbs" : "10g HC ou meio gel";
-                a.title = isEn ? "Slow drop: Take 10g carbs" : "Descida suave: Toma 10g HC ou meio gel";
+                a.title = isEn ? "In range with mild downward drift" : "No alvo com ligeira descida";
+                a.dose = isEn ? "10g SIP CARBS / CHEWS" : "10g HIDRATOS / GOMAS";
                 a.spokenText = isEn
-                        ? "Blood glucose at " + sgv + ", " + a.trendLabel + ". Suggesting 10 grams of carbs or half a gel."
-                        : "Glicémia a " + sgv + ", " + a.trendLabel + ". Sugestão de 10 gramas de hidratos ou meio gel energético.";
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Sip some sports drink or take a chew with 10 grams of carbs."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Bebe bebida isotónica ou gomas com 10 gramas de hidratos.";
             } else {
-                a.dose = isEn ? "5-10g carbs (optional)" : "5g a 10g HC (opcional)";
                 a.title = isEn ? "Steady: Keep your pace" : "Estável: Mantém o ritmo";
+                a.dose = isEn ? "NO CARBS NEEDED" : "SEM HIDRATOS";
                 a.spokenText = isEn
-                        ? "Blood glucose at " + sgv + ", steady. Acceptable level. If your run is long, you can take 5 to 10 grams of carbs."
-                        : "Glicémia a " + sgv + ", estável. Valor aceitável. Se o treino for longo, podes ingerir 5 a 10 gramas de hidratos.";
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Perfect running zone. Keep going!"
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Zona ideal. Excelente ritmo, continua assim!";
             }
-        } else if (sgv <= targetMax) {
-            if (isDroppingFast) {
-                a.dose = isEn ? "10g preventive carbs" : "10g HC preventivos";
-                a.title = isEn ? "Good glucose but dropping fast" : "Boa glicémia mas a descer rápido";
-                a.spokenText = isEn
-                        ? "Blood glucose at " + sgv + ", but dropping fast. Take 10 grams of preventive carbs."
-                        : "Glicémia a " + sgv + ", mas a descer rápido. Toma 10 gramas de hidratos preventivos.";
-            } else {
-                a.dose = isEn ? "No carbs needed" : "Sem hidratos";
-                a.title = isEn ? "Target zone: Perfect" : "Zona alvo: Excelente";
-                a.spokenText = isEn
-                        ? "Blood glucose at " + sgv + ", " + a.trendLabel + ". Target zone for running, no carbs needed."
-                        : "Glicémia a " + sgv + ", " + a.trendLabel + ". Zona ideal de corrida, não precisas de hidratos.";
-            }
-        } else if (sgv <= 230) {
-            a.dose = isEn ? "No carbs + Water" : "Sem hidratos + Água";
-            a.title = isEn ? "Elevated: Drink water" : "Elevada: Bebe água";
-            a.spokenText = isEn
-                    ? "Blood glucose elevated at " + sgv + ", " + a.trendLabel + ". Drink water, no carbs needed."
-                    : "Glicémia elevada a " + sgv + ", " + a.trendLabel + ". Bebe água, não precisas de hidratos.";
-        } else {
-            a.dose = isEn ? "No carbs + Hydration" : "Sem hidratos + Hidratação";
-            a.title = isEn ? "Very high: Ease pace and hydrate" : "Muito alta: Modera o ritmo e hidrata-te";
-            a.spokenText = isEn
-                    ? "Warning: Blood glucose very high at " + sgv + ". Ease your pace, drink water and avoid carbs."
-                    : "Atenção: Glicémia muito alta a " + sgv + ". Modera o ritmo da corrida, bebe água e evita hidratos.";
+            return a;
         }
 
+        if (sgv <= 220) {
+            if (isDropping) {
+                a.title = isEn ? "Above target but correcting downwards" : "Acima do alvo mas a corrigir para baixo";
+                a.dose = isEn ? "HYDRATE WITH WATER" : "ÁGUA APENAS";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Returning to target zone. Drink water, no carbs needed."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". A regressar à zona alvo. Bebe água, não precisas de hidratos.";
+            } else {
+                a.title = isEn ? "High: Monitor and hydrate" : "Alta: Vigia e hidrata-te";
+                a.dose = isEn ? "WATER ONLY" : "SÓ ÁGUA";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Drink water and avoid carbs until it normalizes."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Bebe água e evita hidratos até estabilizar.";
+            }
+            return a;
+        }
+
+        a.title = isEn ? "Very high: Ease pace and hydrate" : "Muito alta: Modera o ritmo e hidrata-te";
+        a.dose = isEn ? "REST & HYDRATE" : "DESCANSA E HIDRATA";
+        a.spokenText = isEn
+                ? "Warning: Blood glucose very high at " + sgv + ". Ease your pace, drink water and avoid carbs."
+                : "Atenção: Glicémia muito alta nos " + sgv + ". Modera o ritmo da corrida, bebe água e evita hidratos.";
         return a;
     }
 
     private String getHrZoneLabel(int bpm, int maxHr, String language) {
-        if (maxHr <= 0) maxHr = 185;
-        double pct = (double) bpm / maxHr;
+        if (maxHr <= 0) maxHr = 179;
         boolean isPt = language.equals("pt-PT");
-        if (pct < 0.60) {
+        // Zones calibrated from Intervals.icu profile (Marco Nascimento: 136, 144, 152, 161, 170)
+        if (bpm < 136) {
             return isPt ? "zona um" : "zone one";
-        } else if (pct < 0.70) {
+        } else if (bpm <= 144) {
             return isPt ? "zona dois" : "zone two";
-        } else if (pct < 0.80) {
+        } else if (bpm <= 152) {
             return isPt ? "zona três" : "zone three";
-        } else if (pct < 0.90) {
+        } else if (bpm <= 161) {
             return isPt ? "zona quatro" : "zone four";
         } else {
             return isPt ? "zona cinco" : "zone five";

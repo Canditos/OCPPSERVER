@@ -526,6 +526,23 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    public static void notifyGpsUpdate(float distanceMeters, int currentPaceSec, int avgPaceSec) {
+        try {
+            if (currentActivityRef != null && currentActivityRef.get() != null) {
+                MainActivity act = currentActivityRef.get();
+                if (act.getBridge() != null && act.getBridge().getWebView() != null) {
+                    act.runOnUiThread(() -> {
+                        String js = "if(window._onNativeGpsUpdate) { window._onNativeGpsUpdate(" +
+                                distanceMeters + ", " + currentPaceSec + ", " + avgPaceSec + "); }";
+                        act.getBridge().getWebView().evaluateJavascript(js, null);
+                    });
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in notifyGpsUpdate", e);
+        }
+    }
+
     public class AudioBridge {
         @JavascriptInterface
         public void playVoice(String url) {

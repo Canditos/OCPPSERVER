@@ -61,8 +61,8 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 11,
-      versionName: '2.0',
+      versionCode: 12,
+      versionName: '2.1',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
       releaseNotes: 'Integração direta e automática com HUAWEI WATCH GT 6 Pro (BLE), nova barra cardíaca no ecrã e voz com ritmo cardíaco.',
       features: [
@@ -270,6 +270,214 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: 'Invalid URL' }));
       return;
     }
+  }
+
+  // 2.1 Intervals.icu Athlete & Zones Proxy
+  if (parsedUrl.pathname === '/api/intervals/athlete') {
+    const apiKey = parsedUrl.searchParams.get('key') || '2vi0p9dd17r7is9lyf2souw4x';
+    const authHeader = 'Basic ' + Buffer.from('API_KEY:' + apiKey).toString('base64');
+    
+    const reqInt = https.request('https://intervals.icu/api/v1/athlete/0', {
+      method: 'GET',
+      headers: {
+        'Authorization': authHeader,
+        'User-Agent': 'NightscoutAudioRunner/2.1',
+        'Accept': 'application/json'
+      }
+    }, (resInt) => {
+      let data = '';
+      resInt.on('data', chunk => data += chunk);
+      resInt.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          let runZones = [136, 144, 152, 161, 165, 170, 179];
+          let maxHr = 179;
+          if (parsed.sportSettings) {
+            const runSetting = parsed.sportSettings.find(s => (s.types || []).includes('Run'));
+            if (runSetting && runSetting.hr_zones) {
+              runZones = runSetting.hr_zones;
+              if (runSetting.max_hr) maxHr = runSetting.max_hr;
+            }
+          }
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*'
+          });
+          res.end(JSON.stringify({
+            id: parsed.id,
+            name: parsed.name,
+            maxHr: maxHr,
+            hrZones: runZones
+          }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ error: 'Failed parsing Intervals.icu response' }));
+        }
+      });
+    });
+    reqInt.on('error', err => {
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    reqInt.end();
+    return;
+  }
+
+  // 2.2 Intervals.icu Today's Workout Proxy
+  if (parsedUrl.pathname === '/api/intervals/today') {
+    const apiKey = parsedUrl.searchParams.get('key') || '2vi0p9dd17r7is9lyf2souw4x';
+    const athleteId = parsedUrl.searchParams.get('athlete') || 'i470647';
+    const authHeader = 'Basic ' + Buffer.from('API_KEY:' + apiKey).toString('base64');
+
+    const now = new Date();
+    const oldest = new Date(now.getTime() - 24 * 3600 * 1000).toISOString().split('T')[0];
+    const newest = new Date(now.getTime() + 4 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
+    const url = `https://intervals.icu/api/v1/athlete/${athleteId}/events?oldest=${oldest}&newest=${newest}`;
+    const reqInt = https.request(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': authHeader,
+        'User-Agent': 'NightscoutAudioRunner/2.1',
+        'Accept': 'application/json'
+      }
+    }, (resInt) => {
+      let data = '';
+      resInt.on('data', chunk => data += chunk);
+      resInt.on('end', () => {
+        try {
+          const events = JSON.parse(data);
+          const todayStr = now.toISOString().split('T')[0];
+          let chosen = null;
+          if (Array.isArray(events)) {
+            chosen = events.find(e => e.category === 'WORKOUT' && e.start_date_local && e.start_date_local.startsWith(todayStr));
+            if (!chosen) {
+              chosen = events.find(e => e.category === 'WORKOUT' && e.start_date_local && e.start_date_local >= todayStr);
+            }
+            if (!chosen && events.length > 0) {
+              chosen = events.find(e => e.category === 'WORKOUT') || events[events.length - 1];
+            }
+          }
+
+          if (chosen) {
+            let targetPaceMin = null;
+            let targetPaceMax = null;
+            let targetPaceFormatted = '';
+            let steps = [];
+
+            if (chosen.workout_doc && chosen.workout_doc.steps) {
+              steps = chosen.workout_doc.steps;
+              for (const st of steps) {
+                if (st.pace && st.pace.start && st.pace.end) {
+                  targetPaceMin = st.pace.start;
+                  targetPaceMax = st.pace.end;
+                  break;
+                }
+              }
+            }
+
+            if (targetPaceMin && targetPaceMax) {
+              const minM = Math.floor(targetPaceMin / 60);
+              const minS = targetPaceMin % 60;
+              const maxM = Math.floor(targetPaceMax / 60);
+              const maxS = targetPaceMax % 60;
+              targetPaceFormatted = `${minM}:${minS < 10 ? '0' : ''}${minS} - ${maxM}:${maxS < 10 ? '0' : ''}${maxS} min/km`;
+            }
+
+            res.writeHead(200, {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*'
+            });
+            res.end(JSON.stringify({
+              found: true,
+              workout: {
+                id: chosen.id,
+                date: chosen.start_date_local,
+                name: chosen.name,
+                type: chosen.type || 'Run',
+                distance: chosen.distance || (chosen.workout_doc && chosen.workout_doc.distance) || 0,
+                duration: chosen.duration || (chosen.workout_doc && chosen.workout_doc.duration) || 0,
+                targetPaceSecMin: targetPaceMin,
+                targetPaceSecMax: targetPaceMax,
+                targetPaceFormatted: targetPaceFormatted,
+                description: chosen.description || '',
+                steps: steps
+              }
+            }));
+          } else {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ found: false, message: 'Nenhum treino agendado para hoje no Intervals.icu.' }));
+          }
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    });
+    reqInt.on('error', err => {
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    reqInt.end();
+    return;
+  }
+
+  // 2.3 Intervals.icu Manual Activity Upload Proxy
+  if (parsedUrl.pathname === '/api/intervals/upload') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const apiKey = payload.apiKey || '2vi0p9dd17r7is9lyf2souw4x';
+        const athleteId = payload.athleteId || '0';
+        const authHeader = 'Basic ' + Buffer.from('API_KEY:' + apiKey).toString('base64');
+
+        const postData = JSON.stringify({
+          name: payload.name || 'Corrida Nightscout Runner',
+          type: payload.type || 'Run',
+          start_date_local: payload.startDate || new Date().toISOString().replace(/\.\d+Z$/, ''),
+          distance: payload.distanceMeters || 0,
+          moving_time: payload.durationSeconds || 0,
+          elapsed_time: payload.durationSeconds || 0,
+          average_heartrate: payload.avgHeartRate || undefined,
+          max_heartrate: payload.maxHeartRate || undefined,
+          description: payload.description || 'Treino monitorizado com Nightscout Audio Runner'
+        });
+
+        const uploadReq = https.request(`https://intervals.icu/api/v1/athlete/${athleteId}/activities/manual`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+            'User-Agent': 'NightscoutAudioRunner/2.1'
+          }
+        }, (uploadRes) => {
+          let respData = '';
+          uploadRes.on('data', c => respData += c);
+          uploadRes.on('end', () => {
+            res.writeHead(uploadRes.statusCode, {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*'
+            });
+            res.end(respData);
+          });
+        });
+
+        uploadReq.on('error', (err) => {
+          res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ error: err.message }));
+        });
+
+        uploadReq.write(postData);
+        uploadReq.end();
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      }
+    });
+    return;
   }
 
   // 3. Static File Server
