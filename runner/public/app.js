@@ -210,148 +210,6 @@ window._onNativeGpsUpdate = function(distanceMeters, currentPaceSec, avgPaceSec)
   }
 };
 
-async function fetchIntervalsWorkout() {
-  const titleEl = document.getElementById('intervalsWorkoutTitle');
-  const descEl = document.getElementById('intervalsWorkoutDesc');
-  const badgeEl = document.getElementById('intervalsWorkoutBadge');
-  const startBtnText = document.getElementById('startBtnText');
-
-  if (titleEl) titleEl.textContent = 'Intervals.icu: A sincronizar...';
-
-  try {
-    const res = await fetch('/api/intervals/today');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-
-    if (data.found && data.workout) {
-      currentIntervalsWorkout = data.workout;
-      if (titleEl) titleEl.textContent = data.workout.name || 'Treino Intervals';
-      if (badgeEl) badgeEl.textContent = data.workout.type || 'Run';
-
-      let desc = '';
-      if (data.workout.distance > 0) {
-        desc += `${(data.workout.distance / 1000).toFixed(1)} km`;
-      }
-      if (data.workout.targetPaceFormatted) {
-        desc += (desc ? ' · ' : '') + `Alvo ${data.workout.targetPaceFormatted}`;
-      } else if (data.workout.duration > 0) {
-        desc += (desc ? ' · ' : '') + `${Math.round(data.workout.duration / 60)} min`;
-      }
-      desc += ' · Z2 (136-144 bpm)';
-
-      if (descEl) descEl.textContent = desc;
-
-      if (startBtnText && !isRunning && currentSessionMode !== 'daily') {
-        startBtnText.textContent = `Iniciar ${data.workout.name} (${(data.workout.distance/1000).toFixed(1)}km)`;
-      }
-      if (currentSessionMode === 'daily') {
-        const intervalsCard = document.getElementById('intervalsWorkoutCard');
-        if (intervalsCard) intervalsCard.classList.add('hidden');
-      }
-
-      showToast(`📊 Treino Intervals sincronizado: ${data.workout.name}`);
-    } else {
-      if (titleEl) titleEl.textContent = 'Intervals.icu: Sem treino hoje';
-      if (descEl) descEl.textContent = 'Nenhum treino agendado para hoje. Podes correr livre!';
-    }
-  } catch (e) {
-    console.warn('fetchIntervalsWorkout error:', e);
-    if (titleEl) titleEl.textContent = 'Intervals.icu: Marco Nascimento';
-    if (descEl) descEl.textContent = 'Toque em Sync para sincronizar';
-  }
-}
-
-function showIntervalsWorkoutDetails() {
-  if (!currentIntervalsWorkout) {
-    fetchIntervalsWorkout();
-    return;
-  }
-  const w = currentIntervalsWorkout;
-  let msg = `🏃 ${w.name}\n`;
-  if (w.distance > 0) msg += `Distância: ${(w.distance / 1000).toFixed(1)} km\n`;
-  if (w.targetPaceFormatted) msg += `Ritmo Alvo: ${w.targetPaceFormatted}\n`;
-  if (w.description) msg += `\nNotas:\n${w.description}`;
-  alert(msg);
-}
-
-
-async function fetchIntervalsAthlete() {
-  try {
-    const res = await fetch('/api/intervals/athlete');
-    if (!res.ok) return;
-    const data = await res.json();
-    intervalsAthleteProfile = data;
-    if (data.maxHr) {
-      config.maxHr = data.maxHr;
-    }
-    if (data.hrZones && Array.isArray(data.hrZones)) {
-      config.intervalsHrZones = data.hrZones;
-    }
-    console.log('[Intervals] Athlete profile loaded:', data);
-  } catch (e) {
-    console.warn('fetchIntervalsAthlete error:', e);
-  }
-}
-
-async function uploadWorkoutToIntervals() {
-  const btn = document.getElementById('btnUploadToIntervals');
-  const label = document.getElementById('labelUploadIntervals');
-  if (btn) btn.disabled = true;
-  if (label) label.textContent = 'A enviar treino para o Intervals.icu...';
-
-  const durationSec = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
-  const avgHr = sessionHeartRates.length > 0
-    ? Math.round(sessionHeartRates.reduce((a, b) => a + b, 0) / sessionHeartRates.length)
-    : undefined;
-  const maxHr = sessionHeartRates.length > 0
-    ? Math.max(...sessionHeartRates)
-    : undefined;
-
-  let desc = 'Monitorizado com Nightscout Audio Runner.\n';
-  if (sessionReadings.length > 0) {
-    const first = sessionReadings[0];
-    const last = sessionReadings[sessionReadings.length - 1];
-    const avg = Math.round(sessionReadings.reduce((a, b) => a + b, 0) / sessionReadings.length);
-    const inRange = sessionReadings.filter(s => s >= (config.targetMin || 110) && s <= (config.targetMax || 170)).length;
-    const tir = Math.round((inRange / sessionReadings.length) * 100);
-    desc += `Glicémia: ${first} ➔ ${last} mg/dL (Média: ${avg}, TIR: ${tir}%)\n`;
-  }
-  if (sessionCarbsTotal > 0) {
-    desc += `Hidratos: ${sessionCarbsTotal}g (${sessionCarbsEntries.length} doses)\n`;
-  }
-  if (sessionDistanceMeters > 50) {
-    desc += `Distância GPS: ${(sessionDistanceMeters / 1000.0).toFixed(2)} km\n`;
-  }
-
-  const payload = {
-    name: currentIntervalsWorkout ? currentIntervalsWorkout.name : 'Corrida Nightscout Runner',
-    type: 'Run',
-    startDate: new Date(sessionStartTime || Date.now()).toISOString().replace(/\.\d+Z$/, ''),
-    distanceMeters: Math.round(sessionDistanceMeters),
-    durationSeconds: durationSec,
-    avgHeartRate: avgHr,
-    maxHeartRate: maxHr,
-    description: desc
-  };
-
-  try {
-    const res = await fetch('/api/intervals/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    if (label) label.textContent = 'Enviado para o Intervals.icu! ✓';
-    if (btn) btn.className = 'w-full mb-2.5 py-3 rounded-2xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center gap-2';
-    showToast('🎉 Treino sincronizado com o Intervals.icu com sucesso!');
-  } catch (e) {
-    console.error('uploadWorkoutToIntervals error:', e);
-    if (label) label.textContent = 'Erro ao enviar. Tenta novamente';
-    if (btn) btn.disabled = false;
-    showToast('⚠️ Erro ao enviar treino para o Intervals.icu');
-  }
-}
-
 window._onNativeDeviceDiscovered = function(name, address, rssi, isHr) {
   if (!address) return;
   discoveredDevicesMap.set(address, {
@@ -1604,10 +1462,15 @@ function fallbackWebAudio(audioUrl, onDone) {
 
 function getStartButtonText(lang, intervalMinutes) {
   const m = intervalMinutes || 2;
+  const isDaily = (currentSessionMode === 'daily');
   if (lang === 'pt-PT') {
-    return `Iniciar Treino (Voz a cada ${m} min)`;
+    return isDaily
+      ? `Iniciar Monitorização (Voz a cada ${m} min)`
+      : `Iniciar Corrida (Voz a cada ${m} min)`;
   }
-  return `Start Workout (Voice every ${m} min)`;
+  return isDaily
+    ? `Start Monitoring (Voice every ${m} min)`
+    : `Start Run (Voice every ${m} min)`;
 }
 
 // Apply Language strings to entire UI
@@ -1922,21 +1785,16 @@ function setSessionMode(mode) {
   const btnRun = document.getElementById('btnModeRunning');
   const btnDaily = document.getElementById('btnModeDaily');
   const startText = document.getElementById('startBtnText');
-  const intervalsCard = document.getElementById('intervalsWorkoutCard');
-  const hrCard = document.getElementById('heartRateQuickBar');
+  const lang = config.language || 'en';
 
   if (currentSessionMode === 'daily') {
     if (btnDaily) btnDaily.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-sky-600 text-white shadow-sm cursor-pointer';
     if (btnRun) btnRun.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer';
-    if (startText) startText.textContent = `Iniciar Monitorização (Voz a cada ${config.intervalMinutes || 2} min)`;
-    if (intervalsCard) intervalsCard.classList.add('hidden');
-    if (hrCard) hrCard.classList.add('hidden');
+    if (startText && !isRunning) startText.textContent = getStartButtonText(lang, config.intervalMinutes);
   } else {
     if (btnRun) btnRun.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white shadow-sm cursor-pointer';
     if (btnDaily) btnDaily.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer';
-    if (startText) startText.textContent = `Iniciar Treino (Voz a cada ${config.intervalMinutes || 2} min)`;
-    if (intervalsCard && currentIntervalsWorkout) intervalsCard.classList.remove('hidden');
-    if (hrCard) hrCard.classList.remove('hidden');
+    if (startText && !isRunning) startText.textContent = getStartButtonText(lang, config.intervalMinutes);
   }
 }
 
@@ -2668,20 +2526,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   updateAudioEngineDisplay();
-
-  // Intervals.icu listeners & sync
-  document.getElementById('btnRefreshIntervals')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    fetchIntervalsWorkout();
-  });
-  document.getElementById('intervalsWorkoutCard')?.addEventListener('click', () => {
-    showIntervalsWorkoutDetails();
-  });
-  document.getElementById('btnUploadToIntervals')?.addEventListener('click', () => {
-    uploadWorkoutToIntervals();
-  });
-  fetchIntervalsAthlete();
-  fetchIntervalsWorkout();
 
   setTimeout(updateAudioEngineDisplay, 1000);
   setTimeout(updateAudioEngineDisplay, 3000);
