@@ -2340,7 +2340,7 @@ window.addEventListener('DOMContentLoaded', () => {
       showAudioStatusToast();
     });
     document.getElementById('btnSettingsDownloadApk')?.addEventListener('click', () => {
-      const apkUrl = 'https://runner.gatoescondido.com/nightscout-runner.apk';
+      const apkUrl = 'https://runner.gatoescondido.com/nightscout-runner.apk?v=14';
       if (window.AndroidVoice && typeof window.AndroidVoice.openDownloadUrl === 'function') {
         window.AndroidVoice.openDownloadUrl(apkUrl);
       } else {

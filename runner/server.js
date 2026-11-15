@@ -63,13 +63,13 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       versionCode: 14,
       versionName: '2.3',
-      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Modo de Sessão (Treino vs Dia a Dia), Interrupção Imediata de Emergência/Hipo, Deteção de Bolus da Bomba Tandem e Voz Focada na Glicémia.',
+      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=14',
+      releaseNotes: 'Modo de Sessão (Corrida vs Dia a Dia), Arranque Autónomo sem Intervals.icu, Interrupção Imediata de Emergência/Hipo, Deteção de Bólus da Bomba Tandem e Voz Focada na Glicémia.',
       features: [
         {
           icon: '🏃',
-          title: 'Seleção de Modo: Treino vs Dia a Dia',
-          desc: 'Escolhe entre Modo Treino/Corrida (com GPS e Intervals.icu) ou Modo Dia a Dia (monitorização de glicémia pura sem GPS nem ecrã de fim de treino).'
+          title: 'Seleção de Modo: Corrida vs Dia a Dia',
+          desc: 'Escolhe entre Modo Corrida (com GPS, ritmo e batimento cardíaco) ou Modo Dia a Dia (monitorização pura da glicémia por voz, sem GPS nem ecrãs desnecessários).'
         },
         {
           icon: '🚨',
@@ -103,7 +103,8 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, {
         'Content-Type': 'application/vnd.android.package-archive',
         'Content-Disposition': 'attachment; filename="nightscout-runner.apk"',
-        'Content-Length': stat.size
+        'Content-Length': stat.size,
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
       });
       fs.createReadStream(apkPath).pipe(res);
       return;
