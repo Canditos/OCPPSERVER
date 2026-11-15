@@ -61,30 +61,30 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 13,
-      versionName: '2.2',
+      versionCode: 14,
+      versionName: '2.3',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk',
-      releaseNotes: 'Treinador de hidratos antecipado para Dexcom G7, silenciamento imediato ao tomar gel e pausa de 15m.',
+      releaseNotes: 'Modo de Sessão (Treino vs Dia a Dia), Interrupção Imediata de Emergência/Hipo, Deteção de Bolus da Bomba Tandem e Voz Focada na Glicémia.',
       features: [
         {
-          icon: '🍬',
-          title: 'Treinador de Hidratos Agressivo (Dexcom G7)',
-          desc: 'Compensação do atraso fisiológico de 10-15m do Dexcom G7. Recomendações antecipadas antes de bater na hipo.'
+          icon: '🏃',
+          title: 'Seleção de Modo: Treino vs Dia a Dia',
+          desc: 'Escolhe entre Modo Treino/Corrida (com GPS e Intervals.icu) ou Modo Dia a Dia (monitorização de glicémia pura sem GPS nem ecrã de fim de treino).'
         },
         {
-          icon: '⏳',
-          title: 'Silenciamento Imediato de Gel',
-          desc: 'Ao clicares "Tomei Gel (20g)" o alerta desliga de imediato no ecrã e nos auscultadores com temporizador de 15m.'
+          icon: '🚨',
+          title: 'Interrupção Imediata de Emergência (30s)',
+          desc: 'Verificação rápida a cada 30s: aviso por voz prioritário e imediato se entrar em hipo severa ou queda a pique, sem esperar pelo temporizador normal.'
         },
         {
-          icon: '📡',
-          title: 'Assistente HUAWEI WATCH GT (BLE)',
-          desc: 'Pesquisa e ligação direta com painel interativo ao vivo e instruções passo a passo para o relógio.'
+          icon: '💉',
+          title: 'Deteção de Bolus da Bomba Tandem',
+          desc: 'Monitoriza administrações de insulina da bomba nos últimos 20m e avisa por voz e no ecrã com crachá dedicado.'
         },
         {
-          icon: '❤️',
-          title: 'Ritmo Cardíaco & Zonas Z1-Z5',
-          desc: 'Anúncio por voz dos batimentos cardíacos (BPM) e zonas de esforço durante corridas e caminhadas.'
+          icon: '🎙️',
+          title: 'Voz Focada na Glicémia',
+          desc: 'Removido o anúncio de ritmo de corrida para manter o foco total na glicémia, que é dita sempre mesmo durante a absorção de hidratos.'
         }
       ]
     }));
@@ -225,6 +225,93 @@ const server = http.createServer((req, res) => {
     });
 
     return;
+  }
+
+  // 2.0 Tandem Pump Bolus Detection & Nightscout Treatments Proxy
+  if (parsedUrl.pathname === '/api/pump/latest') {
+    const targetUrl = 'https://diabetes.gatoescondido.com/api/v1/treatments.json?count=30';
+    try {
+      const client = https;
+      const proxyReq = client.get(targetUrl, {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'NightscoutAudioRunner/2.3' }
+      }, (proxyRes) => {
+        let rawData = '';
+        proxyRes.on('data', chunk => rawData += chunk);
+        proxyRes.on('end', () => {
+          try {
+            const arr = JSON.parse(rawData);
+            const boluses = arr.filter(t => t.insulin && parseFloat(t.insulin) > 0);
+            let result = { hasBolus: false, insulin: 0, minsAgo: -1, timestamp: 0, spokenPt: '', eventType: '' };
+            if (boluses.length > 0) {
+              const b = boluses[0];
+              const ts = new Date(b.created_at || b.timestamp).getTime();
+              const minsAgo = Math.max(0, Math.floor((Date.now() - ts) / 60000));
+              const ins = parseFloat(b.insulin);
+              const insFormatted = (Math.round(ins * 10) / 10).toString().replace('.', ' vírgula ');
+              const spokenPt = minsAgo <= 20
+                ? 'A bomba administrou ' + insFormatted + ' unidades de insulina há ' + minsAgo + ' minutos.'
+                : '';
+              result = {
+                hasBolus: true,
+                insulin: ins,
+                minsAgo: minsAgo,
+                timestamp: ts,
+                carbs: b.carbs || 0,
+                eventType: b.eventType || 'Bolus',
+                notes: b.notes || '',
+                spokenPt: spokenPt
+              };
+            }
+            res.writeHead(200, {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, OPTIONS',
+              'Access-Control-Allow-Headers': '*'
+            });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ error: 'Parse error', details: err.message }));
+          }
+        });
+      });
+      proxyReq.on('error', err => {
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: 'Proxy failed', details: err.message }));
+      });
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
+  if (parsedUrl.pathname === '/api/treatments') {
+    const targetUrl = 'https://diabetes.gatoescondido.com/api/v1/treatments.json?count=30';
+    try {
+      const client = https;
+      const proxyReq = client.get(targetUrl, {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'NightscoutAudioRunner/2.3' }
+      }, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': '*'
+        });
+        proxyRes.pipe(res);
+      });
+      proxyReq.on('error', err => {
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: 'Proxy failed', details: err.message }));
+      });
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
   }
 
   // 2. Built-in Nightscout Proxy to bypass CORS issues on mobile browsers

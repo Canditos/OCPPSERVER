@@ -153,7 +153,13 @@
     <div id="glucoseCard" class="relative overflow-hidden rounded-2xl bg-slate-900/90 border-2 border-slate-800 px-4 py-2 sm:py-3 backdrop-blur-xl shadow-xl transition-all duration-300 shrink-0">
       <div class="flex justify-between items-center mb-0.5">
         <span id="labelGlucoseTitle" class="text-[10px] font-bold tracking-widest uppercase text-slate-400">CURRENT GLUCOSE</span>
-        <span id="readingTime" class="text-[10px] font-medium text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded-full">loading...</span>
+        <div class="flex items-center gap-1.5">
+          <span id="pumpBolusBadge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/60 flex items-center gap-1">
+            <span>💉</span>
+            <span id="pumpBolusText">Bólus recente</span>
+          </span>
+          <span id="readingTime" class="text-[10px] font-medium text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded-full">loading...</span>
+        </div>
       </div>
 
       <div class="flex items-baseline justify-center my-0.5 gap-2.5">
@@ -239,6 +245,16 @@
         <p id="labelAnnouncements" class="text-[9px] uppercase font-bold text-slate-400">Announcements</p>
         <p id="announcementCount" class="text-sm font-black text-indigo-400 tabular-nums">0</p>
       </div>
+    </div>
+
+    <!-- Session Mode Selector: Corrida vs Dia a Dia (Só Glicémia) -->
+    <div class="flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-2xl border border-slate-800 shrink-0">
+      <button id="btnModeRunning" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white shadow-sm cursor-pointer">
+        <span>🏃 Treino / Corrida</span>
+      </button>
+      <button id="btnModeDaily" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer">
+        <span>🛋️ Só Glicémia (Dia a Dia)</span>
+      </button>
     </div>
 
     <!-- Action Buttons -->
@@ -640,6 +656,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=34"></script>
+  <script src="/app.js?v=35"></script>
 </body>
 </html>

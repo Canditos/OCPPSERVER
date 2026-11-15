@@ -48,6 +48,7 @@ public class RunnerService extends Service {
     public static final String EXTRA_MAX_HR = "maxHr";
     public static final String EXTRA_LAST_CARB_GRAMS = "lastCarbGrams";
     public static final String EXTRA_LAST_CARB_TS = "lastCarbTimestamp";
+    public static final String EXTRA_SESSION_MODE = "sessionMode";
 
     private static volatile long lastCarbTimestamp = 0;
     private static volatile int lastCarbGrams = 0;
@@ -57,16 +58,21 @@ public class RunnerService extends Service {
     private PowerManager.WakeLock wakeLock = null;
     private ScheduledExecutorService scheduler = null;
 
-    private int intervalMinutes = 2;
+        private int intervalMinutes = 2;
     private String language = "pt-PT";
     private String apiBase = "https://runner.gatoescondido.com";
     private int targetMin = 110;
     private int targetMax = 170;
     private boolean tellHeartRate = true;
     private int maxHr = 179;
+    private String sessionMode = "running";
 
     private int lastSgv = -1;
     private int announcementCount = 0;
+    private long lastRoutineAnnouncedTime = 0;
+    private long lastDangerAnnouncedTime = 0;
+    private long lastKnownBolusTimestamp = 0;
+    private String lastProcessedDate = "";
 
     // GPS & Pace Tracking
     private LocationManager locationManager = null;
@@ -205,6 +211,10 @@ public class RunnerService extends Service {
         targetMax = intent.getIntExtra(EXTRA_TARGET_MAX, 170);
         tellHeartRate = intent.getBooleanExtra(EXTRA_TELL_HR, true);
         maxHr = intent.getIntExtra(EXTRA_MAX_HR, 179);
+        sessionMode = intent.getStringExtra(EXTRA_SESSION_MODE);
+        if (sessionMode == null || sessionMode.isEmpty()) sessionMode = "running";
+        lastRoutineAnnouncedTime = 0;
+        lastDangerAnnouncedTime = 0;
 
         if (intent.hasExtra(EXTRA_LAST_CARB_TS)) {
             long prevTs = intent.getLongExtra(EXTRA_LAST_CARB_TS, 0);
@@ -270,10 +280,10 @@ public class RunnerService extends Service {
         scheduler = Executors.newSingleThreadScheduledExecutor();
 
         // Immediate first poll after 3 seconds
-        scheduler.schedule(this::pollAndAnnounce, 3, TimeUnit.SECONDS);
+        scheduler.schedule(this::pollAndCheck, 3, TimeUnit.SECONDS);
 
-        // Recurring interval
-        scheduler.scheduleAtFixedRate(this::pollAndAnnounce, intervalMinutes * 60L, intervalMinutes * 60L, TimeUnit.SECONDS);
+        // Fast 30-second checking loop for immediate danger detection and routine announcements
+        scheduler.scheduleAtFixedRate(this::pollAndCheck, 30L, 30L, TimeUnit.SECONDS);
 
         return START_NOT_STICKY;
     }
@@ -338,11 +348,11 @@ public class RunnerService extends Service {
         }
     }
 
-    private void pollAndAnnounce() {
+    private void pollAndCheck() {
         if (!isServiceRunning) return;
 
         try {
-            Log.d(TAG, "pollAndAnnounce triggered");
+            Log.d(TAG, "pollAndCheck triggered");
             String entriesUrl = apiBase + "/api/entries";
             String jsonStr = httpGet(entriesUrl);
 
@@ -357,6 +367,7 @@ public class RunnerService extends Service {
             JSONObject current = arr.getJSONObject(0);
             int sgv = current.getInt("sgv");
             String direction = current.optString("direction", "Flat");
+            String dateString = current.optString("dateString", current.optString("date", ""));
             Integer delta = null;
 
             if (arr.length() > 1) {
@@ -369,15 +380,35 @@ public class RunnerService extends Service {
             }
 
             lastSgv = sgv;
-            announcementCount++;
+            lastProcessedDate = dateString;
 
-            // Evaluate carb advice
+            // 1. Evaluate carb advice (Dexcom G7 lag-compensated + 15m absorption window)
             CarbAdvice advice = evaluateAdvice(sgv, direction, delta, language, targetMin, targetMax);
 
-            // Fetch live Heart Rate from HeartRateManager
+            // 2. Fetch latest Tandem Pump Bolus from Nightscout
+            String pumpSpeech = "";
+            try {
+                String pumpJson = httpGet(apiBase + "/api/pump/latest");
+                if (pumpJson != null && !pumpJson.isEmpty()) {
+                    JSONObject pObj = new JSONObject(pumpJson);
+                    if (pObj.optBoolean("hasBolus", false)) {
+                        long bTs = pObj.optLong("timestamp", 0);
+                        int minsAgo = pObj.optInt("minsAgo", 999);
+                        if (minsAgo <= 20 && bTs > lastKnownBolusTimestamp) {
+                            lastKnownBolusTimestamp = bTs;
+                            String spoken = pObj.optString("spokenPt", "");
+                            if (!spoken.isEmpty()) {
+                                pumpSpeech = " " + spoken;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // 3. Heart Rate
             int bpm = HeartRateManager.getInstance(this).getLatestBpm();
             String hrSpeech = "";
-            if (bpm > 0 && tellHeartRate) {
+            if (bpm > 0 && tellHeartRate && "running".equalsIgnoreCase(sessionMode)) {
                 String zoneLabel = getHrZoneLabel(bpm, maxHr, language);
                 if (language.equals("pt-PT")) {
                     hrSpeech = " " + bpm + " batimentos por minuto" + (zoneLabel.isEmpty() ? "" : ", " + zoneLabel) + ".";
@@ -386,33 +417,61 @@ public class RunnerService extends Service {
                 }
             }
 
-            // Running Pace speech if moving
-            String paceSpeech = "";
-            if (currentPaceSecondsPerKm > 0 && currentPaceSecondsPerKm < 900) {
-                int paceMins = currentPaceSecondsPerKm / 60;
-                int paceSecs = currentPaceSecondsPerKm % 60;
-                if (language.equals("pt-PT")) {
-                    paceSpeech = " Ritmo " + paceMins + " minutos e " + paceSecs + " por quilómetro.";
-                } else {
-                    paceSpeech = " Pace " + paceMins + " " + paceSecs + " per kilometer.";
+            // 4. Update Notification on Lock Screen
+            boolean isRunningMode = "running".equalsIgnoreCase(sessionMode);
+            String hrSuffix = (bpm > 0 && isRunningMode ? " · ❤️ " + bpm + " bpm" : "");
+            String paceSuffix = (currentPaceSecondsPerKm > 0 && isRunningMode ? " · ⏱️ " + (currentPaceSecondsPerKm / 60) + ":" + String.format("%02d", currentPaceSecondsPerKm % 60) + "/km" : "");
+            String distSuffix = (totalDistanceMeters > 50 && isRunningMode ? " · " + String.format("%.2f", totalDistanceMeters / 1000.0f) + "km" : "");
+            String modeIcon = isRunningMode ? "🏃 " : "📊 ";
+
+            String notifTitle = modeIcon + sgv + " mg/dL " + advice.symbol + hrSuffix + paceSuffix;
+            String notifContent = advice.dose + " · " + advice.title + distSuffix;
+            updateNotification(notifTitle, notifContent);
+
+            // 5. Evaluate DANGER condition for IMMEDIATE out-of-cycle intervention
+            boolean isSevereHypo = sgv < 75;
+            boolean isImminentHypo = sgv <= 85;
+            boolean isFastPlunge = (delta != null && delta <= -6 && sgv <= 135) || (direction.equals("DoubleDown") && sgv <= 140);
+            boolean isPredictiveCrash = false;
+            if (delta != null && delta <= -5 && sgv <= 135) {
+                float dropPerMin = Math.abs(delta) / 5.0f;
+                int minTo70 = Math.round((sgv - 70) / dropPerMin);
+                if (minTo70 > 0 && minTo70 <= 12) {
+                    isPredictiveCrash = true;
                 }
             }
+            boolean isDanger = isSevereHypo || isImminentHypo || isFastPlunge || isPredictiveCrash;
+            long now = System.currentTimeMillis();
 
-            // Update Notification on Lock Screen
-            String hrSuffix = (bpm > 0 ? " · ❤️ " + bpm + " bpm" : "");
-            String paceSuffix = (currentPaceSecondsPerKm > 0 ? " · ⏱️ " + (currentPaceSecondsPerKm / 60) + ":" + String.format("%02d", currentPaceSecondsPerKm % 60) + "/km" : "");
-            String distSuffix = (totalDistanceMeters > 50 ? " · " + String.format("%.2f", totalDistanceMeters / 1000.0f) + "km" : "");
+            // A) IMMEDIATE OUT-OF-CYCLE DANGER INTERVENTION!
+            if (isDanger && (now - lastDangerAnnouncedTime > 90 * 1000L)) {
+                Log.i(TAG, "EMERGENCY DANGER detected out-of-cycle at SGV=" + sgv + "! Speaking immediately.");
+                lastDangerAnnouncedTime = now;
+                lastRoutineAnnouncedTime = now; // reset routine timer
+                announcementCount++;
 
-            String title = "🏃 " + sgv + " mg/dL " + advice.symbol + hrSuffix + paceSuffix;
-            String content = advice.dose + " · " + advice.title + distSuffix;
-            updateNotification(title, content);
+                String prefix = language.equals("pt-PT")
+                    ? "Alerta urgente fora de ciclo! "
+                    : "Urgent emergency alert! ";
 
-            // Play voice via AudioEngine (routes to Bluetooth and ducks music!)
-            String cleanText = (advice.spokenText.replaceAll("[⇈↑↗→↘↓⇊—?]", "").trim() + paceSpeech + hrSpeech).trim();
-            String ttsUrl = apiBase + "/api/tts?text=" + URLEncoder.encode(cleanText, "UTF-8") + "&lang=" + URLEncoder.encode(language, "UTF-8");
-            AudioEngine.playVoice(getApplicationContext(), ttsUrl, null);
+                // Always state glucose clearly first!
+                String emergencySpeech = (prefix + advice.spokenText.replaceAll("[⇈↑↗→↘↓⇊—?]", "").trim() + pumpSpeech + hrSpeech).trim();
+                String ttsUrl = apiBase + "/api/tts?text=" + URLEncoder.encode(emergencySpeech, "UTF-8") + "&lang=" + URLEncoder.encode(language, "UTF-8");
+                AudioEngine.playVoice(getApplicationContext(), ttsUrl, null);
 
-            // Notify UI if app is open or unlocked
+            // B) ROUTINE PERIODIC ANNOUNCEMENT (every intervalMinutes)
+            } else if (now - lastRoutineAnnouncedTime >= intervalMinutes * 60L * 1000L) {
+                Log.d(TAG, "Routine interval reached (" + intervalMinutes + "m). Speaking.");
+                lastRoutineAnnouncedTime = now;
+                announcementCount++;
+
+                // NOTE: NO paceSpeech! Pure glucose + carbs + pump + hr
+                String cleanText = (advice.spokenText.replaceAll("[⇈↑↗→↘↓⇊—?]", "").trim() + pumpSpeech + hrSpeech).trim();
+                String ttsUrl = apiBase + "/api/tts?text=" + URLEncoder.encode(cleanText, "UTF-8") + "&lang=" + URLEncoder.encode(language, "UTF-8");
+                AudioEngine.playVoice(getApplicationContext(), ttsUrl, null);
+            }
+
+            // Forward reading event to UI
             JSONObject readingEvent = new JSONObject();
             readingEvent.put("sgv", sgv);
             readingEvent.put("direction", direction);
@@ -423,10 +482,11 @@ public class RunnerService extends Service {
             readingEvent.put("heartRate", bpm);
             readingEvent.put("distanceMeters", totalDistanceMeters);
             readingEvent.put("paceSecondsPerKm", currentPaceSecondsPerKm);
+            readingEvent.put("sessionMode", sessionMode);
             MainActivity.notifyReading(readingEvent);
 
         } catch (Exception e) {
-            Log.e(TAG, "Error in pollAndAnnounce", e);
+            Log.e(TAG, "Error in pollAndCheck", e);
         }
     }
 

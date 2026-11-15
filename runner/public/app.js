@@ -63,6 +63,9 @@ let config = { ...defaultConfig };
 
 // State
 let isRunning = false;
+let currentSessionMode = localStorage.getItem("runner_session_mode") || "running";
+let lastEmergencySpokenTs = 0;
+let lastPumpBolusTs = 0;
 let timerId = null;
 let countdownTimerId = null;
 let secondsRemaining = 120;
@@ -104,7 +107,8 @@ function triggerNativeForegroundStart() {
         payload.tellHeartRate,
         payload.maxHr,
         lastG,
-        lastT
+        lastT,
+        currentSessionMode
       );
     } catch (e) {
       console.warn('AndroidVoice.startWorkoutService error:', e);
@@ -237,8 +241,12 @@ async function fetchIntervalsWorkout() {
 
       if (descEl) descEl.textContent = desc;
 
-      if (startBtnText && !isRunning) {
+      if (startBtnText && !isRunning && currentSessionMode !== 'daily') {
         startBtnText.textContent = `Iniciar ${data.workout.name} (${(data.workout.distance/1000).toFixed(1)}km)`;
+      }
+      if (currentSessionMode === 'daily') {
+        const intervalsCard = document.getElementById('intervalsWorkoutCard');
+        if (intervalsCard) intervalsCard.classList.add('hidden');
       }
 
       showToast(`📊 Treino Intervals sincronizado: ${data.workout.name}`);
@@ -671,6 +679,10 @@ function onHeartbeatTick() {
   // 2. Periodic Bluetooth output state sync (every ~8 seconds)
   if (now % 8000 < 500) {
     checkInitialAudioOutput();
+  }
+  // Check Tandem pump bolus every 30 seconds
+  if (now % 30000 < 1000) {
+    checkLatestPumpBolus();
   }
 
   // 2. Real wall-clock countdown and announcement trigger
@@ -1903,6 +1915,53 @@ function updateUIWithReading(current, previous, delta, advice) {
   }
 }
 
+function setSessionMode(mode) {
+  currentSessionMode = mode === 'daily' ? 'daily' : 'running';
+  try { localStorage.setItem('runner_session_mode', currentSessionMode); } catch (e) {}
+
+  const btnRun = document.getElementById('btnModeRunning');
+  const btnDaily = document.getElementById('btnModeDaily');
+  const startText = document.getElementById('startBtnText');
+  const intervalsCard = document.getElementById('intervalsWorkoutCard');
+  const hrCard = document.getElementById('heartRateQuickBar');
+
+  if (currentSessionMode === 'daily') {
+    if (btnDaily) btnDaily.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-sky-600 text-white shadow-sm cursor-pointer';
+    if (btnRun) btnRun.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer';
+    if (startText) startText.textContent = `Iniciar Monitorização (Voz a cada ${config.intervalMinutes || 2} min)`;
+    if (intervalsCard) intervalsCard.classList.add('hidden');
+    if (hrCard) hrCard.classList.add('hidden');
+  } else {
+    if (btnRun) btnRun.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white shadow-sm cursor-pointer';
+    if (btnDaily) btnDaily.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer';
+    if (startText) startText.textContent = `Iniciar Treino (Voz a cada ${config.intervalMinutes || 2} min)`;
+    if (intervalsCard && currentIntervalsWorkout) intervalsCard.classList.remove('hidden');
+    if (hrCard) hrCard.classList.remove('hidden');
+  }
+}
+
+async function checkLatestPumpBolus() {
+  try {
+    const res = await fetch('/api/pump/latest?t=' + Date.now());
+    if (!res.ok) return null;
+    const data = await res.json();
+    const badge = document.getElementById('pumpBolusBadge');
+    const badgeText = document.getElementById('pumpBolusText');
+    if (!badge || !badgeText) return data;
+
+    if (data && data.hasBolus && data.minsAgo < 180) {
+      badge.classList.remove('hidden');
+      const timeStr = data.minsAgo < 60 ? `${data.minsAgo}m` : `${Math.floor(data.minsAgo / 60)}h${data.minsAgo % 60}m`;
+      badgeText.textContent = `Bólus: ${data.insulin}U há ${timeStr}`;
+    } else {
+      badge.classList.add('hidden');
+    }
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
 // Workout Management
 async function startWorkout() {
   isRunning = true;
@@ -2010,7 +2069,7 @@ function stopWorkout(fromNative = false) {
   document.getElementById('workoutStatusBadge').innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span> ' + I18N[lang].ui.workoutStopped;
   updateCountdownDisplay();
 
-  if (sessionReadings.length > 0 || sessionStartTime) {
+  if (currentSessionMode !== 'daily' && (sessionReadings.length > 0 || sessionStartTime)) {
     showWorkoutSummaryModal();
   }
 }
@@ -2066,59 +2125,59 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 11,
-  versionName: '2.0',
+  versionCode: 14,
+  versionName: '2.3',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 2.0 • Integração Total HUAWEI WATCH GT',
-    btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
+    sub: 'Versão 2.3 • Modo Sessão, Emergência 30s & Bomba Tandem',
+    btnDismiss: 'Entendido! 🚀',
     features: [
       {
-        icon: '❤️',
-        title: 'Barra Cardíaca em Tempo Real no Ecrã Principal',
-        desc: 'Nova barra dedicada no ecrã com batimentos cardíacos (BPM) e zonas de esforço Z1-Z5 em direto do teu HUAWEI WATCH GT 6 Pro.'
+        icon: '🏃',
+        title: 'Modo Treino vs Dia a Dia',
+        desc: 'Alterna com 1 toque entre Treino (com GPS, ritmo cardíaco e Intervals) e Modo Dia a Dia (apenas glicémia por voz e no ecrã).'
       },
       {
-        icon: '⚡',
-        title: 'Ligação Automática por Bluetooth LE',
-        desc: 'A app inicia a pesquisa e ligação automática ao relógio assim que arranca ou inicia um treino.'
+        icon: '🚨',
+        title: 'Aviso Imediato de Emergência (30s)',
+        desc: 'Se a glicémia descer a pique ou entrar em hipo severa, a app avisa de imediato sem esperar pelo temporizador de 2 minutos.'
       },
       {
-        icon: '💡',
-        title: 'Instruções Claras no Relógio',
-        desc: 'Guia visual passo a passo para ativar "Transmissão de ritmo cardíaco" nas definições do relógio para emitir via BLE.'
+        icon: '💉',
+        title: 'Deteção de Bólus da Bomba Tandem',
+        desc: 'Novo crachá com o último bólus administrado pela bomba de insulina e anúncio sonoro quando ocorre uma administração recente.'
       },
       {
-        icon: '🛑',
-        title: 'Paragem Limpa de Fundo',
-        desc: 'Cancelamento imediato de serviços de fundo, áudio e notificações ao parar o treino.'
+        icon: '🎙️',
+        title: 'Voz Focada na Glicémia',
+        desc: 'Removido o anúncio de ritmo para manter o anúncio sonoro curto e focado. A glicémia é sempre dita, mesmo em absorção de hidratos.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 2.0 • Full HUAWEI WATCH GT Integration',
-    btnDismiss: "Got it, Let's Run! 🏃‍♂️",
+    sub: 'Version 2.3 • Session Mode, 30s Danger Alerts & Tandem Pump',
+    btnDismiss: "Got it! 🚀",
     features: [
       {
-        icon: '❤️',
-        title: 'Live Heart Rate Bar on Main Screen',
-        desc: 'Dedicated real-time heart rate display and Z1-Z5 effort zones directly from your HUAWEI WATCH GT 6 Pro.'
+        icon: '🏃',
+        title: 'Workout vs Daily Mode',
+        desc: 'Toggle with 1 tap between Workout mode (GPS, HR, Intervals) and Daily mode (voice glucose only, no workout prompts).'
       },
       {
-        icon: '⚡',
-        title: 'Auto-Discovery & Pairing over BLE',
-        desc: 'The app automatically discovers and links to your watch on launch or workout start.'
+        icon: '🚨',
+        title: 'Immediate 30s Danger Alerts',
+        desc: 'Fast checking loop interrupts immediately on rapid drop or severe hypo without waiting for the cycle.'
       },
       {
-        icon: '💡',
-        title: 'Step-by-Step Watch Guide',
-        desc: 'Clear guidance on turning on "HR Data Broadcasts" in your watch settings.'
+        icon: '💉',
+        title: 'Tandem Pump Bolus Detection',
+        desc: 'Detects recent insulin boluses from your pump and announces them.'
       },
       {
-        icon: '🛑',
-        title: 'Clean Background Stop',
-        desc: 'Instant cancellation of background services and notifications.'
+        icon: '🎙️',
+        title: 'Glucose-Centric Audio',
+        desc: 'Pace speech removed so glucose is always crisp and prominent, even during carb absorption.'
       }
     ]
   }
@@ -2435,6 +2494,12 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('profHIIT')?.addEventListener('click', () => setWorkoutProfile('hiit'));
     document.getElementById('profWalk')?.addEventListener('click', () => setWorkoutProfile('walk'));
     updateProfileButtonsUI();
+
+    // Session Mode (Corrida vs Dia a Dia)
+    document.getElementById('btnModeRunning')?.addEventListener('click', () => setSessionMode('running'));
+    document.getElementById('btnModeDaily')?.addEventListener('click', () => setSessionMode('daily'));
+    setSessionMode(currentSessionMode);
+    checkLatestPumpBolus();
 
     // Quick Carb Intake & Voice
     updateCarbButtonUI();

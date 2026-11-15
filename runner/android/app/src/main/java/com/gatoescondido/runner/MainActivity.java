@@ -595,11 +595,43 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void startWorkoutService(int intervalMinutes, String language, String apiBase, int targetMin, int targetMax, boolean tellHeartRate, int maxHr) {
-            startWorkoutService(intervalMinutes, language, apiBase, targetMin, targetMax, tellHeartRate, maxHr, 0, 0);
+            startWorkoutService(intervalMinutes, language, apiBase, targetMin, targetMax, tellHeartRate, maxHr, 0, 0, "running");
         }
 
         @JavascriptInterface
         public void startWorkoutService(int intervalMinutes, String language, String apiBase, int targetMin, int targetMax, boolean tellHeartRate, int maxHr, int lastCarbGrams, long lastCarbTimestamp) {
+            startWorkoutService(intervalMinutes, language, apiBase, targetMin, targetMax, tellHeartRate, maxHr, lastCarbGrams, lastCarbTimestamp, "running");
+        }
+
+        @JavascriptInterface
+        public void startWorkoutService(int intervalMinutes, String language, String apiBase, int targetMin, int targetMax, boolean tellHeartRate, int maxHr, int lastCarbGrams, long lastCarbTimestamp, String sessionMode) {
+            Log.d(TAG, "startWorkoutService called with interval=" + intervalMinutes + ", tellHR=" + tellHeartRate + ", mode=" + sessionMode);
+            try {
+                Intent serviceIntent = new Intent(MainActivity.this, RunnerService.class);
+                serviceIntent.putExtra(RunnerService.EXTRA_INTERVAL, intervalMinutes);
+                serviceIntent.putExtra(RunnerService.EXTRA_LANG, language);
+                serviceIntent.putExtra(RunnerService.EXTRA_API_BASE, apiBase);
+                serviceIntent.putExtra(RunnerService.EXTRA_TARGET_MIN, targetMin);
+                serviceIntent.putExtra(RunnerService.EXTRA_TARGET_MAX, targetMax);
+                serviceIntent.putExtra(RunnerService.EXTRA_TELL_HR, tellHeartRate);
+                serviceIntent.putExtra(RunnerService.EXTRA_MAX_HR, maxHr);
+                serviceIntent.putExtra(RunnerService.EXTRA_SESSION_MODE, sessionMode != null ? sessionMode : "running");
+                if (lastCarbTimestamp > 0) {
+                    serviceIntent.putExtra(RunnerService.EXTRA_LAST_CARB_GRAMS, lastCarbGrams);
+                    serviceIntent.putExtra(RunnerService.EXTRA_LAST_CARB_TS, lastCarbTimestamp);
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to start RunnerService", e);
+            }
+        }
+
+        private void legacyUnusedStartWorkoutService(int intervalMinutes, String language, String apiBase, int targetMin, int targetMax, boolean tellHeartRate, int maxHr, int lastCarbGrams, long lastCarbTimestamp) {
             Log.d(TAG, "startWorkoutService called with interval=" + intervalMinutes + ", tellHR=" + tellHeartRate + ", lastCarb=" + lastCarbGrams + "g");
             try {
                 Intent serviceIntent = new Intent(MainActivity.this, RunnerService.class);
