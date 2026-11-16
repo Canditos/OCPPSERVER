@@ -1127,8 +1127,8 @@ function evaluateCarbAdvice(sgv, direction, delta) {
         cardBorder: 'border-orange-500 shadow-orange-900/40',
         carbs: '20g a 25g HC (Gel)',
         title: 'Quebra iminente: Toma gel de 20g a 25g já',
-        adviceText: `Glicémia nos ${sgv}. O sensor Dexcom G7 tem 10-15m de atraso; o teu sangue real já está abaixo de 90. Toma gel agora!`,
-        spokenText: `Aviso urgente! Glicémia a ${sgv}, ${dirSpoken}. Sangue real está em quebra iminente. Toma vinte a vinte e cinco gramas de gel agora mesmo!`
+        adviceText: `Glicémia nos ${sgv}. O sensor Dexcom G7 tem 10-15m de atraso; no sangue já estás abaixo de 90. Toma gel agora!`,
+        spokenText: `Aviso urgente! Glicémia a ${sgv}, ${dirSpoken}. No sangue estás em quebra iminente. Toma vinte a vinte e cinco gramas de gel agora mesmo!`
       };
     } else {
       return {
@@ -1138,8 +1138,8 @@ function evaluateCarbAdvice(sgv, direction, delta) {
         cardBorder: 'border-orange-500 shadow-orange-900/40',
         carbs: '20g to 25g Carbs (Gel)',
         title: 'Imminent hypo: Take 20g-25g gel now',
-        adviceText: `Glucose at ${sgv}. With Dexcom G7 lag, capillary blood is already below 90. Take a gel immediately!`,
-        spokenText: `Warning! Blood glucose ${sgv}, ${dirSpoken}. Real blood is below 90. Take 20 to 25 grams of carbs now!`
+        adviceText: `Glucose at ${sgv}. With Dexcom G7 lag, blood glucose is already below 90. Take a gel immediately!`,
+        spokenText: `Warning! Blood glucose ${sgv}, ${dirSpoken}. Blood glucose is dropping fast. Take 20 to 25 grams of carbs now!`
       };
     }
   }
