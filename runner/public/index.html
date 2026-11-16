@@ -68,8 +68,21 @@
     </div>
   </header>
 
-  <!-- Main Workout Dashboard Body -->
-  <main class="flex-1 px-3 sm:px-4 py-1.5 sm:py-2.5 flex flex-col justify-between max-w-md mx-auto w-full gap-1.5 sm:gap-2 overflow-y-auto">
+  <!-- Navigation Tab Bar (Corrida vs Ginásio) -->
+  <div class="px-3.5 pt-1.5 shrink-0 max-w-md mx-auto w-full z-20">
+    <div class="flex items-center gap-1 p-1 bg-slate-900/95 rounded-2xl border border-slate-800 shadow-sm">
+      <button id="tabBtnRunning" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-sky-500 text-white shadow-sm cursor-pointer">
+        <span>🏃</span> <span id="labelTabRunning">Corrida & Glicémia</span>
+      </button>
+      <button id="tabBtnGym" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer">
+        <span>🏋️</span> <span id="labelTabGym">Treino Ginásio</span>
+        <span id="tabGymBadge" class="hidden text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">Hoje</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Workout Dashboard Body (Corrida & Glicémia) -->
+  <main id="runningView" class="flex-1 px-3 sm:px-4 py-1.5 sm:py-2.5 flex flex-col justify-between max-w-md mx-auto w-full gap-1.5 sm:gap-2 overflow-y-auto">
 
     <!-- Top Status Row -->
     <div class="flex items-center justify-between shrink-0 gap-1">
@@ -277,12 +290,123 @@
 
   </main>
 
+  <!-- Gym / Strength Training Dashboard View (100% Máquinas) -->
+  <main id="gymView" class="hidden flex-1 px-3 sm:px-4 py-1.5 sm:py-2.5 flex flex-col max-w-md mx-auto w-full gap-2.5 overflow-y-auto pb-6">
+
+    <!-- Gym Top Live Glucose Bar -->
+    <div id="gymLiveGlucoseBar" class="flex items-center justify-between gap-2 bg-slate-900/90 px-3 py-1.5 rounded-2xl border border-slate-800 shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-rose-400">🩸</span>
+        <span class="text-[11px] font-bold text-slate-300">Glicémia:</span>
+        <span id="gymGlucoseVal" class="text-xs font-black text-white font-mono">-- mg/dL</span>
+        <span id="gymGlucoseTrend" class="text-xs font-bold text-sky-400">→</span>
+        <span id="gymGlucoseDelta" class="text-[10px] text-slate-400 font-mono">(--)</span>
+      </div>
+      <div id="gymBolusMiniBadge" class="hidden text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-950 text-indigo-300 border border-indigo-700/60">
+        💉 <span id="gymBolusMiniText">Bolus</span>
+      </div>
+    </div>
+
+    <!-- Gym Week / Session Navigation Header -->
+    <div class="bg-slate-900/95 rounded-2xl border border-slate-800 p-3 shadow-md shrink-0 space-y-2">
+      <div class="flex items-center justify-between gap-1.5">
+        <button id="btnGymPrev" type="button" class="w-8 h-8 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 cursor-pointer text-xs" title="Semana anterior">
+          ◀
+        </button>
+        <div class="text-center min-w-0 flex-1">
+          <p id="gymSessionDateLabel" class="text-[10px] font-bold uppercase tracking-wider text-amber-400 font-mono">Quarta-feira, 18 Nov</p>
+          <h2 id="gymSessionTitle" class="text-xs sm:text-sm font-extrabold text-white truncate">S2 - Ginásio Força Base & Tendões</h2>
+        </div>
+        <button id="btnGymNext" type="button" class="w-8 h-8 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 cursor-pointer text-xs" title="Próxima semana">
+          ▶
+        </button>
+      </div>
+
+      <!-- Quick Session Selector Dropdown & Refresh -->
+      <div class="flex items-center gap-1.5 pt-1">
+        <select id="gymSessionSelect" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-medium">
+          <!-- Populated dynamically with all 20 Wednesdays -->
+        </select>
+        <button id="btnGymRefresh" type="button" class="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/50 text-amber-400 text-xs transition cursor-pointer flex items-center gap-1" title="Sincronizar com Intervals.icu">
+          <span>🔄</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Interactive Rest Timer Widget (60s) -->
+    <div id="gymRestTimerWidget" class="bg-gradient-to-r from-slate-900 to-amber-950/40 rounded-2xl border border-amber-900/40 p-2.5 flex items-center justify-between gap-3 shrink-0">
+      <div class="flex items-center gap-2.5">
+        <div id="restTimerIconBox" class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-lg font-black shrink-0">
+          ⏱️
+        </div>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wider text-amber-400">Descanso entre Séries</p>
+          <p id="restTimerText" class="text-base font-black text-white font-mono tabular-nums">Pronto (60s)</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button id="btnStartRestTimer" type="button" class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition active:scale-95 cursor-pointer shadow-sm">
+          Descansar 60s
+        </button>
+        <button id="btnResetRestTimer" type="button" class="hidden px-2 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition active:scale-95 cursor-pointer">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- Gym Warmup Banner -->
+    <div id="gymWarmupBox" class="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-2.5 flex items-center gap-2.5 shrink-0">
+      <span class="text-xl">🚴</span>
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Aquecimento Cardiovascular (6 min)</p>
+        <p id="gymWarmupText" class="text-xs font-medium text-slate-200">5-6 min Bicicleta Indoor ou Elítica suave (preparar articulações)</p>
+      </div>
+    </div>
+
+    <!-- Visual Infographic Toggle Accordion -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shrink-0">
+      <button id="btnToggleGymImages" type="button" class="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-sky-400 hover:bg-slate-800/50 transition cursor-pointer">
+        <span class="flex items-center gap-2">
+          <span>📸</span> <span>Ver Infografia Visual das Máquinas</span>
+        </span>
+        <span id="gymImagesToggleArrow" class="text-slate-400 text-xs transition-transform">▼</span>
+      </button>
+      <div id="gymImagesContainer" class="hidden p-2 space-y-2 border-t border-slate-800 bg-slate-950/80">
+        <div>
+          <p class="text-[10px] font-bold text-slate-400 mb-1">Membros Inferiores & Costas:</p>
+          <img src="/img/gym/machines_lower_back.jpg" alt="Máquinas Pernas e Costas" class="rounded-xl border border-slate-800 w-full" loading="lazy">
+        </div>
+        <div>
+          <p class="text-[10px] font-bold text-slate-400 mb-1">Pés, Joelho e Core:</p>
+          <img src="/img/gym/machines_core_calves.jpg" alt="Máquinas Core e Gémeos" class="rounded-xl border border-slate-800 w-full" loading="lazy">
+        </div>
+      </div>
+    </div>
+
+    <!-- Dynamic Exercise Cards List -->
+    <div id="gymExercisesList" class="space-y-2.5">
+      <!-- Populated dynamically via app.js -->
+    </div>
+
+    <!-- Tandem t:slim X2 Gym Medical Advice Box -->
+    <div class="rounded-2xl bg-indigo-950/30 border border-indigo-800/50 p-3 space-y-1.5 shrink-0 text-xs">
+      <div class="flex items-center gap-2">
+        <span class="text-base">💉</span>
+        <h4 class="font-extrabold text-indigo-300 uppercase tracking-wider text-[11px]">Dica Tandem t:slim X2 no Ginásio</h4>
+      </div>
+      <p id="gymTandemNotesText" class="text-slate-300 leading-snug text-[11px]">
+        A musculação em máquinas pode manter a glicémia estável ou fazê-la subir 10-20 mg/dL devido à adrenalina. Não hipercorrigir com bolus durante o treino. A sensibilidade aumentará nas horas seguintes.
+      </p>
+    </div>
+
+  </main>
+
   <!-- Footer Tip & OTA Status -->
   <footer class="px-3.5 py-1.5 flex items-center justify-between border-t border-slate-900 text-[10px] text-slate-400 shrink-0">
     <div id="footerTip" class="truncate mr-2 leading-none">💡 Auriculares: Botão ouve glicémia instantânea</div>
     <div class="flex items-center gap-1 shrink-0">
       <button id="btnFooterWhatsNew" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-800 hover:border-sky-500/40 shadow-sm transition active:scale-95 cursor-pointer">
-        <span>✨ v1.6</span>
+        <span>✨ v2.4</span>
       </button>
       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950/90 text-emerald-400 border border-emerald-500/40 shadow-sm">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>

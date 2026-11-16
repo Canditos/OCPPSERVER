@@ -500,6 +500,162 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 2.25 Intervals.icu Gym / Strength Workouts Proxy
+  if (parsedUrl.pathname === '/api/intervals/gym') {
+    const apiKey = parsedUrl.searchParams.get('key') || '2vi0p9dd17r7is9lyf2souw4x';
+    const athleteId = parsedUrl.searchParams.get('athlete') || 'i470647';
+    const dateParam = parsedUrl.searchParams.get('date'); // YYYY-MM-DD
+    const listAll = parsedUrl.searchParams.get('listAll') === 'true';
+    const authHeader = 'Basic ' + Buffer.from('API_KEY:' + apiKey).toString('base64');
+
+    // Query window: if listAll, from Nov 2026 to April 2027
+    const oldest = listAll ? '2026-11-09' : (dateParam ? dateParam : new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0]);
+    const newest = listAll ? '2027-04-10' : (dateParam ? new Date(new Date(dateParam).getTime() + 86400000).toISOString().split('T')[0] : new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]);
+
+    const url = `https://intervals.icu/api/v1/athlete/${athleteId}/events?oldest=${oldest}&newest=${newest}`;
+    const reqInt = https.request(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': authHeader,
+        'User-Agent': 'NightscoutAudioRunner/2.4',
+        'Accept': 'application/json'
+      }
+    }, (resInt) => {
+      let data = '';
+      resInt.on('data', chunk => data += chunk);
+      resInt.on('end', () => {
+        try {
+          const events = JSON.parse(data);
+          if (!Array.isArray(events)) {
+            res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({ error: 'Intervals.icu returned invalid list' }));
+            return;
+          }
+
+          // Filter for WeightTraining workouts
+          const gymEvents = events.filter(e => e.category === 'WORKOUT' && e.type === 'WeightTraining');
+
+          function parseGymDescription(desc) {
+            if (!desc) return { warmup: '', exercises: [], tandemNotes: '', raw: '' };
+            const lines = desc.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            let warmup = '';
+            let exercises = [];
+            let tandemNotes = '';
+            let currentEx = null;
+            let section = '';
+
+            for (const line of lines) {
+              if (line.toLowerCase().includes('aquecimento') || line.toLowerCase().includes('cardio leve')) {
+                section = 'warmup';
+                continue;
+              }
+              if (line.toLowerCase().includes('circuito') || line.toLowerCase().includes('bloco de força') || line.toLowerCase().includes('bloco de forca')) {
+                section = 'exercises';
+                continue;
+              }
+              if (line.toLowerCase().includes('nota tandem') || line.toLowerCase().includes('tandem')) {
+                section = 'tandem';
+                continue;
+              }
+
+              if (section === 'warmup') {
+                warmup += (warmup ? ' • ' : '') + line.replace(/^-\s*/, '');
+              } else if (section === 'exercises') {
+                const matchEx = line.match(/^(\d+)\.\s*([^:]+):\s*(.*)/);
+                if (matchEx) {
+                  currentEx = {
+                    num: parseInt(matchEx[1]),
+                    name: matchEx[2].trim(),
+                    prescription: matchEx[3].trim(),
+                    sets: 3,
+                    reps: '12 reps',
+                    rest: '60s',
+                    notes: ''
+                  };
+                  const sMatch = matchEx[3].match(/(\d+)\s*s[eé]ries/i);
+                  if (sMatch) currentEx.sets = parseInt(sMatch[1]);
+                  const rMatch = matchEx[3].match(/(\d+(?:\s*a\s*\d+)?)\s*reps/i);
+                  if (rMatch) currentEx.reps = rMatch[1] + ' reps';
+                  const restMatch = matchEx[3].match(/descanso\s*(\d+s?)/i);
+                  if (restMatch) currentEx.rest = restMatch[1];
+                  exercises.push(currentEx);
+                } else if (line.startsWith('(') && currentEx) {
+                  currentEx.notes = line.replace(/^\(|\)$/g, '').trim();
+                } else if (line.startsWith('-') && currentEx) {
+                  currentEx.notes += (currentEx.notes ? ' ' : '') + line.replace(/^-\s*/, '');
+                }
+              } else if (section === 'tandem') {
+                tandemNotes += (tandemNotes ? ' ' : '') + line;
+              }
+            }
+
+            return { warmup, exercises, tandemNotes, raw: desc };
+          }
+
+          if (listAll) {
+            const list = gymEvents.map(e => ({
+              id: e.id,
+              date: (e.start_date_local || '').split('T')[0],
+              name: e.name,
+              movingTime: e.moving_time || 2700,
+              parsed: parseGymDescription(e.description)
+            })).sort((a,b) => a.date.localeCompare(b.date));
+
+            res.writeHead(200, {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*'
+            });
+            res.end(JSON.stringify({ found: true, count: list.length, workouts: list }));
+            return;
+          }
+
+          // Single workout lookup
+          let targetWorkout = null;
+          if (dateParam) {
+            targetWorkout = gymEvents.find(e => (e.start_date_local || '').startsWith(dateParam));
+          }
+          if (!targetWorkout && gymEvents.length > 0) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            targetWorkout = gymEvents.find(e => (e.start_date_local || '').split('T')[0] >= todayStr) || gymEvents[0];
+          }
+
+          if (targetWorkout) {
+            res.writeHead(200, {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*'
+            });
+            res.end(JSON.stringify({
+              found: true,
+              workout: {
+                id: targetWorkout.id,
+                date: (targetWorkout.start_date_local || '').split('T')[0],
+                name: targetWorkout.name,
+                movingTime: targetWorkout.moving_time || 2700,
+                parsed: parseGymDescription(targetWorkout.description),
+                allDates: gymEvents.map(e => (e.start_date_local || '').split('T')[0]).sort()
+              }
+            }));
+          } else {
+            res.writeHead(200, {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*'
+            });
+            res.end(JSON.stringify({ found: false, message: 'Nenhum treino de ginásio encontrado para este período.' }));
+          }
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+    });
+    reqInt.on('error', err => {
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    reqInt.end();
+    return;
+  }
+
   // 2.3 Intervals.icu Manual Activity Upload Proxy
   if (parsedUrl.pathname === '/api/intervals/upload') {
     let body = '';

@@ -1764,6 +1764,29 @@ function updateUIWithReading(current, previous, delta, advice) {
   if (adviceTitle) adviceTitle.textContent = advice.title;
   if (adviceDesc) adviceDesc.textContent = advice.adviceText;
 
+  // Mini Glucose Bar in Gym View
+  const gymSgv = document.getElementById('gymGlucoseVal');
+  const gymTrend = document.getElementById('gymGlucoseTrend');
+  const gymDelta = document.getElementById('gymGlucoseDelta');
+  if (gymSgv && current && current.sgv) {
+    gymSgv.textContent = `${current.sgv} mg/dL`;
+    if (current.sgv < config.targetMin) {
+      gymSgv.className = 'text-xs font-black text-rose-400 font-mono';
+    } else if (current.sgv > config.targetMax) {
+      gymSgv.className = 'text-xs font-black text-amber-400 font-mono';
+    } else {
+      gymSgv.className = 'text-xs font-black text-emerald-400 font-mono';
+    }
+  }
+  if (gymTrend && current && current.direction) {
+    const dirInfo = I18N[lang]?.directions[current.direction] || I18N[lang]?.directions.Flat;
+    if (dirInfo) gymTrend.textContent = dirInfo.symbol;
+  }
+  if (gymDelta && delta !== null) {
+    const sign = delta > 0 ? '+' : '';
+    gymDelta.textContent = `(${sign}${delta})`;
+  }
+
   if (mainCard) {
     mainCard.className = `relative overflow-hidden rounded-2xl bg-slate-900/90 border-2 px-4 py-2 sm:py-3 backdrop-blur-xl transition-all duration-300 shadow-xl ${advice.cardBorder}`;
   }
@@ -1807,12 +1830,20 @@ async function checkLatestPumpBolus() {
     const badgeText = document.getElementById('pumpBolusText');
     if (!badge || !badgeText) return data;
 
+    const gymBadge = document.getElementById('gymBolusMiniBadge');
+    const gymBadgeText = document.getElementById('gymBolusMiniText');
+
     if (data && data.hasBolus && data.minsAgo < 180) {
       badge.classList.remove('hidden');
       const timeStr = data.minsAgo < 60 ? `${data.minsAgo}m` : `${Math.floor(data.minsAgo / 60)}h${data.minsAgo % 60}m`;
       badgeText.textContent = `Bólus: ${data.insulin}U há ${timeStr}`;
+      if (gymBadge && gymBadgeText) {
+        gymBadge.classList.remove('hidden');
+        gymBadgeText.textContent = `${data.insulin}U há ${timeStr}`;
+      }
     } else {
       badge.classList.add('hidden');
+      if (gymBadge) gymBadge.classList.add('hidden');
     }
     return data;
   } catch (e) {
@@ -1983,13 +2014,18 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 14,
-  versionName: '2.3',
+  versionCode: 15,
+  versionName: '2.4',
   'pt-PT': {
     title: 'O que há de novo',
     sub: 'Versão 2.3 • Modo Sessão, Emergência 30s & Bomba Tandem',
     btnDismiss: 'Entendido! 🚀',
     features: [
+      {
+        icon: '🏋️',
+        title: 'Treino de Ginásio (100% Máquinas)',
+        desc: 'Novo separador dedicado aos treinos de ginásio sincronizados com o Intervals.icu, cronómetro de descanso de 60s, checklist de séries e guia postural catita.'
+      },
       {
         icon: '🏃',
         title: 'Modo Treino vs Dia a Dia',
@@ -2298,6 +2334,495 @@ function checkInitialAudioOutput() {
 
 window._onAudioOutputUpdate = updateBluetoothStatusBadge;
 
+
+// ==========================================
+// TREINO DE GINÁSIO (100% MÁQUINAS) & INTERVALS.ICU
+// ==========================================
+
+let activeMainTab = 'running'; // 'running' | 'gym'
+let gymSchedule = [];
+let currentGymIndex = 0;
+let currentGymWorkout = null;
+let gymRestTimerInterval = null;
+let gymRestSeconds = 60;
+
+const MACHINE_METADATA = {
+  'leg press': {
+    icon: '🦵',
+    target: 'Quadríceps & Glúteos',
+    equipment: 'Prensa 45° ou Horizontal',
+    tip: 'Pés alinhados à largura dos ombros no meio da base. Desce em 3 segundos controlados até os joelhos formarem 90°. NUNCA bloquear/estalar os joelhos no topo para proteger articulações.'
+  },
+  'seated leg curl': {
+    icon: '🦵',
+    target: 'Isquiotibiais (Posterior da Coxa)',
+    equipment: 'Máquina Flexora Sentada',
+    tip: 'Alinha a rotação do joelho com o eixo da máquina. Almofada logo acima do calcanhar/tendão de Aquiles. Contrai firme 1 segundo no fundo e controla o retorno em 2-3 segundos.'
+  },
+  'flexora': {
+    icon: '🦵',
+    target: 'Isquiotibiais & Proteção do Joelho',
+    equipment: 'Máquina Flexora',
+    tip: 'O posterior da coxa é o travão natural na passada de corrida. Mantém a bacia estável no assento sem arquear a lombar.'
+  },
+  'hip abductor': {
+    icon: '🍑',
+    target: 'Glúteo Médio & Estabilidade Pélvica',
+    equipment: 'Máquina Abdutora Sentada',
+    tip: 'Costas bem apoiadas. Abre os joelhos contra a resistência e faz pausa de 1 segundo em abertura máxima. Previne a queda da anca e o joelho de corredor (IT band syndrome).'
+  },
+  'abdutora': {
+    icon: '🍑',
+    target: 'Glúteo Médio & Estabilidade Pélvica',
+    equipment: 'Máquina Abdutora',
+    tip: 'Abre com força mantendo os pés relaxados. Foca a força nos glúteos laterais.'
+  },
+  'seated cable row': {
+    icon: '🚣',
+    target: 'Dorsais, Rombóides & Postura',
+    equipment: 'Máquina de Remo Sentado / Polia',
+    tip: 'Peito alto e ombros encaixados para trás e para baixo. Puxa os cotovelos junto ao tronco, aperta as omoplatas 1 segundo e volta devagar. Mantém a postura aberta na corrida longa.'
+  },
+  'remo': {
+    icon: '🚣',
+    target: 'Costas & Postura de Corrida',
+    equipment: 'Máquina de Remo Sentado',
+    tip: 'Não deites o tronco para trás no final da puxada. Mantém o core firme e os ombros relaxados (longe das orelhas).'
+  },
+  'puxada': {
+    icon: '🏋️',
+    target: 'Costas & Grande Dorsal',
+    equipment: 'Lat Pulldown / Puxada Alta',
+    tip: 'Puxa a barra em direção à parte superior do peito. Não puxes atrás da nuca.'
+  },
+  'seated calf raise': {
+    icon: '🦶',
+    target: 'Solear & Tendão de Aquiles',
+    equipment: 'Máquina Gémeos Sentado ou Prensa',
+    tip: 'Desce ao ponto mais fundo e faz uma PAUSA OBRIGATÓRIA de 2 segundos para eliminar a energia elástica. Sobe na ponta dos pés. O solear absorve até 8x o peso corporal em cada passada!'
+  },
+  'gémeos': {
+    icon: '🦶',
+    target: 'Solear, Gastrocnémio & Aquiles',
+    equipment: 'Máquina de Gémeos',
+    tip: 'A pausa no ponto baixo é indispensável para criar tendões de aço e evitar fascite plantar e tendinites de Aquiles.'
+  },
+  'leg extension': {
+    icon: '🦵',
+    target: 'Quadríceps & Tendão Rotuliano',
+    equipment: 'Máquina Extensora Sentada',
+    tip: 'Extensão suave até quase 180° sem esticar abruptamente. Segura 1 segundo no topo sentindo o vasto medial (músculo acima do joelho). Baixa em 3 segundos.'
+  },
+  'extensora': {
+    icon: '🦵',
+    target: 'Quadríceps & Vasto Medial',
+    equipment: 'Máquina Extensora',
+    tip: 'Fortalecimento do vasto medial para centrar a patela no sulco femoral e prevenir dores no joelho anterior.'
+  },
+  'seated ab crunch': {
+    icon: '🎯',
+    target: 'Reto Abdominal & Core Central',
+    equipment: 'Máquina Crunch Abdominal',
+    tip: 'Expira todo o ar ao enrolar a coluna para a frente, apertando o abdómen com força máxima. Não puxes com os braços nem com a cabeça. Core estável = passada económica.'
+  },
+  'rotary torso': {
+    icon: '🔄',
+    target: 'Oblíquos & Estabilidade Rotacional',
+    equipment: 'Máquina Torso Rotary Sentada',
+    tip: 'Fixa as ancas nas almofadas. Roda lentamente o tronco usando apenas os músculos abdominais laterais. Segura 1 segundo e volta ao centro com controlo.'
+  },
+  'back extension': {
+    icon: '🛡️',
+    target: 'Lombar & Cadeia Posterior',
+    equipment: 'Máquina Extensão Lombar Sentada',
+    tip: 'Apoia a almofada na zona dorsal média. Empurra com a força lombar mantendo o peito direito. Não hiperextendas a coluna para além da linha natural.'
+  }
+};
+
+function getMachineMeta(name) {
+  const lower = (name || '').toLowerCase();
+  for (const [key, meta] of Object.entries(MACHINE_METADATA)) {
+    if (lower.includes(key)) return meta;
+  }
+  return {
+    icon: '🏋️',
+    target: 'Músculos Estabilizadores',
+    equipment: 'Máquina Guiada Selectorizada',
+    tip: 'Execução controlada: 2 segundos a subir, 1 segundo de contração isométrica, 3 segundos a descer. Respiração fluida: expira no esforço, inspira no retorno.'
+  };
+}
+
+function playBeepSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  } catch (e) {
+    console.warn('Beep audio error:', e);
+  }
+}
+
+function startGymRestTimer(duration = 60) {
+  clearInterval(gymRestTimerInterval);
+  gymRestSeconds = duration;
+  const timerText = document.getElementById('restTimerText');
+  const btnStart = document.getElementById('btnStartRestTimer');
+  const btnReset = document.getElementById('btnResetRestTimer');
+
+  if (btnReset) btnReset.classList.remove('hidden');
+  if (btnStart) btnStart.textContent = 'Reiniciar 60s';
+
+  const updateDisplay = () => {
+    if (!timerText) return;
+    if (gymRestSeconds > 0) {
+      timerText.textContent = `${gymRestSeconds}s restantes`;
+      timerText.className = 'text-base font-black text-amber-400 font-mono tabular-nums animate-pulse';
+    } else {
+      clearInterval(gymRestTimerInterval);
+      gymRestTimerInterval = null;
+      timerText.textContent = 'Tempo esgotado! Próxima série 💪';
+      timerText.className = 'text-base font-black text-emerald-400 font-mono tabular-nums';
+      if (btnReset) btnReset.classList.add('hidden');
+      if (btnStart) btnStart.textContent = 'Descansar 60s';
+      playBeepSound();
+      try {
+        if (config.language === 'pt-PT') {
+          playStudioVoice('Descanso terminado! Próxima série.');
+        } else {
+          playStudioVoice('Rest finished! Next set.');
+        }
+      } catch (e) {}
+    }
+  };
+
+  updateDisplay();
+  gymRestTimerInterval = setInterval(() => {
+    gymRestSeconds--;
+    updateDisplay();
+  }, 1000);
+}
+
+function resetGymRestTimer() {
+  clearInterval(gymRestTimerInterval);
+  gymRestTimerInterval = null;
+  gymRestSeconds = 60;
+  const timerText = document.getElementById('restTimerText');
+  const btnStart = document.getElementById('btnStartRestTimer');
+  const btnReset = document.getElementById('btnResetRestTimer');
+  if (timerText) {
+    timerText.textContent = 'Pronto (60s)';
+    timerText.className = 'text-base font-black text-white font-mono tabular-nums';
+  }
+  if (btnReset) btnReset.classList.add('hidden');
+  if (btnStart) btnStart.textContent = 'Descansar 60s';
+}
+
+function switchMainTab(tab) {
+  activeMainTab = tab === 'gym' ? 'gym' : 'running';
+  try { localStorage.setItem('runner_main_tab', activeMainTab); } catch (e) {}
+
+  const tabBtnRunning = document.getElementById('tabBtnRunning');
+  const tabBtnGym = document.getElementById('tabBtnGym');
+  const runningView = document.getElementById('runningView');
+  const gymView = document.getElementById('gymView');
+
+  if (activeMainTab === 'gym') {
+    if (runningView) runningView.classList.add('hidden');
+    if (gymView) gymView.classList.remove('hidden');
+
+    if (tabBtnGym) {
+      tabBtnGym.className = 'flex-1 py-1.5 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition bg-amber-500 text-slate-950 shadow-md cursor-pointer';
+    }
+    if (tabBtnRunning) {
+      tabBtnRunning.className = 'flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer';
+    }
+
+    if (gymSchedule.length === 0) {
+      loadGymSchedule();
+    }
+  } else {
+    if (gymView) gymView.classList.add('hidden');
+    if (runningView) runningView.classList.remove('hidden');
+
+    if (tabBtnRunning) {
+      tabBtnRunning.className = 'flex-1 py-1.5 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition bg-sky-500 text-white shadow-md cursor-pointer';
+    }
+    if (tabBtnGym) {
+      tabBtnGym.className = 'flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer';
+    }
+  }
+}
+
+async function loadGymSchedule(targetDate = null, forceRefresh = false) {
+  const container = document.getElementById('gymExercisesList');
+  if (!container) return;
+
+  if (gymSchedule.length === 0) {
+    container.innerHTML = `
+      <div class="py-12 text-center text-slate-400 space-y-2">
+        <div class="inline-block animate-spin text-2xl">⏳</div>
+        <p class="text-xs font-semibold">A carregar sessões de ginásio do Intervals.icu...</p>
+      </div>
+    `;
+  }
+
+  try {
+    const bust = forceRefresh ? `&_t=${Date.now()}` : '';
+    const res = await fetch(`/api/intervals/gym?listAll=true${bust}`);
+    if (!res.ok) throw new Error('Falha ao comunicar com Intervals.icu');
+    const data = await res.json();
+    if (!data.workouts || data.workouts.length === 0) {
+      container.innerHTML = `<div class="p-4 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-400">Nenhum treino de ginásio encontrado no Intervals.icu.</div>`;
+      return;
+    }
+
+    gymSchedule = (data.workouts || []).map(w => ({
+      id: w.id,
+      date: w.date,
+      title: w.name || w.title || 'Treino Ginásio',
+      name: w.name || w.title || 'Treino Ginásio',
+      movingTime: w.movingTime || 2700,
+      warmup: w.warmup || (w.parsed && w.parsed.warmup) || '5-6 min Bicicleta Indoor ou Elítica (suave)',
+      tandemNotes: w.tandemNotes || (w.parsed && w.parsed.tandemNotes) || 'A musculação em máquinas mantém a glicémia estável ou sobe ligeiramente pela adrenalina. Evitar bolus agressivos.',
+      parsedExercises: w.parsedExercises || (w.parsed && w.parsed.exercises) || []
+    }));
+
+    // Populate Select
+    const select = document.getElementById('gymSessionSelect');
+    if (select) {
+      select.innerHTML = '';
+      gymSchedule.forEach((w, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        const dParts = w.date.split('-');
+        const dObj = new Date(parseInt(dParts[0], 10), parseInt(dParts[1], 10) - 1, parseInt(dParts[2], 10));
+        const formattedDate = dObj.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
+        opt.textContent = `${w.title} (${formattedDate})`;
+        select.appendChild(opt);
+      });
+    }
+
+    // Determine target workout
+    let targetIdx = 0;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (targetDate) {
+      const idx = gymSchedule.findIndex(w => w.date === targetDate);
+      if (idx !== -1) targetIdx = idx;
+    } else {
+      const upcomingIdx = gymSchedule.findIndex(w => w.date >= todayStr);
+      if (upcomingIdx !== -1) targetIdx = upcomingIdx;
+    }
+
+    currentGymIndex = targetIdx;
+    if (select) select.selectedIndex = currentGymIndex;
+    renderGymWorkout(gymSchedule[currentGymIndex]);
+
+  } catch (err) {
+    console.error('loadGymSchedule error:', err);
+    container.innerHTML = `
+      <div class="p-4 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-center text-xs text-rose-300 space-y-2">
+        <p>⚠️ Não foi possível carregar os treinos do ginásio.</p>
+        <button id="btnRetryGymSchedule" type="button" class="px-3 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 rounded-xl text-rose-200 text-xs font-bold transition">Tentar novamente</button>
+      </div>
+    `;
+    document.getElementById('btnRetryGymSchedule')?.addEventListener('click', () => loadGymSchedule(null, true));
+  }
+}
+
+function renderGymWorkout(workout) {
+  if (!workout) return;
+  currentGymWorkout = workout;
+
+  // Title & Date
+  const titleEl = document.getElementById('gymSessionTitle');
+  const dateLabelEl = document.getElementById('gymSessionDateLabel');
+  if (titleEl) titleEl.textContent = workout.title || 'Treino de Ginásio';
+  if (dateLabelEl && workout.date) {
+    const parts = workout.date.split('-');
+    const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    const dayName = d.toLocaleDateString('pt-PT', { weekday: 'long' });
+    const formattedDate = d.toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
+    dateLabelEl.textContent = `${dayName.charAt(0).toUpperCase() + dayName.slice(1)}, ${formattedDate}`;
+  }
+
+  // Warmup & Tandem Notes
+  const warmupEl = document.getElementById('gymWarmupText');
+  if (warmupEl) {
+    warmupEl.textContent = workout.warmup || '5-6 min Bicicleta Indoor suave (preparar articulações e circulação)';
+  }
+  const tandemEl = document.getElementById('gymTandemNotesText');
+  if (tandemEl) {
+    tandemEl.textContent = workout.tandemNotes || 'A musculação em máquinas mantém a glicémia estável ou sobe ligeiramente pela adrenalina. Evitar bolus agressivos durante a sessão.';
+  }
+
+  // Render Exercises List
+  const container = document.getElementById('gymExercisesList');
+  if (!container) return;
+
+  const exercises = workout.parsedExercises || [];
+  if (exercises.length === 0) {
+    container.innerHTML = `<div class="p-4 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-400">Sem exercícios detalhados para esta data.</div>`;
+    return;
+  }
+
+  let totalSessionSets = 0;
+  exercises.forEach(ex => {
+    totalSessionSets += (ex.sets || 3);
+  });
+
+  let html = `
+    <div class="flex items-center justify-between px-1 text-[11px] font-semibold text-slate-400">
+      <span class="flex items-center gap-1.5">
+        <span class="text-amber-400">🏋️</span>
+        <span>${exercises.length} Exercícios Guiados</span>
+      </span>
+      <span id="gymSessionSetCounter" class="font-mono text-amber-400">-- / ${totalSessionSets} séries</span>
+    </div>
+  `;
+
+  exercises.forEach((ex, exIdx) => {
+    const meta = getMachineMeta(ex.name);
+    const setsCount = ex.sets || 3;
+    const repsStr = ex.reps ? `${ex.reps} reps` : '10-12 reps';
+    const restStr = ex.rest || '60s';
+
+    // Build sets checkboxes
+    let setsHtml = '';
+    for (let s = 1; s <= setsCount; s++) {
+      const setKey = `gym_set_${workout.date}_${exIdx}_${s}`;
+      const isDone = localStorage.getItem(setKey) === '1';
+      const activeClass = isDone
+        ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-extrabold shadow-sm shadow-emerald-500/20'
+        : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700 font-bold';
+
+      setsHtml += `
+        <button type="button"
+          data-ex-idx="${exIdx}"
+          data-set-num="${s}"
+          data-total-sets="${totalSessionSets}"
+          class="gym-set-btn flex-1 py-1.5 px-1 rounded-xl border text-xs flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer ${activeClass}">
+          <span>${isDone ? '✓' : ''} S${s}</span>
+        </button>
+      `;
+    }
+
+    html += `
+      <div class="rounded-2xl bg-slate-900/90 border border-slate-800 p-3 space-y-2.5 shadow-md">
+        <!-- Exercise Top Info -->
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 font-extrabold text-xs flex items-center justify-center shrink-0">
+              ${ex.num || exIdx + 1}
+            </span>
+            <div class="min-w-0">
+              <h3 class="text-xs sm:text-sm font-extrabold text-white truncate leading-tight">${ex.name}</h3>
+              <p class="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                <span>${meta.icon}</span> <span>${meta.target}</span>
+              </p>
+            </div>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-amber-400 shrink-0">
+            ${meta.equipment}
+          </span>
+        </div>
+
+        <!-- Prescription Badges -->
+        <div class="flex items-center gap-1.5 text-[11px] font-mono bg-slate-950/60 px-2.5 py-1.5 rounded-xl border border-slate-800/80 justify-between">
+          <span class="text-slate-300 font-bold">📋 ${setsCount} séries × ${repsStr}</span>
+          <span class="text-amber-400 font-bold flex items-center gap-1">
+            <span>⏱️</span> <span>Descanso ${restStr}</span>
+          </span>
+        </div>
+
+        <!-- Polished Form & Posture Cue ("Instrução Catita") -->
+        <div class="bg-amber-950/20 border border-amber-900/40 rounded-xl p-2 text-[11px] text-amber-200/90 leading-snug">
+          <p class="font-bold text-[10px] uppercase tracking-wider text-amber-400 mb-0.5">💡 Postura & Execução de Corredor:</p>
+          <p>${ex.notes ? ex.notes + ' • ' : ''}${meta.tip}</p>
+        </div>
+
+        <!-- Interactive Sets Tracker -->
+        <div class="space-y-1 pt-0.5">
+          <div class="flex items-center justify-between text-[10px] text-slate-400 px-0.5 font-semibold">
+            <span>Séries Concluídas:</span>
+            <span class="text-slate-400 text-[10px]">Toca após cada série (inicia 60s)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            ${setsHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+
+  // Bind click handlers to set buttons
+  container.querySelectorAll('.gym-set-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const b = e.currentTarget;
+      const exIdx = b.getAttribute('data-ex-idx');
+      const setNum = b.getAttribute('data-set-num');
+      const totalSets = parseInt(b.getAttribute('data-total-sets'), 10) || totalSessionSets;
+      toggleGymSet(workout.date, exIdx, setNum, b, totalSets);
+    });
+  });
+
+  updateSessionProgress(workout.date, totalSessionSets);
+}
+
+function toggleGymSet(workoutDate, exIdx, setNum, btnElement, totalSets) {
+  const setKey = `gym_set_${workoutDate}_${exIdx}_${setNum}`;
+  const currentState = localStorage.getItem(setKey) === '1';
+  const newState = !currentState;
+
+  if (newState) {
+    localStorage.setItem(setKey, '1');
+    btnElement.className = 'gym-set-btn flex-1 py-1.5 px-1 rounded-xl border text-xs flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer bg-emerald-500 text-slate-950 border-emerald-400 font-extrabold shadow-sm shadow-emerald-500/20';
+    btnElement.innerHTML = `<span>✓ S${setNum}</span>`;
+    // Trigger 60s rest timer
+    startGymRestTimer(60);
+  } else {
+    localStorage.removeItem(setKey);
+    btnElement.className = 'gym-set-btn flex-1 py-1.5 px-1 rounded-xl border text-xs flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700 font-bold';
+    btnElement.innerHTML = `<span>S${setNum}</span>`;
+  }
+
+  updateSessionProgress(workoutDate, totalSets);
+}
+
+function updateSessionProgress(workoutDate, totalSets) {
+  const counterEl = document.getElementById('gymSessionSetCounter');
+  if (!counterEl) return;
+
+  let completed = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(`gym_set_${workoutDate}_`)) {
+      if (localStorage.getItem(key) === '1') completed++;
+    }
+  }
+
+  counterEl.textContent = `${completed} / ${totalSets} séries`;
+  if (completed === totalSets && totalSets > 0) {
+    counterEl.className = 'font-mono text-emerald-400 font-bold';
+  } else {
+    counterEl.className = 'font-mono text-amber-400 font-bold';
+  }
+}
+
+
 window.addEventListener('DOMContentLoaded', () => {
   function updateNativeVersionDisplay() {
     const nativeEl = document.getElementById('settingsNativeVersion');
@@ -2333,6 +2858,56 @@ window.addEventListener('DOMContentLoaded', () => {
       loadConfig();
     applyLanguageUI();
     updateCountdownDisplay();
+    // Main View Navigation (Corrida vs Ginásio)
+    document.getElementById('tabBtnRunning')?.addEventListener('click', () => switchMainTab('running'));
+    document.getElementById('tabBtnGym')?.addEventListener('click', () => switchMainTab('gym'));
+
+    // Gym Session navigation
+    document.getElementById('btnGymPrev')?.addEventListener('click', () => {
+      if (currentGymIndex > 0) {
+        currentGymIndex--;
+        const sel = document.getElementById('gymSessionSelect');
+        if (sel) sel.selectedIndex = currentGymIndex;
+        renderGymWorkout(gymSchedule[currentGymIndex]);
+      }
+    });
+    document.getElementById('btnGymNext')?.addEventListener('click', () => {
+      if (currentGymIndex < gymSchedule.length - 1) {
+        currentGymIndex++;
+        const sel = document.getElementById('gymSessionSelect');
+        if (sel) sel.selectedIndex = currentGymIndex;
+        renderGymWorkout(gymSchedule[currentGymIndex]);
+      }
+    });
+    document.getElementById('gymSessionSelect')?.addEventListener('change', (e) => {
+      currentGymIndex = parseInt(e.target.value, 10) || 0;
+      renderGymWorkout(gymSchedule[currentGymIndex]);
+    });
+    document.getElementById('btnGymRefresh')?.addEventListener('click', () => {
+      const curDate = currentGymWorkout ? currentGymWorkout.date : null;
+      loadGymSchedule(curDate, true);
+    });
+
+    // Gym Rest Timer
+    document.getElementById('btnStartRestTimer')?.addEventListener('click', () => startGymRestTimer(60));
+    document.getElementById('btnResetRestTimer')?.addEventListener('click', () => resetGymRestTimer());
+
+    // Visual Infographics Toggle Accordion
+    document.getElementById('btnToggleGymImages')?.addEventListener('click', () => {
+      const c = document.getElementById('gymImagesContainer');
+      const arrow = document.getElementById('gymImagesToggleArrow');
+      if (c) {
+        c.classList.toggle('hidden');
+        if (arrow) {
+          arrow.style.transform = c.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+      }
+    });
+
+    // Restore active main tab (default: running)
+    const savedTab = localStorage.getItem('runner_main_tab') || 'running';
+    switchMainTab(savedTab);
+
     updateNativeVersionDisplay();
     checkInitialAudioOutput();
     document.getElementById('audioStatusBadge')?.addEventListener('click', () => {
@@ -2454,6 +3029,56 @@ window.addEventListener('DOMContentLoaded', () => {
     saveConfig();
     applyLanguageUI();
     updateCountdownDisplay();
+    // Main View Navigation (Corrida vs Ginásio)
+    document.getElementById('tabBtnRunning')?.addEventListener('click', () => switchMainTab('running'));
+    document.getElementById('tabBtnGym')?.addEventListener('click', () => switchMainTab('gym'));
+
+    // Gym Session navigation
+    document.getElementById('btnGymPrev')?.addEventListener('click', () => {
+      if (currentGymIndex > 0) {
+        currentGymIndex--;
+        const sel = document.getElementById('gymSessionSelect');
+        if (sel) sel.selectedIndex = currentGymIndex;
+        renderGymWorkout(gymSchedule[currentGymIndex]);
+      }
+    });
+    document.getElementById('btnGymNext')?.addEventListener('click', () => {
+      if (currentGymIndex < gymSchedule.length - 1) {
+        currentGymIndex++;
+        const sel = document.getElementById('gymSessionSelect');
+        if (sel) sel.selectedIndex = currentGymIndex;
+        renderGymWorkout(gymSchedule[currentGymIndex]);
+      }
+    });
+    document.getElementById('gymSessionSelect')?.addEventListener('change', (e) => {
+      currentGymIndex = parseInt(e.target.value, 10) || 0;
+      renderGymWorkout(gymSchedule[currentGymIndex]);
+    });
+    document.getElementById('btnGymRefresh')?.addEventListener('click', () => {
+      const curDate = currentGymWorkout ? currentGymWorkout.date : null;
+      loadGymSchedule(curDate, true);
+    });
+
+    // Gym Rest Timer
+    document.getElementById('btnStartRestTimer')?.addEventListener('click', () => startGymRestTimer(60));
+    document.getElementById('btnResetRestTimer')?.addEventListener('click', () => resetGymRestTimer());
+
+    // Visual Infographics Toggle Accordion
+    document.getElementById('btnToggleGymImages')?.addEventListener('click', () => {
+      const c = document.getElementById('gymImagesContainer');
+      const arrow = document.getElementById('gymImagesToggleArrow');
+      if (c) {
+        c.classList.toggle('hidden');
+        if (arrow) {
+          arrow.style.transform = c.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+      }
+    });
+
+    // Restore active main tab (default: running)
+    const savedTab = localStorage.getItem('runner_main_tab') || 'running';
+    switchMainTab(savedTab);
+
     settingsModal.classList.add('hidden');
 
     if (isRunning) {
