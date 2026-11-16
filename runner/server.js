@@ -61,11 +61,16 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 14,
-      versionName: '2.3',
-      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=14',
-      releaseNotes: 'Modo de Sessão (Corrida vs Dia a Dia), Arranque Autónomo sem Intervals.icu, Interrupção Imediata de Emergência/Hipo, Deteção de Bólus da Bomba Tandem e Voz Focada na Glicémia.',
+      versionCode: 15,
+      versionName: '2.4',
+      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=15',
+      releaseNotes: 'Treino de Ginásio (100% Máquinas), Sincronização Intervals.icu, Cronómetro 60s, Checklist de Séries e Dicas Posturais.',
       features: [
+        {
+          icon: '🏋️',
+          title: 'Treino de Ginásio (100% Máquinas)',
+          desc: 'Novo separador dedicado aos treinos de ginásio sincronizados com o Intervals.icu, cronómetro de descanso de 60s, checklist de séries e guia postural catita.'
+        },
         {
           icon: '🏃',
           title: 'Seleção de Modo: Corrida vs Dia a Dia',
