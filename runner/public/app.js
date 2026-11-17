@@ -2251,64 +2251,64 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 15,
-  versionName: '2.4',
+  versionCode: 16,
+  versionName: '2.5',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 2.3 • Modo Sessão, Emergência 30s & Bomba Tandem',
+    sub: 'Versão 2.5 • Tablet Adaptativo, Algoritmo Cinemático & Anti-Colisão Huawei',
     btnDismiss: 'Entendido! 🚀',
     features: [
       {
+        icon: '📱',
+        title: 'Layout Adaptativo Tablet & Telemóvel',
+        desc: 'A app adapta-se automaticamente: coluna única compacta em telemóvel e painel de 2 colunas em tablet com Glicémia XXL e cronómetro sempre visível.'
+      },
+      {
+        icon: '🏅',
+        title: 'Algoritmo Cinemático de Previsão',
+        desc: 'Previsão avançada com aceleração d2G/dt2, compensação de atraso do sensor Dexcom G7 em esforço e novo Perfil Meia-Maratona (135-165 mg/dL).'
+      },
+      {
+        icon: '🔇',
+        title: 'Anti-Colisão Inteligente de Áudio',
+        desc: 'A app deteta quando o Huawei Watch ou outra app está a falar e aguarda educadamente que termine antes de anunciar a tua glicémia.'
+      },
+      {
+        icon: '🍬',
+        title: 'Fim do Empilhamento de Hidratos',
+        desc: 'Quando a glicémia estabiliza ou sobe (ex: 85 mg/dL com delta +), a app confirma recuperação e silencia pedidos repetidos de géis.'
+      },
+      {
         icon: '🏋️',
-        title: 'Treino de Ginásio (100% Máquinas)',
-        desc: 'Novo separador dedicado aos treinos de ginásio sincronizados com o Intervals.icu, cronómetro de descanso de 60s, checklist de séries e guia postural catita.'
-      },
-      {
-        icon: '🏃',
-        title: 'Modo Treino vs Dia a Dia',
-        desc: 'Alterna com 1 toque entre Treino (com GPS, ritmo cardíaco e Intervals) e Modo Dia a Dia (apenas glicémia por voz e no ecrã).'
-      },
-      {
-        icon: '🚨',
-        title: 'Aviso Imediato de Emergência (30s)',
-        desc: 'Se a glicémia descer a pique ou entrar em hipo severa, a app avisa de imediato sem esperar pelo temporizador de 2 minutos.'
-      },
-      {
-        icon: '💉',
-        title: 'Deteção de Bólus da Bomba Tandem',
-        desc: 'Novo crachá com o último bólus administrado pela bomba de insulina e anúncio sonoro quando ocorre uma administração recente.'
-      },
-      {
-        icon: '🎙️',
-        title: 'Voz Focada na Glicémia',
-        desc: 'Removido o anúncio de ritmo para manter o anúncio sonoro curto e focado. A glicémia é sempre dita, mesmo em absorção de hidratos.'
+        title: 'Treino de Ginásio & Descanso 60s',
+        desc: '20 semanas sincronizadas com o Intervals.icu, cronómetro de recuperação de 60s, fotos das máquinas e dicas clínicas para bomba Tandem t:slim X2.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 2.3 • Session Mode, 30s Danger Alerts & Tandem Pump',
+    sub: 'Version 2.5 • Adaptive Tablet Layout, Kinematic Algorithm & Watch Ducking',
     btnDismiss: "Got it! 🚀",
     features: [
       {
-        icon: '🏃',
-        title: 'Workout vs Daily Mode',
-        desc: 'Toggle with 1 tap between Workout mode (GPS, HR, Intervals) and Daily mode (voice glucose only, no workout prompts).'
+        icon: '📱',
+        title: 'Adaptive Tablet & Mobile Layout',
+        desc: 'Automatic responsive layout: compact single column on phone, wide 2-column dashboard with XXL glucose display on tablet.'
       },
       {
-        icon: '🚨',
-        title: 'Immediate 30s Danger Alerts',
-        desc: 'Fast checking loop interrupts immediately on rapid drop or severe hypo without waiting for the cycle.'
+        icon: '🏅',
+        title: 'Kinematic Predictive Algorithm',
+        desc: 'Predictive hypo engine using acceleration (d2G/dt2), G7 sensor lag compensation, and Half-Marathon Profile (135-165 mg/dL).'
       },
       {
-        icon: '💉',
-        title: 'Tandem Pump Bolus Detection',
-        desc: 'Detects recent insulin boluses from your pump and announces them.'
+        icon: '🔇',
+        title: 'Huawei Watch Audio Anti-Collision',
+        desc: 'Smart ducking pauses and retries voice cues when the watch or workout app is announcing kilometer splits.'
       },
       {
-        icon: '🎙️',
-        title: 'Glucose-Centric Audio',
-        desc: 'Pace speech removed so glucose is always crisp and prominent, even during carb absorption.'
+        icon: '🍬',
+        title: 'No More Carb Stacking',
+        desc: 'When glucose is rebounding (e.g. 85 mg/dL with positive delta), carb prompts are silenced to avoid post-run spikes.'
       }
     ]
   }

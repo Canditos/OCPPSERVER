@@ -61,11 +61,16 @@ const server = http.createServer((req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 15,
-      versionName: '2.4',
-      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=15',
-      releaseNotes: 'Algoritmo Meia-Maratona: Previsão com Aceleração, Alerta Antecipado 20m, Anti-colisão com Relógio Huawei e Preset Meia-Maratona (135-165).',
+      versionCode: 16,
+      versionName: '2.5',
+      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=16',
+      releaseNotes: 'Layout Adaptativo Tablet/Telemóvel, Algoritmo Cinemático Meia-Maratona, Anti-colisão com Relógio Huawei e Fim do Empilhamento de Géis.',
       features: [
+        {
+          icon: '📱',
+          title: 'Layout Adaptativo Tablet & Telemóvel',
+          desc: 'Adaptação automática para ecrã de telemóvel (1 coluna) ou tablet (dashboard 2 colunas com Glicémia XXL e cronómetro sticky no ginásio).'
+        },
         {
           icon: '🏃',
           title: 'Algoritmo Meia-Maratona com Aceleração',
@@ -85,11 +90,6 @@ const server = http.createServer((req, res) => {
           icon: '🛡️',
           title: 'Prevenção de Empilhamento de Hidratos',
           desc: 'Quando a glicose está a subir (ex: 85 mg/dL com delta positivo), a app confirma a recuperação em vez de pedir mais géis.'
-        },
-        {
-          icon: '💉',
-          title: 'Deteção de Bolus da Bomba Tandem',
-          desc: 'Monitoriza administrações de insulina da bomba nos últimos 20m e avisa por voz e no ecrã com crachá dedicado.'
         }
       ]
     }));
