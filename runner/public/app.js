@@ -1020,11 +1020,117 @@ function showWorkoutSummaryModal() {
     hrBox.classList.add('hidden');
   }
 
+  // Reset 1-Tap Sync button state
+  const syncBtn = document.getElementById('btnSyncIntervalsSummary');
+  const syncIcon = document.getElementById('iconSyncIntervals');
+  const syncLabel = document.getElementById('labelSyncIntervals');
+  const syncFeedback = document.getElementById('syncIntervalsFeedback');
+  const isPt = config.language === 'pt-PT';
+  if (syncBtn) {
+    syncBtn.disabled = false;
+    syncBtn.className = 'w-full py-3 px-3 rounded-2xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 shadow-md shadow-indigo-900/20 cursor-pointer';
+  }
+  if (syncIcon) syncIcon.textContent = '⚡';
+  if (syncLabel) syncLabel.textContent = isPt ? 'Sincronizar c/ Intervals.icu' : 'Sync with Intervals.icu';
+  if (syncFeedback) {
+    syncFeedback.className = 'hidden text-[10px] text-center mt-1 font-medium';
+    syncFeedback.textContent = '';
+  }
+
   modal.classList.remove('hidden');
 }
 
 function closeWorkoutSummaryModal() {
   document.getElementById('workoutSummaryModal')?.classList.add('hidden');
+}
+
+// 1-Tap Intervals.icu Workout Summary Sync
+async function syncWorkoutToIntervals() {
+  const syncBtn = document.getElementById('btnSyncIntervalsSummary');
+  const syncFeedback = document.getElementById('syncIntervalsFeedback');
+  const syncIcon = document.getElementById('iconSyncIntervals');
+  const syncLabel = document.getElementById('labelSyncIntervals');
+  const isPt = config.language === 'pt-PT';
+
+  if (!syncBtn) return;
+  syncBtn.disabled = true;
+  if (syncIcon) syncIcon.textContent = '🔄';
+  if (syncLabel) syncLabel.textContent = isPt ? 'A sincronizar c/ Intervals.icu...' : 'Syncing with Intervals.icu...';
+  if (syncFeedback) {
+    syncFeedback.classList.remove('hidden');
+    syncFeedback.className = 'text-[10px] text-center mt-1 text-sky-400 font-medium animate-pulse';
+    syncFeedback.textContent = isPt ? 'A contactar servidor e Intervals.icu...' : 'Contacting server and Intervals.icu...';
+  }
+
+  try {
+    const durationSec = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+    let avgGlucose = null;
+    let minGlucose = null;
+    let maxGlucose = null;
+    let tirPercent = 100;
+
+    if (sessionReadings.length > 0) {
+      minGlucose = Math.min(...sessionReadings);
+      maxGlucose = Math.max(...sessionReadings);
+      avgGlucose = Math.round(sessionReadings.reduce((a, b) => a + b, 0) / sessionReadings.length);
+      const inRange = sessionReadings.filter(s => s >= (config.targetMin || 110) && s <= (config.targetMax || 170)).length;
+      tirPercent = Math.round((inRange / sessionReadings.length) * 100);
+    }
+
+    let hrAvg = null;
+    let hrMax = null;
+    if (sessionHeartRates.length > 0) {
+      const validHrs = sessionHeartRates.filter(h => h > 30 && h < 250);
+      if (validHrs.length > 0) {
+        hrAvg = Math.round(validHrs.reduce((a, b) => a + b, 0) / validHrs.length);
+        hrMax = Math.max(...validHrs);
+      }
+    }
+
+    const payload = {
+      workoutDate: new Date().toISOString().split('T')[0],
+      durationSeconds: durationSec,
+      avgGlucose,
+      minGlucose,
+      maxGlucose,
+      tirPercent,
+      carbsGrams: sessionCarbsTotal,
+      hrAvg,
+      hrMax,
+      notes: sessionCarbsEntries.length > 0
+        ? `Consumos: ${sessionCarbsEntries.map(c => `${c.grams}g (${c.source || 'gel'})`).join(', ')}`
+        : 'Sem hidratos consumidos'
+    };
+
+    const res = await fetch(`${API_BASE}/api/intervals/sync-workout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (syncIcon) syncIcon.textContent = '✓';
+      if (syncLabel) syncLabel.textContent = isPt ? 'Sincronizado c/ Sucesso!' : 'Successfully Synced!';
+      syncBtn.className = 'w-full py-3 px-3 rounded-2xl bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 transition shadow-md shadow-emerald-900/20';
+      if (syncFeedback) {
+        syncFeedback.className = 'text-[10px] text-center mt-1 text-emerald-400 font-bold';
+        syncFeedback.textContent = data.message || (isPt ? 'Treino atualizado no Intervals.icu' : 'Workout updated in Intervals.icu');
+      }
+    } else {
+      throw new Error(data.error || 'Erro desconhecido');
+    }
+  } catch (err) {
+    console.error('Error syncing to Intervals.icu:', err);
+    syncBtn.disabled = false;
+    if (syncIcon) syncIcon.textContent = '⚠️';
+    if (syncLabel) syncLabel.textContent = isPt ? 'Falha na Sincronização (Tentar Novamente)' : 'Sync Failed (Retry)';
+    syncBtn.className = 'w-full py-3 px-3 rounded-2xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/50 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer';
+    if (syncFeedback) {
+      syncFeedback.className = 'text-[10px] text-center mt-1 text-rose-400 font-semibold';
+      syncFeedback.textContent = isPt ? `Erro: ${err.message}` : `Error: ${err.message}`;
+    }
+  }
 }
 
 function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
@@ -1824,12 +1930,12 @@ function updateMediaSession(sgv, direction, carbAdvice) {
   });
 }
 
-// Fetch Nightscout Readings
+// Fetch Nightscout Readings (12 entries = 1 hour history for Sparkline)
 async function fetchNightscoutEntries() {
   const endpointsToTry = [
     `${API_BASE}/api/entries`,
-    `${config.nsUrl.replace(/\/+$/, '')}/api/v1/entries.json?count=5`,
-    `https://corsproxy.io/?${encodeURIComponent(config.nsUrl.replace(/\/+$/, '') + '/api/v1/entries.json?count=5')}`
+    `${config.nsUrl.replace(/\/+$/, '')}/api/v1/entries.json?count=12`,
+    `https://corsproxy.io/?${encodeURIComponent(config.nsUrl.replace(/\/+$/, '') + '/api/v1/entries.json?count=12')}`
   ];
 
   let lastError = null;
@@ -1864,6 +1970,90 @@ function timeAgo(date) {
   if (minutes < 60) return `há ${minutes} min`;
   return `há ${Math.floor(minutes / 60)}h`;
 }
+
+// ── Real-time SVG Sparkline Micro-Chart ─────────────────────────────────────
+function renderGlucoseSparkline(entries) {
+  const svg = document.getElementById('glucoseSparklineSvg');
+  if (!svg || !Array.isArray(entries) || entries.length === 0) return;
+
+  // Take up to 12 readings (last ~60 min) and arrange chronologically (oldest -> newest)
+  const pts = entries.slice(0, 12).reverse().filter(e => e && typeof e.sgv === 'number');
+  if (pts.length < 2) return;
+
+  const minTarget = config.targetMin || 110;
+  const maxTarget = config.targetMax || 170;
+
+  const sgvs = pts.map(p => p.sgv);
+  const minVal = Math.min(...sgvs, minTarget - 15, 70);
+  const maxVal = Math.max(...sgvs, maxTarget + 15, 200);
+  const range = maxVal - minVal || 1;
+
+  // ViewBox: 300 x 48 (Y: 6 to 42 leaves 6px margins)
+  const getY = (val) => Math.round(42 - ((val - minVal) / range) * 36);
+  const getX = (idx) => Math.round((idx / (pts.length - 1)) * 300);
+
+  const coords = pts.map((p, idx) => ({ x: getX(idx), y: getY(p.sgv), sgv: p.sgv }));
+
+  // Update Target Corridor dashed lines
+  const lineMax = document.getElementById('sparklineTargetMax');
+  const lineMin = document.getElementById('sparklineTargetMin');
+  if (lineMax) {
+    const yMax = getY(maxTarget);
+    lineMax.setAttribute('y1', yMax);
+    lineMax.setAttribute('y2', yMax);
+  }
+  if (lineMin) {
+    const yMin = getY(minTarget);
+    lineMin.setAttribute('y1', yMin);
+    lineMin.setAttribute('y2', yMin);
+  }
+
+  // Build SVG Path
+  const pathD = coords.reduce((acc, pt, i) => {
+    return i === 0 ? `M ${pt.x},${pt.y}` : `${acc} L ${pt.x},${pt.y}`;
+  }, '');
+
+  const pathEl = document.getElementById('sparklinePath');
+  if (pathEl) pathEl.setAttribute('d', pathD);
+
+  // Build Area Polygon
+  const areaEl = document.getElementById('sparklineArea');
+  if (areaEl) {
+    const polyPoints = `0,48 ${coords.map(c => `${c.x},${c.y}`).join(' ')} 300,48`;
+    areaEl.setAttribute('points', polyPoints);
+  }
+
+  // Dynamic Theme according to latest reading
+  const latest = coords[coords.length - 1];
+  let themeColor = '#38bdf8'; // sky
+  let gradUrl = 'url(#sparklineGradNormal)';
+
+  if (latest.sgv < minTarget) {
+    themeColor = '#f43f5e'; // rose (hypo danger)
+    gradUrl = 'url(#sparklineGradLow)';
+  } else if (latest.sgv > maxTarget) {
+    themeColor = '#fbbf24'; // amber (hyper)
+    gradUrl = 'url(#sparklineGradHigh)';
+  }
+
+  if (pathEl) pathEl.setAttribute('stroke', themeColor);
+  if (areaEl) areaEl.setAttribute('fill', gradUrl);
+
+  // Position and color latest active pulsing dot
+  const dotEl = document.getElementById('sparklineCurrentDot');
+  if (dotEl) {
+    dotEl.setAttribute('cx', latest.x);
+    dotEl.setAttribute('cy', latest.y);
+    dotEl.setAttribute('fill', themeColor);
+  }
+
+  // Update target label
+  const labelEl = document.getElementById('sparklineTargetLabel');
+  if (labelEl) {
+    labelEl.textContent = `Alvo ${minTarget}-${maxTarget}`;
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 // Polling & Announcement Routine
 async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = false) {
@@ -1915,6 +2105,7 @@ async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = 
     const advice = evaluateCarbAdvice(sgv, direction, delta, acceleration);
 
     updateUIWithReading(current, previous, delta, advice);
+    renderGlucoseSparkline(entries);
     updateMediaSession(sgv, direction, advice);
 
     if ((isRunning || isManualTrigger) && !skipSpeech) {
@@ -2251,64 +2442,64 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 16,
-  versionName: '2.5',
+  versionCode: 17,
+  versionName: '2.6',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 2.5 • Tablet Adaptativo, Algoritmo Cinemático & Anti-Colisão Huawei',
+    sub: 'Versão 2.6 • Blindagem Cibersegurança, Sparkline SVG & Seletor de Géis',
     btnDismiss: 'Entendido! 🚀',
     features: [
       {
-        icon: '📱',
-        title: 'Layout Adaptativo Tablet & Telemóvel',
-        desc: 'A app adapta-se automaticamente: coluna única compacta em telemóvel e painel de 2 colunas em tablet com Glicémia XXL e cronómetro sempre visível.'
+        icon: '🛡️',
+        title: 'Blindagem de Cibersegurança Avançada',
+        desc: 'Proteção total contra SSRF e DNS Rebinding nos proxies internos, Rate Limiting dinâmico por IP anti-DoS, sanitização de TTS e cabeçalhos CSP/HSTS.'
       },
       {
-        icon: '🏅',
-        title: 'Algoritmo Cinemático de Previsão',
-        desc: 'Previsão avançada com aceleração d2G/dt2, compensação de atraso do sensor Dexcom G7 em esforço e novo Perfil Meia-Maratona (135-165 mg/dL).'
-      },
-      {
-        icon: '🔇',
-        title: 'Anti-Colisão Inteligente de Áudio',
-        desc: 'A app deteta quando o Huawei Watch ou outra app está a falar e aguarda educadamente que termine antes de anunciar a tua glicémia.'
+        icon: '📈',
+        title: 'Sparkline SVG de Glicémia em Tempo Real',
+        desc: 'Micro-gráfico neon embutido diretamente no Card de Glicémia: curva da última hora (12 leituras), corredor alvo e ponto pulsante dinâmico.'
       },
       {
         icon: '🍬',
-        title: 'Fim do Empilhamento de Hidratos',
-        desc: 'Quando a glicémia estabiliza ou sobe (ex: 85 mg/dL com delta +), a app confirma recuperação e silencia pedidos repetidos de géis.'
+        title: 'Seletor de Géis & Dextrose Calibrado',
+        desc: 'Novo menu de 1-toque com os teus produtos reais: Glucody SOS (12g rápida), 4Energy Gel (20g líquida) e 4Endurance 2:1 (30g lenta), além de stepper manual.'
       },
       {
-        icon: '🏋️',
-        title: 'Treino de Ginásio & Descanso 60s',
-        desc: '20 semanas sincronizadas com o Intervals.icu, cronómetro de recuperação de 60s, fotos das máquinas e dicas clínicas para bomba Tandem t:slim X2.'
+        icon: '⚡',
+        title: 'Sincronização 1-Tap c/ Intervals.icu',
+        desc: 'Botão dedicado no resumo de treino que envia glicémia média, TIR, hidratos consumidos e frequência cardíaca diretamente para o treino do dia no Intervals.icu.'
+      },
+      {
+        icon: '📱',
+        title: 'Layout Adaptativo Tablet & Telemóvel',
+        desc: 'Visual responsivo OLED de alto contraste que se ajusta em telemóvel e tablet com cronómetro sticky no ginásio.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 2.5 • Adaptive Tablet Layout, Kinematic Algorithm & Watch Ducking',
+    sub: 'Version 2.6 • Cybersecurity Shield, Live Sparkline & Custom Gels',
     btnDismiss: "Got it! 🚀",
     features: [
       {
-        icon: '📱',
-        title: 'Adaptive Tablet & Mobile Layout',
-        desc: 'Automatic responsive layout: compact single column on phone, wide 2-column dashboard with XXL glucose display on tablet.'
+        icon: '🛡️',
+        title: 'Cybersecurity Shield & DoS Defense',
+        desc: 'Full SSRF and DNS Rebinding protection, IP rate limiting, TTS input sanitization, and strict CSP/HSTS security headers.'
       },
       {
-        icon: '🏅',
-        title: 'Kinematic Predictive Algorithm',
-        desc: 'Predictive hypo engine using acceleration (d2G/dt2), G7 sensor lag compensation, and Half-Marathon Profile (135-165 mg/dL).'
-      },
-      {
-        icon: '🔇',
-        title: 'Huawei Watch Audio Anti-Collision',
-        desc: 'Smart ducking pauses and retries voice cues when the watch or workout app is announcing kilometer splits.'
+        icon: '📈',
+        title: 'Real-time SVG Glucose Sparkline',
+        desc: 'Neon micro-chart inside the main glucose card showing the last 1-hour trend, target corridor, and live pulsing dot.'
       },
       {
         icon: '🍬',
-        title: 'No More Carb Stacking',
-        desc: 'When glucose is rebounding (e.g. 85 mg/dL with positive delta), carb prompts are silenced to avoid post-run spikes.'
+        title: 'Calibrated Gel & Fast Dextrose Selector',
+        desc: '1-tap quick buttons for Glucody SOS (12g fast dextrose), 4Energy Liquid Gel (20g), and 4Endurance 2:1 (30g), plus numeric stepper.'
+      },
+      {
+        icon: '⚡',
+        title: '1-Tap Sync with Intervals.icu',
+        desc: 'Sync workout glucose stats, time in range (TIR), carbs consumed, and heart rate directly to your Intervals.icu workout.'
       }
     ]
   }
@@ -3179,18 +3370,44 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnCancelVoice')?.addEventListener('click', stopVoiceListening);
     document.getElementById('btnCustomCarb')?.addEventListener('click', openCustomCarbModal);
     document.getElementById('btnCancelCustomCarb')?.addEventListener('click', closeCustomCarbModal);
+    document.getElementById('btnCloseCustomCarbTop')?.addEventListener('click', closeCustomCarbModal);
 
     document.querySelectorAll('.carb-choice').forEach(b => {
       b.addEventListener('click', (e) => {
         const grams = parseInt(e.currentTarget.getAttribute('data-grams'), 10) || 20;
-        recordCarbsIntake(grams, 'custom_picker');
+        const source = e.currentTarget.getAttribute('data-source') || 'custom_picker';
+        recordCarbsIntake(grams, source);
         closeCustomCarbModal();
       });
+    });
+
+    document.getElementById('btnCarbMinus')?.addEventListener('click', () => {
+      const input = document.getElementById('inputCustomCarbs');
+      if (input) {
+        let v = parseInt(input.value, 10) || 20;
+        input.value = Math.max(1, v - 5);
+      }
+    });
+
+    document.getElementById('btnCarbPlus')?.addEventListener('click', () => {
+      const input = document.getElementById('inputCustomCarbs');
+      if (input) {
+        let v = parseInt(input.value, 10) || 20;
+        input.value = Math.min(120, v + 5);
+      }
+    });
+
+    document.getElementById('btnCarbConfirmCustom')?.addEventListener('click', () => {
+      const input = document.getElementById('inputCustomCarbs');
+      const g = input ? (parseInt(input.value, 10) || 20) : 20;
+      recordCarbsIntake(g, 'stepper_custom');
+      closeCustomCarbModal();
     });
 
     // Workout Summary modal
     document.getElementById('btnCloseSummary')?.addEventListener('click', closeWorkoutSummaryModal);
     document.getElementById('btnDismissSummary')?.addEventListener('click', closeWorkoutSummaryModal);
+    document.getElementById('btnSyncIntervalsSummary')?.addEventListener('click', syncWorkoutToIntervals);
 
     // Sync settings voice checkboxes
     const vOpts = config.voiceOptions || {};
