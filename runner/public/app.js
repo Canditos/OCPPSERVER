@@ -81,6 +81,35 @@ let currentAudioPlayer = null;
 let lastAnnouncementTimestamp = Date.now();
 let lastHeartbeatProcessTime = 0;
 
+// ── Glucose History for Acceleration (2nd derivative) ─────────────────────
+// Stores the last 3 SGV readings to compute velocity + acceleration
+let glucoseHistory = []; // array of {sgv, timestamp}
+
+function updateGlucoseHistory(sgv, timestamp) {
+  glucoseHistory.push({ sgv, timestamp: timestamp || Date.now() });
+  if (glucoseHistory.length > 3) glucoseHistory.shift(); // keep only last 3
+}
+
+// Returns acceleration (mg/dL per 5-min period change) = Δvelocity
+// Positive: drop decelerating (safe). Negative: drop accelerating (dangerous!)
+function computeAcceleration() {
+  if (glucoseHistory.length < 3) return 0;
+  const [g3, g2, g1] = glucoseHistory.map(h => h.sgv);
+  const v2 = g2 - g3; // older velocity
+  const v1 = g1 - g2; // current velocity
+  return v1 - v2;     // acceleration (Δv in one 5-min step)
+}
+
+// Predict glucose at t minutes ahead using kinematic model: G + v*t + 0.5*a*t²
+function predictGlucose(sgv, delta, acceleration, minutesAhead) {
+  if (delta === null) return sgv;
+  const v = delta / 5.0;        // mg/dL per minute (velocity)
+  const a = acceleration / 5.0; // mg/dL per minute² (acceleration)
+  const t = minutesAhead;
+  return Math.round(sgv + (v * t) + (0.5 * a * t * t));
+}
+// ──────────────────────────────────────────────────────────────────────────
+
 // Native Android Foreground Service integration (Capacitor & Android JavascriptInterface)
 function triggerNativeForegroundStart() {
   const tellHr = (config.voiceOptions && config.voiceOptions.heartRate !== false);
@@ -888,7 +917,10 @@ function closeCustomCarbModal() {
 // Workout Profiles
 function setWorkoutProfile(profileKey) {
   config.workoutProfile = profileKey;
-  if (profileKey === 'zone2') {
+  if (profileKey === 'half' || profileKey === 'halfmarathon') {
+    config.targetMin = 135;
+    config.targetMax = 165;
+  } else if (profileKey === 'zone2') {
     config.targetMin = 130;
     config.targetMax = 170;
   } else if (profileKey === 'hiit') {
@@ -914,16 +946,17 @@ function setWorkoutProfile(profileKey) {
 }
 
 function updateProfileButtonsUI() {
-  const p = config.workoutProfile || 'zone2';
+  const p = config.workoutProfile || 'half';
   const setBtn = (id, active) => {
     const el = document.getElementById(id);
     if (!el) return;
     if (active) {
-      el.className = 'profile-btn flex-1 py-1 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer';
+      el.className = 'profile-btn flex-1 py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer';
     } else {
-      el.className = 'profile-btn flex-1 py-1 px-1.5 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer';
+      el.className = 'profile-btn flex-1 py-1 px-1 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer';
     }
   };
+  setBtn('profHalf', p === 'half' || p === 'halfmarathon');
   setBtn('profZone2', p === 'zone2');
   setBtn('profHIIT', p === 'hiit');
   setBtn('profWalk', p === 'walk');
@@ -994,7 +1027,7 @@ function closeWorkoutSummaryModal() {
   document.getElementById('workoutSummaryModal')?.classList.add('hidden');
 }
 
-function evaluateCarbAdvice(sgv, direction, delta) {
+function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
   const lang = config.language || 'pt-PT';
   const isPt = lang === 'pt-PT';
   const dirKey = direction || 'Flat';
@@ -1007,6 +1040,20 @@ function evaluateCarbAdvice(sgv, direction, delta) {
   const isRisingFast = dirKey === 'SingleUp' || dirKey === 'DoubleUp' || (delta !== null && delta >= 5);
   const isRisingSlow = dirKey === 'FortyFiveUp' || (delta !== null && delta >= 2 && delta < 5);
   const isRising = isRisingFast || isRisingSlow || (delta !== null && delta > 0);
+
+  // Kinematic projection using velocity + acceleration (2nd derivative)
+  const accel = (typeof accelParam === 'number') ? accelParam : computeAcceleration();
+  const dampedAccel = Math.max(-8, Math.min(8, accel));
+  const k15 = 3;
+  const k25 = 5;
+  const proj15 = (delta !== null)
+    ? Math.round(sgv + (delta * k15) + (0.5 * dampedAccel * 4.5))
+    : sgv;
+  const proj25 = (delta !== null)
+    ? Math.round(sgv + (delta * k25) + (0.5 * dampedAccel * 7.5))
+    : sgv;
+
+  const isRunningSession = (currentSessionMode === 'running');
 
   // 1. Carb Absorption Window (15 minutes silence for carb alarms!)
   if (lastCarbIntake && (Date.now() - lastCarbIntake.timestamp) < 15 * 60 * 1000) {
@@ -1062,11 +1109,13 @@ function evaluateCarbAdvice(sgv, direction, delta) {
     }
   }
 
-  // 2. Predictive Hypoglycemia Alert (Projected <= 70 within 15 min) - only when falling!
-  if (delta !== null && delta <= -5 && sgv <= 140 && !isRising) {
-    const dropPerMin = Math.abs(delta) / 5.0;
-    const minutesTo70 = Math.round((sgv - 70) / dropPerMin);
-    if (minutesTo70 > 0 && minutesTo70 <= 15) {
+  // 2. Predictive Hypoglycemia Alert (Two-Stage Engine)
+  if (!isRising && delta !== null) {
+    // Stage 2: Urgent Crash (Projected <= 70 within ~15m)
+    const isUrgentCrash = (proj15 <= 70 && delta <= -4) || (delta <= -5 && sgv <= 140 && ((sgv - 70) / (Math.abs(delta) / 5.0) <= 15));
+    if (isUrgentCrash) {
+      const dropPerMin = Math.max(0.5, Math.abs(delta) / 5.0);
+      const minutesTo70 = Math.max(1, Math.round((sgv - 70) / dropPerMin));
       if (isPt) {
         return {
           status: 'predictive_hypo',
@@ -1088,6 +1137,33 @@ function evaluateCarbAdvice(sgv, direction, delta) {
           title: 'Predictive Alert: Hypo Risk Ahead',
           adviceText: `Fast drop of ${Math.abs(delta)} mg/dL in 5m. Projected to hit 70 mg/dL in about ${minutesTo70} minutes. Anticipate sensor lag!`,
           spokenText: `Urgent warning! Blood glucose ${sgv}, rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take 20 grams of gel now!`
+        };
+      }
+    }
+
+    // Stage 1: Half-Marathon Proactive Early Warning (Projected <= 85 within ~20-25m)
+    if (isRunningSession && proj25 <= 85 && isDropping && sgv <= 150) {
+      if (isPt) {
+        return {
+          status: 'warning',
+          badge: '⚠️ QUEBRA EM ~20 MIN',
+          badgeColor: 'bg-amber-600 text-white animate-pulse',
+          cardBorder: 'border-amber-500 shadow-amber-900/40',
+          carbs: '15g a 20g Gel Antecipado',
+          title: 'Alerta Antecipado: Projeção de Quebra',
+          adviceText: `Glicémia a ${sgv} com tendência de queda. Projeção cinemática indica descida aos ~${proj25} mg/dL em 20-25m. Toma um gel antes da digestão atrasar!`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma quinze a vinte gramas de hidratos já!`
+        };
+      } else {
+        return {
+          status: 'warning',
+          badge: '⚠️ DROP IN ~20 MIN',
+          badgeColor: 'bg-amber-600 text-white animate-pulse',
+          cardBorder: 'border-amber-500 shadow-amber-900/40',
+          carbs: '15g-20g Proactive Gel',
+          title: 'Proactive Alert: Projected Drop',
+          adviceText: `Glucose at ${sgv} dropping. Kinematic projection forecasts ~${proj25} mg/dL in 20-25m. Take gel early!`,
+          spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Proactive alert: projection indicates low in twenty minutes. Take 15 to 20 grams of gel now!`
         };
       }
     }
@@ -1227,7 +1303,7 @@ function evaluateCarbAdvice(sgv, direction, delta) {
       }
     }
 
-    if (sgv < 90) {
+    if (sgv < 92) {
       if (isPt) {
         return {
           status: 'warning',
@@ -1642,6 +1718,7 @@ function applyLanguageUI() {
   const isPt = lang === 'pt-PT';
   setT('labelQuickGel', isPt ? 'Tomei Gel (20g)' : 'Took Gel (20g)');
   setT('labelMicBtn', isPt ? 'Voz' : 'Voice');
+  setT('labelProfHalf', isPt ? 'Meia-Maratona' : 'Half Marathon');
   setT('labelProfZone2', isPt ? 'Longo (130-170)' : 'Long Run (130-170)');
   setT('labelProfHIIT', isPt ? 'Séries (110-150)' : 'Intervals (110-150)');
   setT('labelProfWalk', isPt ? 'Caminhada (90-140)' : 'Walk (90-140)');
@@ -1799,6 +1876,7 @@ async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = 
 
     const current = entries[0];
     const previous = entries[1] || null;
+    const previous2 = entries[2] || null;
 
     lastEntry = current;
     prevEntry = previous;
@@ -1811,7 +1889,30 @@ async function performPollAndAnnouncement(isManualTrigger = false, skipSpeech = 
       delta = sgv - previous.sgv;
     }
 
-    const advice = evaluateCarbAdvice(sgv, direction, delta);
+    let deltaPrev = null;
+    if (previous && previous.sgv && previous2 && previous2.sgv) {
+      deltaPrev = previous.sgv - previous2.sgv;
+    }
+
+    let acceleration = 0;
+    if (delta !== null && deltaPrev !== null) {
+      acceleration = delta - deltaPrev;
+    }
+
+    if (entries && entries.length >= 3) {
+      glucoseHistory = [
+        { sgv: entries[2].sgv, timestamp: entries[2].date },
+        { sgv: entries[1].sgv, timestamp: entries[1].date },
+        { sgv: entries[0].sgv, timestamp: entries[0].date }
+      ];
+    } else if (entries && entries.length >= 2) {
+      glucoseHistory = [
+        { sgv: entries[1].sgv, timestamp: entries[1].date },
+        { sgv: entries[0].sgv, timestamp: entries[0].date }
+      ];
+    }
+
+    const advice = evaluateCarbAdvice(sgv, direction, delta, acceleration);
 
     updateUIWithReading(current, previous, delta, advice);
     updateMediaSession(sgv, direction, advice);
@@ -3059,6 +3160,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
     // Profile buttons
+    document.getElementById('profHalf')?.addEventListener('click', () => setWorkoutProfile('half'));
     document.getElementById('profZone2')?.addEventListener('click', () => setWorkoutProfile('zone2'));
     document.getElementById('profHIIT')?.addEventListener('click', () => setWorkoutProfile('hiit'));
     document.getElementById('profWalk')?.addEventListener('click', () => setWorkoutProfile('walk'));

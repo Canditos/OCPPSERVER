@@ -112,14 +112,17 @@
 
     <!-- Quick Workout Profile Selector -->
     <div class="flex items-center justify-between gap-1 bg-slate-900/70 p-1 rounded-xl border border-slate-800/80 text-xs shrink-0">
-      <button id="profZone2" type="button" class="profile-btn flex-1 py-1 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer">
-        <span>🏃‍♂️</span><span id="labelProfZone2">Longo (130-170)</span>
+      <button id="profHalf" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer" title="Alvo Meia-Maratona: 135-165 mg/dL (Consenso ADA/EASD)">
+        <span>🏅</span><span id="labelProfHalf">Meia-Maratona</span>
       </button>
-      <button id="profHIIT" type="button" class="profile-btn flex-1 py-1 px-1.5 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer">
-        <span>⚡</span><span id="labelProfHIIT">Séries (110-150)</span>
+      <button id="profZone2" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Treino Longo / Zona 2: 130-170 mg/dL">
+        <span>🏃‍♂️</span><span id="labelProfZone2">Longo</span>
       </button>
-      <button id="profWalk" type="button" class="profile-btn flex-1 py-1 px-1.5 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer">
-        <span>🚶</span><span id="labelProfWalk">Caminhada (90-140)</span>
+      <button id="profHIIT" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Treino Rápido / Séries: 110-150 mg/dL">
+        <span>⚡</span><span id="labelProfHIIT">Séries</span>
+      </button>
+      <button id="profWalk" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Caminhada: 90-140 mg/dL">
+        <span>🚶</span><span id="labelProfWalk">Caminhada</span>
       </button>
     </div>
 
@@ -758,6 +761,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=37"></script>
+  <script src="/app.js?v=38"></script>
 </body>
 </html>

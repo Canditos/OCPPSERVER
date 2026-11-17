@@ -379,11 +379,24 @@ public class RunnerService extends Service {
                 delta = sgv - lastSgv;
             }
 
+            Integer deltaPrev = null;
+            if (arr.length() > 2) {
+                JSONObject prev1 = arr.getJSONObject(1);
+                JSONObject prev2 = arr.getJSONObject(2);
+                if (prev1.has("sgv") && prev2.has("sgv")) {
+                    deltaPrev = prev1.getInt("sgv") - prev2.getInt("sgv");
+                }
+            }
+            int acceleration = 0;
+            if (delta != null && deltaPrev != null) {
+                acceleration = delta - deltaPrev;
+            }
+
             lastSgv = sgv;
             lastProcessedDate = dateString;
 
-            // 1. Evaluate carb advice (Dexcom G7 lag-compensated + 15m absorption window)
-            CarbAdvice advice = evaluateAdvice(sgv, direction, delta, language, targetMin, targetMax);
+            // 1. Evaluate carb advice (Dexcom G7 lag-compensated + kinematic prediction)
+            CarbAdvice advice = evaluateAdvice(sgv, direction, delta, acceleration, language, targetMin, targetMax);
 
             // 2. Fetch latest Tandem Pump Bolus from Nightscout
             String pumpSpeech = "";
@@ -650,7 +663,7 @@ public class RunnerService extends Service {
         boolean isDropping;
     }
 
-    private CarbAdvice evaluateAdvice(int sgv, String direction, Integer delta, String lang, int tMin, int tMax) {
+    private CarbAdvice evaluateAdvice(int sgv, String direction, Integer delta, int acceleration, String lang, int tMin, int tMax) {
         CarbAdvice a = new CarbAdvice();
         boolean isEn = lang.equals("en");
 
@@ -700,6 +713,18 @@ public class RunnerService extends Service {
         a.isRising = isRising;
         a.isDropping = isDropping;
 
+        // Kinematic projection using velocity + acceleration (2nd derivative)
+        // Damped acceleration prevents quadratic swings on noisy sensor data
+        int dampedAccel = Math.max(-8, Math.min(8, acceleration));
+        int proj15 = sgv;
+        int proj25 = sgv;
+        if (delta != null) {
+            proj15 = sgv + (delta * 3) + Math.round(0.5f * dampedAccel * 4.5f);
+            proj25 = sgv + (delta * 5) + Math.round(0.5f * dampedAccel * 7.5f);
+        }
+
+        boolean isRunningSession = "running".equalsIgnoreCase(sessionMode);
+
         // 1. Carb Absorption Window (Silence repeat carb alarms for 15 minutes!)
         long now = System.currentTimeMillis();
         if (lastCarbTimestamp > 0 && (now - lastCarbTimestamp < 15 * 60 * 1000)) {
@@ -724,16 +749,29 @@ public class RunnerService extends Service {
             return a;
         }
 
-        // 2. Predictive Hypoglycemia Alert (Projected <= 70 within 15m) - only when falling!
-        if (delta != null && delta <= -5 && sgv <= 140 && !isRising) {
-            float dropPerMin = Math.abs(delta) / 5.0f;
-            int minutesTo70 = Math.round((sgv - 70) / dropPerMin);
-            if (minutesTo70 > 0 && minutesTo70 <= 15) {
+        // 2. Predictive Hypoglycemia Alert (Two-Stage Engine)
+        if (!isRising && delta != null) {
+            // Stage 2: Urgent Crash (Projected <= 70 within ~15m)
+            boolean isUrgentCrash = (proj15 <= 70 && delta <= -4) || (delta <= -5 && sgv <= 140 && ((sgv - 70) / (Math.abs(delta) / 5.0f) <= 15));
+            if (isUrgentCrash) {
+                float dropPerMin = Math.max(0.5f, Math.abs(delta) / 5.0f);
+                int minutesTo70 = Math.max(1, Math.round((sgv - 70) / dropPerMin));
                 a.title = isEn ? "Predictive Alert: Hypo in ~" + minutesTo70 + "m" : "Alerta Preditivo: Hipo em ~" + minutesTo70 + "m";
                 a.dose = isEn ? "20g FAST GEL NOW" : "20g GEL RÁPIDO AGORA";
                 a.spokenText = isEn
                         ? "Urgent warning! Blood glucose " + sgv + ", rapid drop. Risk of hypoglycemia in " + minutesTo70 + " minutes. Take 20 grams of gel now!"
                         : "Atenção urgente! Glicémia nos " + sgv + ", queda rápida. Risco de hipoglicémia dentro de " + minutesTo70 + " minutos. Antecipa o sensor: toma um gel de vinte gramas já!";
+                return a;
+            }
+
+            // Stage 1: Half-Marathon Proactive Early Warning (Projected <= 85 within ~20-25m)
+            if (isRunningSession && proj25 <= 85 && isDropping && sgv <= 150) {
+                a.title = isEn ? "Proactive Warning: Drop in ~20m" : "Alerta Antecipado: Quebra em ~20m";
+                a.dose = isEn ? "15-20g PROACTIVE GEL" : "15 a 20g GEL ANTECIPADO";
+                a.symbol = "⚠️";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Proactive alert: projection indicates drop in twenty minutes. Take 15 to 20 grams of gel now!"
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma quinze a vinte gramas de hidratos já!";
                 return a;
             }
         }
@@ -782,12 +820,12 @@ public class RunnerService extends Service {
                 a.spokenText = isEn
                         ? "Blood glucose " + sgv + ", " + trendSpoken + ". Take 15 to 20 grams of carbs to stabilize."
                         : "Glicémia nos " + sgv + ", " + trendSpoken + ". Toma quinze a vinte gramas de hidratos para estabilizar o nível.";
-            } else if (sgv < 90) {
+            } else if (sgv < 92) {
                 a.title = isEn ? "Lower Limit: Preventive 10g" : "Limiar Baixo: 10g Preventivas";
                 a.dose = isEn ? "10-15g CHEWS/SIP" : "10 a 15g GOMAS/BEBIDA";
                 a.symbol = "⚠️";
                 a.spokenText = isEn
-                        ? "Blood glucose " + sgv + ", steady. Low boundary, take 10 to 15 grams preventive carbs."
+                        ? "Blood glucose " + sgv + ", steady at lower limit. Take 10 to 15 grams preventive carbs."
                         : "Glicémia nos " + sgv + ", estável no limiar baixo. Toma dez a quinze gramas de hidratos preventivos para manter a corrida segura.";
             } else {
                 a.title = isEn ? "Steady in Target Zone" : "Estável no Alvo";

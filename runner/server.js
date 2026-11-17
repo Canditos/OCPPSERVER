@@ -64,32 +64,32 @@ const server = http.createServer((req, res) => {
       versionCode: 15,
       versionName: '2.4',
       apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=15',
-      releaseNotes: 'Treino de Ginásio (100% Máquinas), Sincronização Intervals.icu, Cronómetro 60s, Checklist de Séries e Dicas Posturais.',
+      releaseNotes: 'Algoritmo Meia-Maratona: Previsão com Aceleração, Alerta Antecipado 20m, Anti-colisão com Relógio Huawei e Preset Meia-Maratona (135-165).',
       features: [
         {
-          icon: '🏋️',
-          title: 'Treino de Ginásio (100% Máquinas)',
-          desc: 'Novo separador dedicado aos treinos de ginásio sincronizados com o Intervals.icu, cronómetro de descanso de 60s, checklist de séries e guia postural catita.'
-        },
-        {
           icon: '🏃',
-          title: 'Seleção de Modo: Corrida vs Dia a Dia',
-          desc: 'Escolhe entre Modo Corrida (com GPS, ritmo e batimento cardíaco) ou Modo Dia a Dia (monitorização pura da glicémia por voz, sem GPS nem ecrãs desnecessários).'
+          title: 'Algoritmo Meia-Maratona com Aceleração',
+          desc: 'Modelo cinemático com velocidade e aceleração (2ª derivada) e compensação do atraso do Dexcom G7 para prever quebras com 20-25m de antecedência.'
         },
         {
-          icon: '🚨',
-          title: 'Interrupção Imediata de Emergência (30s)',
-          desc: 'Verificação rápida a cada 30s: aviso por voz prioritário e imediato se entrar em hipo severa ou queda a pique, sem esperar pelo temporizador normal.'
+          icon: '🔇',
+          title: 'Anti-colisão de Voz com Relógio Huawei',
+          desc: 'A app deteta se o relógio ou sistema estão a falar e aguarda para não falar por cima. A música de fundo continua a baixar suavemente.'
+        },
+        {
+          icon: '🏅',
+          title: 'Preset Meia-Maratona (135-165 mg/dL)',
+          desc: 'Alvo baseado nas diretrizes ADA/EASD e Control-IQ para corrida de longa distância.'
+        },
+        {
+          icon: '🛡️',
+          title: 'Prevenção de Empilhamento de Hidratos',
+          desc: 'Quando a glicose está a subir (ex: 85 mg/dL com delta positivo), a app confirma a recuperação em vez de pedir mais géis.'
         },
         {
           icon: '💉',
           title: 'Deteção de Bolus da Bomba Tandem',
           desc: 'Monitoriza administrações de insulina da bomba nos últimos 20m e avisa por voz e no ecrã com crachá dedicado.'
-        },
-        {
-          icon: '🎙️',
-          title: 'Voz Focada na Glicémia',
-          desc: 'Removido o anúncio de ritmo de corrida para manter o foco total na glicémia, que é dita sempre mesmo durante a absorção de hidratos.'
         }
       ]
     }));
