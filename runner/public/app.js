@@ -1003,7 +1003,10 @@ function evaluateCarbAdvice(sgv, direction, delta) {
 
   const isDroppingFast = dirKey === 'SingleDown' || dirKey === 'DoubleDown' || (delta !== null && delta <= -5);
   const isDroppingSlow = dirKey === 'FortyFiveDown' || (delta !== null && delta < -2 && delta > -5);
-  const isDropping = isDroppingFast || isDroppingSlow;
+  const isDropping = isDroppingFast || isDroppingSlow || (delta !== null && delta < 0);
+  const isRisingFast = dirKey === 'SingleUp' || dirKey === 'DoubleUp' || (delta !== null && delta >= 5);
+  const isRisingSlow = dirKey === 'FortyFiveUp' || (delta !== null && delta >= 2 && delta < 5);
+  const isRising = isRisingFast || isRisingSlow || (delta !== null && delta > 0);
 
   // 1. Carb Absorption Window (15 minutes silence for carb alarms!)
   if (lastCarbIntake && (Date.now() - lastCarbIntake.timestamp) < 15 * 60 * 1000) {
@@ -1059,8 +1062,8 @@ function evaluateCarbAdvice(sgv, direction, delta) {
     }
   }
 
-  // 2. Predictive Hypoglycemia Alert (Projected <= 70 within 15 min)
-  if (delta !== null && delta <= -5 && sgv <= 140) {
+  // 2. Predictive Hypoglycemia Alert (Projected <= 70 within 15 min) - only when falling!
+  if (delta !== null && delta <= -5 && sgv <= 140 && !isRising) {
     const dropPerMin = Math.abs(delta) / 5.0;
     const minutesTo70 = Math.round((sgv - 70) / dropPerMin);
     if (minutesTo70 > 0 && minutesTo70 <= 15) {
@@ -1073,7 +1076,7 @@ function evaluateCarbAdvice(sgv, direction, delta) {
           carbs: '20g Gel Rápido Já',
           title: 'Alerta Preditivo: Risco de Hipo Iminente',
           adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em ~${minutesTo70}m. Antecipa o atraso do sensor!`,
-          spokenText: `Atenção urgente! Queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Antecipa o sensor: toma um gel de vinte gramas já!`
+          spokenText: `Atenção urgente! Glicémia a ${sgv}, queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Antecipa o sensor: toma um gel de vinte gramas já!`
         };
       } else {
         return {
@@ -1084,7 +1087,7 @@ function evaluateCarbAdvice(sgv, direction, delta) {
           carbs: '20g Fast Gel Now',
           title: 'Predictive Alert: Hypo Risk Ahead',
           adviceText: `Fast drop of ${Math.abs(delta)} mg/dL in 5m. Projected to hit 70 mg/dL in about ${minutesTo70} minutes. Anticipate sensor lag!`,
-          spokenText: `Urgent warning! Rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take 20 grams of gel now!`
+          spokenText: `Urgent warning! Blood glucose ${sgv}, rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take 20 grams of gel now!`
         };
       }
     }
@@ -1092,6 +1095,32 @@ function evaluateCarbAdvice(sgv, direction, delta) {
 
   // 3. Clinical Hypoglycemia (< 75 mg/dL)
   if (sgv < 75) {
+    if (isRising) {
+      if (isPt) {
+        return {
+          status: 'recovering',
+          badge: `📈 A RECUPERAR (+${delta || 0} mg/dL)`,
+          badgeColor: 'bg-emerald-600 text-white animate-pulse',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/50',
+          carbs: 'Aguardar Digestão',
+          title: 'A recuperar da hipo: Aguarda pela digestão',
+          adviceText: `Glicémia nos ${sgv} com subida (+${delta || 0} mg/dL). Os hidratos já estão a atuar no sangue. Não tomes mais doses e aguarda pela subida estável.`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Boa recuperação! Os hidratos já estão a fazer efeito, aguarda pela subida antes de voltar a correr.`
+        };
+      } else {
+        return {
+          status: 'recovering',
+          badge: `📈 RECOVERING (+${delta || 0} mg/dL)`,
+          badgeColor: 'bg-emerald-600 text-white animate-pulse',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/50',
+          carbs: 'Wait for Carbs',
+          title: 'Recovering from hypo: Wait for digestion',
+          adviceText: `Glucose at ${sgv} rising (+${delta || 0} mg/dL). Previous carbs are working. Wait for stable levels before resuming running.`,
+          spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Good recovery! Carbs are entering your bloodstream, wait for rise before running.`
+        };
+      }
+    }
+
     if (isPt) {
       return {
         status: 'urgent',
@@ -1117,35 +1146,167 @@ function evaluateCarbAdvice(sgv, direction, delta) {
     }
   }
 
-  // 4. Imminent Hypo Zone (75 - 110 mg/dL) - Interstitial lag means real capillary blood is < 90!
+  // 4. Low / Imminent Hypo Zone (75 - 110 mg/dL)
   if (sgv <= 110) {
+    if (isRising) {
+      // User's specific case: 85 mg/dL with delta + (Recovery in progress!)
+      if (isPt) {
+        return {
+          status: 'recovering',
+          badge: `📈 A RECUPERAR (+${delta || 0} mg/dL)`,
+          badgeColor: 'bg-emerald-600 text-white',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/40',
+          carbs: 'Não Tomar Mais Géis',
+          title: 'A subir: Hidratos a fazer efeito',
+          adviceText: `Glicémia nos ${sgv} com subida de +${delta || 0} mg/dL. Os hidratos consumidos estão a entrar no sangue. Continua em ritmo controlado sem tomar mais hidratos.`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Boa recuperação! Os hidratos já estão a fazer efeito, não tomes mais géis para não disparar a glicose.`
+        };
+      } else {
+        return {
+          status: 'recovering',
+          badge: `📈 RECOVERING (+${delta || 0} mg/dL)`,
+          badgeColor: 'bg-emerald-600 text-white',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/40',
+          carbs: 'No More Gels Needed',
+          title: 'Rising: Carbs are absorbing',
+          adviceText: `Glucose at ${sgv} rising by +${delta || 0} mg/dL. Previous carbs are entering bloodstream. Keep running smoothly without taking more carbs.`,
+          spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Great recovery! Your carbs are working, no need for more gels.`
+        };
+      }
+    }
+
+    if (isDroppingFast) {
+      if (isPt) {
+        return {
+          status: 'urgent',
+          badge: '⚠️ QUEDA RÁPIDA',
+          badgeColor: 'bg-rose-600 text-white animate-pulse',
+          cardBorder: 'border-rose-500 shadow-rose-900/50',
+          carbs: '20g a 25g HC (Gel)',
+          title: 'Queda rápida: Toma gel de 20g a 25g já',
+          adviceText: `Glicémia nos ${sgv} em queda rápida. O sangue real já está em quebra iminente. Toma gel agora!`,
+          spokenText: `Aviso urgente! Glicémia a ${sgv}, em descida rápida. Toma vinte a vinte e cinco gramas de gel agora mesmo!`
+        };
+      } else {
+        return {
+          status: 'urgent',
+          badge: '⚠️ FAST DROP',
+          badgeColor: 'bg-rose-600 text-white animate-pulse',
+          cardBorder: 'border-rose-500 shadow-rose-900/50',
+          carbs: '20g to 25g Carbs (Gel)',
+          title: 'Fast drop: Take 20g-25g gel now',
+          adviceText: `Glucose at ${sgv} falling fast. Take a gel immediately!`,
+          spokenText: `Warning! Blood glucose ${sgv}, dropping fast. Take 20 to 25 grams of carbs now!`
+        };
+      }
+    }
+
+    if (isDroppingSlow) {
+      if (isPt) {
+        return {
+          status: 'warning',
+          badge: '⚠️ DESCIDA SUAVE',
+          badgeColor: 'bg-orange-500 text-white',
+          cardBorder: 'border-orange-500 shadow-orange-900/40',
+          carbs: '15g a 20g HC (Gel)',
+          title: 'Descida suave: Reforça 15g a 20g',
+          adviceText: `Glicémia nos ${sgv} a descer devagar. 15g a 20g de hidratos estabilizam o nível com segurança.`,
+          spokenText: `Glicémia a ${sgv}, em descida suave. Toma quinze a vinte gramas de hidratos para estabilizar o nível.`
+        };
+      } else {
+        return {
+          status: 'warning',
+          badge: '⚠️ DOWNWARD DRIFT',
+          badgeColor: 'bg-orange-500 text-white',
+          cardBorder: 'border-orange-500 shadow-orange-900/40',
+          carbs: '15g to 20g Carbs',
+          title: 'Downward drift: Take 15g-20g carbs',
+          adviceText: `Glucose at ${sgv} drifting down. Take 15-20g carbs to stabilize.`,
+          spokenText: `Blood glucose ${sgv}, drifting down. Take 15 to 20 grams of carbs to stabilize.`
+        };
+      }
+    }
+
+    if (sgv < 90) {
+      if (isPt) {
+        return {
+          status: 'warning',
+          badge: '⚠️ LIMIAR BAIXO',
+          badgeColor: 'bg-amber-500 text-gray-900 font-bold',
+          cardBorder: 'border-amber-500 shadow-amber-900/30',
+          carbs: '10g a 15g Preventivas',
+          title: 'Limiar baixo: Reforço preventivo',
+          adviceText: `Glicémia nos ${sgv}, estável mas no limiar inferior. 10 a 15g de hidratos mantêm a margem de segurança.`,
+          spokenText: `Glicémia a ${sgv}, estável no limiar baixo. Toma dez a quinze gramas de hidratos preventivos para manter a corrida segura.`
+        };
+      } else {
+        return {
+          status: 'warning',
+          badge: '⚠️ LOW BOUNDARY',
+          badgeColor: 'bg-amber-500 text-gray-900 font-bold',
+          cardBorder: 'border-amber-500 shadow-amber-900/30',
+          carbs: '10g to 15g Preventive Carbs',
+          title: 'Low boundary: Preventive carbs',
+          adviceText: `Glucose at ${sgv}, steady near lower boundary. 10-15g carbs keeps your run safe.`,
+          spokenText: `Blood glucose ${sgv}, steady at lower limit. Take 10 to 15 grams of preventive carbs.`
+        };
+      }
+    }
+
+    // 90 - 110 Steady
     if (isPt) {
       return {
-        status: 'urgent',
-        badge: '⚠️ QUEBRA IMINENTE',
-        badgeColor: 'bg-orange-600 text-white animate-pulse',
-        cardBorder: 'border-orange-500 shadow-orange-900/40',
-        carbs: '20g a 25g HC (Gel)',
-        title: 'Quebra iminente: Toma gel de 20g a 25g já',
-        adviceText: `Glicémia nos ${sgv}. O sensor Dexcom G7 tem 10-15m de atraso; no sangue já estás abaixo de 90. Toma gel agora!`,
-        spokenText: `Aviso urgente! Glicémia a ${sgv}, ${dirSpoken}. No sangue estás em quebra iminente. Toma vinte a vinte e cinco gramas de gel agora mesmo!`
+        status: 'ideal',
+        badge: '🟢 ESTÁVEL NO ALVO',
+        badgeColor: 'bg-emerald-600 text-white',
+        cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+        carbs: 'Sem Hidratos',
+        title: 'Estável no alvo: Mantém o ritmo',
+        adviceText: `Glicémia nos ${sgv} mg/dL, estável. Ritmo sob controlo, não precisas de hidratos de momento.`,
+        spokenText: `Glicémia a ${sgv}, estável. Ritmo sob controlo, não precisas de hidratos de momento.`
       };
     } else {
       return {
-        status: 'urgent',
-        badge: '⚠️ IMMINENT HYPO',
-        badgeColor: 'bg-orange-600 text-white animate-pulse',
-        cardBorder: 'border-orange-500 shadow-orange-900/40',
-        carbs: '20g to 25g Carbs (Gel)',
-        title: 'Imminent hypo: Take 20g-25g gel now',
-        adviceText: `Glucose at ${sgv}. With Dexcom G7 lag, blood glucose is already below 90. Take a gel immediately!`,
-        spokenText: `Warning! Blood glucose ${sgv}, ${dirSpoken}. Blood glucose is dropping fast. Take 20 to 25 grams of carbs now!`
+        status: 'ideal',
+        badge: '🟢 STEADY IN TARGET',
+        badgeColor: 'bg-emerald-600 text-white',
+        cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+        carbs: 'No Carbs Needed',
+        title: 'Steady in target: Keep going',
+        adviceText: `Glucose at ${sgv} mg/dL, steady. Safe running pace, no carbs needed right now.`,
+        spokenText: `Blood glucose at ${sgv}, steady. Safe running pace, no carbs needed right now.`
       };
     }
   }
 
-  // 5. Proactive Carb Action Zone (110 - 140 mg/dL) - Dexcom G7 ISF lag compensation!
+  // 5. Proactive Carb Action Zone (110 - 140 mg/dL)
   if (sgv <= 140) {
+    if (isRising) {
+      if (isPt) {
+        return {
+          status: 'ok',
+          badge: `📈 SUBIDA (+${delta || 0} mg/dL)`,
+          badgeColor: 'bg-emerald-600 text-white',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+          carbs: 'Sem Hidratos',
+          title: 'Subida controlada: Ritmo seguro',
+          adviceText: `Glicémia nos ${sgv} a subir (+${delta || 0} mg/dL). Ritmo seguro, sem necessidade de hidratos.`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Subida controlada, ritmo seguro. Não precisas de hidratos.`
+        };
+      } else {
+        return {
+          status: 'ok',
+          badge: `📈 RISING (+${delta || 0} mg/dL)`,
+          badgeColor: 'bg-emerald-600 text-white',
+          cardBorder: 'border-emerald-500 shadow-emerald-900/30',
+          carbs: 'No Carbs Needed',
+          title: 'Controlled rise: Safe running',
+          adviceText: `Glucose at ${sgv} rising (+${delta || 0} mg/dL). Safe running pace, no carbs needed.`,
+          spokenText: `Blood glucose at ${sgv}, ${dirSpoken}. Controlled rise, running pace is safe. No carbs needed.`
+        };
+      }
+    }
+
     if (isDroppingFast) {
       if (isPt) {
         return {
@@ -1196,32 +1357,7 @@ function evaluateCarbAdvice(sgv, direction, delta) {
         };
       }
     }
-    if (sgv <= 125) {
-      if (isPt) {
-        return {
-          status: 'warning',
-          badge: '⚠️ LIMIAR INFERIOR',
-          badgeColor: 'bg-yellow-500 text-gray-900 font-bold',
-          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
-          carbs: '10g a 15g Isotónico / Gomas',
-          title: 'Limiar inferior: Reforço preventivo',
-          adviceText: `Glicémia nos ${sgv}, estável mas no limite inferior para corrida. Toma 10 a 15g de hidratos de reserva.`,
-          spokenText: `Glicémia a ${sgv}, estável mas no limite inferior de corrida. Toma dez a quinze gramas de hidratos de reforço.`
-        };
-      } else {
-        return {
-          status: 'warning',
-          badge: '⚠️ LOWER BOUNDARY',
-          badgeColor: 'bg-yellow-500 text-gray-900 font-bold',
-          cardBorder: 'border-yellow-500 shadow-yellow-900/20',
-          carbs: '10g to 15g Drink / Chews',
-          title: 'Lower boundary: Preventive reinforcement',
-          adviceText: `Glucose at ${sgv}, steady but near lower running buffer. Sip 10-15g sports drink.`,
-          spokenText: `Blood glucose ${sgv}, steady but at lower running limit. Sip 10 to 15 grams of sports drink.`
-        };
-      }
-    }
-    // 126 - 140 Flat
+    // 110 - 140 Steady
     if (isPt) {
       return {
         status: 'ideal',
@@ -1240,8 +1376,8 @@ function evaluateCarbAdvice(sgv, direction, delta) {
         badgeColor: 'bg-emerald-600 text-white font-bold',
         cardBorder: 'border-emerald-500 shadow-emerald-900/30',
         carbs: 'Maintain / Hydrate',
-        title: 'Steady base: Keep your pace',
-        adviceText: `Glucose at ${sgv}. Good aerobic baseline. Sip sports drink if running longer than 45m.`,
+        title: 'Steady base: Maintain pace',
+        adviceText: `Glucose at ${sgv}. Good aerobic running base. No carbs needed right now.`,
         spokenText: `Blood glucose ${sgv}, steady. Safe running pace, no carbs needed right now.`
       };
     }

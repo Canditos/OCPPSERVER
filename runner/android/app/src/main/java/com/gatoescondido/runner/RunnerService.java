@@ -429,11 +429,12 @@ public class RunnerService extends Service {
             updateNotification(notifTitle, notifContent);
 
             // 5. Evaluate DANGER condition for IMMEDIATE out-of-cycle intervention
-            boolean isSevereHypo = sgv < 75;
-            boolean isImminentHypo = sgv <= 85;
+            boolean isRising = advice.isRising;
+            boolean isSevereHypo = sgv < 70 || (sgv < 75 && !isRising);
+            boolean isImminentHypo = sgv <= 85 && !isRising;
             boolean isFastPlunge = (delta != null && delta <= -6 && sgv <= 135) || (direction.equals("DoubleDown") && sgv <= 140);
             boolean isPredictiveCrash = false;
-            if (delta != null && delta <= -5 && sgv <= 135) {
+            if (delta != null && delta <= -5 && sgv <= 135 && !isRising) {
                 float dropPerMin = Math.abs(delta) / 5.0f;
                 int minTo70 = Math.round((sgv - 70) / dropPerMin);
                 if (minTo70 > 0 && minTo70 <= 12) {
@@ -451,7 +452,7 @@ public class RunnerService extends Service {
                 announcementCount++;
 
                 String prefix = language.equals("pt-PT")
-                    ? "Alerta urgente fora de ciclo! "
+                    ? "Atenção urgente! "
                     : "Urgent emergency alert! ";
 
                 // Always state glucose clearly first!
@@ -645,6 +646,8 @@ public class RunnerService extends Service {
         String spokenText;
         String symbol;
         String trendLabel;
+        boolean isRising;
+        boolean isDropping;
     }
 
     private CarbAdvice evaluateAdvice(int sgv, String direction, Integer delta, String lang, int tMin, int tMax) {
@@ -689,7 +692,13 @@ public class RunnerService extends Service {
 
         boolean isDroppingFast = dirKey.equals("SingleDown") || dirKey.equals("DoubleDown") || (delta != null && delta <= -5);
         boolean isDroppingSlow = dirKey.equals("FortyFiveDown") || (delta != null && delta < -2 && delta > -5);
-        boolean isDropping = isDroppingFast || isDroppingSlow;
+        boolean isDropping = isDroppingFast || isDroppingSlow || (delta != null && delta < 0);
+        boolean isRisingFast = dirKey.equals("SingleUp") || dirKey.equals("DoubleUp") || (delta != null && delta >= 5);
+        boolean isRisingSlow = dirKey.equals("FortyFiveUp") || (delta != null && delta >= 2 && delta < 5);
+        boolean isRising = isRisingFast || isRisingSlow || (delta != null && delta > 0);
+
+        a.isRising = isRising;
+        a.isDropping = isDropping;
 
         // 1. Carb Absorption Window (Silence repeat carb alarms for 15 minutes!)
         long now = System.currentTimeMillis();
@@ -715,43 +724,92 @@ public class RunnerService extends Service {
             return a;
         }
 
-        // 2. Predictive Hypoglycemia Alert (Projected <= 70 within 15m)
-        if (delta != null && delta <= -5 && sgv <= 140) {
+        // 2. Predictive Hypoglycemia Alert (Projected <= 70 within 15m) - only when falling!
+        if (delta != null && delta <= -5 && sgv <= 140 && !isRising) {
             float dropPerMin = Math.abs(delta) / 5.0f;
             int minutesTo70 = Math.round((sgv - 70) / dropPerMin);
             if (minutesTo70 > 0 && minutesTo70 <= 15) {
                 a.title = isEn ? "Predictive Alert: Hypo in ~" + minutesTo70 + "m" : "Alerta Preditivo: Hipo em ~" + minutesTo70 + "m";
                 a.dose = isEn ? "20g FAST GEL NOW" : "20g GEL RÁPIDO AGORA";
                 a.spokenText = isEn
-                        ? "Urgent warning! Rapid drop. Risk of hypoglycemia in " + minutesTo70 + " minutes. Take 20 grams of gel now!"
-                        : "Atenção urgente! Queda rápida. Risco de hipoglicémia dentro de " + minutesTo70 + " minutos. Antecipa o sensor: toma um gel de vinte gramas já!";
+                        ? "Urgent warning! Blood glucose " + sgv + ", rapid drop. Risk of hypoglycemia in " + minutesTo70 + " minutes. Take 20 grams of gel now!"
+                        : "Atenção urgente! Glicémia nos " + sgv + ", queda rápida. Risco de hipoglicémia dentro de " + minutesTo70 + " minutos. Antecipa o sensor: toma um gel de vinte gramas já!";
                 return a;
             }
         }
 
         // 3. Clinical Hypoglycemia (< 75 mg/dL)
         if (sgv < 75) {
-            a.title = isEn ? "Hypo Alert: Stop and take fast carbs" : "Alerta de Hipo: Pára e toma hidratos rápidos";
-            a.dose = isEn ? "20-25g FAST CARBS" : "20 a 25g HIDRATOS RÁPIDOS";
-            a.spokenText = isEn
-                    ? "Urgent warning: Glucose low at " + sgv + ", " + trendSpoken + ". Stop running immediately and take 20 to 25 grams of fast carbs!"
-                    : "Atenção urgente! Glicémia baixa nos " + sgv + ", " + trendSpoken + ". Pára imediatamente a corrida e toma vinte a vinte e cinco gramas de hidratos rápidos!";
+            if (isRising) {
+                a.title = isEn ? "Recovering from Hypo" : "A recuperar da Hipo";
+                a.dose = isEn ? "REST & ABSORB" : "DESCANSA E AGUARDA";
+                a.symbol = "📈";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Good recovery! Carbs are entering your bloodstream, wait for rise before running."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Boa recuperação! Os hidratos já estão a fazer efeito, aguarda pela subida antes de voltar a correr.";
+            } else {
+                a.title = isEn ? "Hypo Alert: Stop and take fast carbs" : "Alerta de Hipo: Pára e toma hidratos rápidos";
+                a.dose = isEn ? "20-25g FAST CARBS" : "20 a 25g HIDRATOS RÁPIDOS";
+                a.symbol = "🚨";
+                a.spokenText = isEn
+                        ? "Urgent warning: Glucose low at " + sgv + ", " + trendSpoken + ". Stop running immediately and take 20 to 25 grams of fast carbs!"
+                        : "Atenção urgente! Glicémia baixa nos " + sgv + ", " + trendSpoken + ". Pára imediatamente a corrida e toma vinte a vinte e cinco gramas de hidratos rápidos!";
+            }
             return a;
         }
 
-        // 4. Imminent Hypo Zone (75 - 110 mg/dL) - Interstitial lag means real capillary blood is < 90!
+        // 4. Low / Imminent Hypo Zone (75 - 110 mg/dL)
         if (sgv <= 110) {
-            a.title = isEn ? "Imminent Hypo: Take gel immediately" : "Quebra Iminente: Toma gel imediatamente";
-            a.dose = isEn ? "20-25g CARBS (Gel)" : "20 a 25g HIDRATOS (Gel)";
-            a.spokenText = isEn
-                    ? "Warning: Blood glucose " + sgv + ", " + trendSpoken + ". Real blood is below 90. Take 20 to 25 grams of carbs now!"
-                    : "Aviso urgente! Glicémia nos " + sgv + ", " + trendSpoken + ". O sangue real está em quebra iminente. Toma vinte a vinte e cinco gramas de gel agora mesmo!";
+            if (isRising) {
+                // Critical user case: 85 mg/dL with delta + (Recovery in progress!)
+                a.title = isEn ? "Recovering: Carbs absorbing" : "A Recuperar: Hidratos a fazer efeito";
+                a.dose = isEn ? "NO MORE GELS NEEDED" : "NÃO TOMAR MAIS GÉIS";
+                a.symbol = "📈";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Great recovery! Your carbs are working, no need for more gels."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Boa recuperação! Os hidratos já estão a fazer efeito, não tomes mais géis para não disparar a glicose.";
+            } else if (isDroppingFast) {
+                a.title = isEn ? "Fast Drop: Take gel immediately" : "Queda Rápida: Toma gel imediatamente";
+                a.dose = isEn ? "20-25g CARBS (Gel)" : "20 a 25g HIDRATOS (Gel)";
+                a.symbol = "🚨";
+                a.spokenText = isEn
+                        ? "Warning: Blood glucose " + sgv + ", dropping fast. Take 20 to 25 grams of carbs now!"
+                        : "Aviso urgente! Glicémia nos " + sgv + ", em queda rápida. Toma vinte a vinte e cinco gramas de gel agora mesmo!";
+            } else if (isDroppingSlow) {
+                a.title = isEn ? "Downward Drift: Refuel Carbs" : "Descida Suave: Reforça Hidratos";
+                a.dose = isEn ? "15-20g CARBS (Gel)" : "15 a 20g HIDRATOS (Gel)";
+                a.symbol = "⚠️";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Take 15 to 20 grams of carbs to stabilize."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Toma quinze a vinte gramas de hidratos para estabilizar o nível.";
+            } else if (sgv < 90) {
+                a.title = isEn ? "Lower Limit: Preventive 10g" : "Limiar Baixo: 10g Preventivas";
+                a.dose = isEn ? "10-15g CHEWS/SIP" : "10 a 15g GOMAS/BEBIDA";
+                a.symbol = "⚠️";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", steady. Low boundary, take 10 to 15 grams preventive carbs."
+                        : "Glicémia nos " + sgv + ", estável no limiar baixo. Toma dez a quinze gramas de hidratos preventivos para manter a corrida segura.";
+            } else {
+                a.title = isEn ? "Steady in Target Zone" : "Estável no Alvo";
+                a.dose = isEn ? "NO CARBS NEEDED" : "SEM HIDRATOS";
+                a.symbol = "🟢";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", steady. Safe running pace, no carbs needed right now."
+                        : "Glicémia nos " + sgv + ", estável. Ritmo sob controlo, não precisas de hidratos de momento.";
+            }
             return a;
         }
 
-        // 5. Proactive Carb Action Zone (110 - 140 mg/dL) - Compensates Dexcom G7 10-15m ISF lag!
+        // 5. Proactive Carb Action Zone (110 - 140 mg/dL)
         if (sgv <= 140) {
-            if (isDroppingFast) {
+            if (isRising) {
+                a.title = isEn ? "Controlled Rise: Safe" : "Subida Controlada: Seguro";
+                a.dose = isEn ? "NO CARBS NEEDED" : "SEM HIDRATOS";
+                a.symbol = "📈";
+                a.spokenText = isEn
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Controlled rise, running pace is safe. No carbs needed."
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Subida controlada, ritmo seguro. Não precisas de hidratos.";
+            } else if (isDroppingFast) {
                 a.title = isEn ? "Fast Drop: Proactive Gel" : "Queda Rápida: Gel Agressivo";
                 a.dose = isEn ? "20g PROACTIVE GEL" : "20g GEL AGRESSIVO (ANTECIPAÇÃO)";
                 a.spokenText = isEn
@@ -763,12 +821,6 @@ public class RunnerService extends Service {
                 a.spokenText = isEn
                         ? "Blood glucose " + sgv + ", " + trendSpoken + ". Take 15 to 20 grams of carbs to sustain your run."
                         : "Glicémia nos " + sgv + ", " + trendSpoken + ". Toma quinze a vinte gramas de hidratos para proteger a tua corrida.";
-            } else if (sgv <= 125) {
-                a.title = isEn ? "Lower Boundary: Preventive Carbs" : "Limiar Inferior: Reforço Preventivo";
-                a.dose = isEn ? "10-15g CHEWS / DRINK" : "10 a 15g BEBIDA / GOMAS";
-                a.spokenText = isEn
-                        ? "Blood glucose " + sgv + ", steady but at lower running limit. Sip 10 to 15 grams of sports drink."
-                        : "Glicémia nos " + sgv + ", estável mas no limite inferior de corrida. Toma dez a quinze gramas de hidratos de reforço.";
             } else {
                 a.title = isEn ? "Steady Running Base" : "Base Estável de Corrida";
                 a.dose = isEn ? "MAINTAIN / SIP WATER" : "MANTER / BEBER ÁGUA";
