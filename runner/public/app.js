@@ -708,17 +708,17 @@ function updateCarbButtonUI() {
   if (lastCarbIntake && (now - lastCarbIntake.timestamp < 15 * 60 * 1000)) {
     const minsAgo = Math.max(0, Math.floor((now - lastCarbIntake.timestamp) / 60000));
     const minsLeft = Math.max(1, 15 - minsAgo);
-    label.textContent = `✅ Gel Tomado (${minsLeft}m)`;
+    label.textContent = `✅ 4Endurance Tomado (${minsLeft}m)`;
     btn.className = 'flex-1 py-1.5 sm:py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-sky-300 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer';
   } else {
     const isPt = (config.language || 'pt-PT') === 'pt-PT';
-    label.textContent = isPt ? 'Tomei Gel (20g)' : 'Took Gel (20g)';
+    label.textContent = isPt ? 'Tomei 4Endurance (30g)' : 'Took 4Endurance (30g)';
     btn.className = 'flex-1 py-1.5 sm:py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer';
   }
 }
 
 function recordCarbsIntake(grams, source = 'manual') {
-  const g = parseInt(grams, 10) || 20;
+  const g = parseInt(grams, 10) || 30; // Default to 30g (4Endurance)
   sessionCarbsTotal += g;
   const now = Date.now();
   const entry = { timestamp: now, grams: g, source };
@@ -746,15 +746,15 @@ function recordCarbsIntake(grams, source = 'manual') {
   // 2. Play confirmation audio only if not running native (native plays via AudioEngine)
   if (!isRunningNative() && typeof playStudioVoice === 'function') {
     const msg = isPt
-      ? `Gel registado! ${g} gramas em absorção. Alerta silenciado durante quinze minutos.`
-      : `Carbs logged! ${g} grams absorbing. Alerts paused for fifteen minutes.`;
+      ? (g === 30 ? 'Gel 4Endurance registado! Trinta gramas em absorção. Alerta silenciado durante quinze minutos.' : `Gel registado! ${g} gramas em absorção. Alerta silenciado durante quinze minutos.`)
+      : (g === 30 ? '4Endurance gel logged! 30 grams absorbing. Alerts paused for fifteen minutes.' : `Carbs logged! ${g} grams absorbing. Alerts paused for fifteen minutes.`);
     playStudioVoice(msg);
   }
 
   // 3. Visual toast
   const toast = document.createElement('div');
   toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 max-w-[90vw] bg-sky-950/95 text-sky-200 border border-sky-500/60 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl z-50 transition-opacity duration-300 backdrop-blur text-center flex items-center gap-2';
-  toast.innerHTML = `<span>⏳</span><span>${isPt ? `Gel registado: ${g}g em absorção! Alerta pausado 15m.` : `Logged: ${g}g absorbing! Alert paused 15m.`}</span>`;
+  toast.innerHTML = `<span>⏳</span><span>${isPt ? (g === 30 ? 'Gel 4Endurance (30g) em absorção! Alerta pausado 15m.' : `Gel registado: ${g}g em absorção! Alerta pausado 15m.`) : (g === 30 ? '4Endurance (30g) absorbing! Alert paused 15m.' : `Logged: ${g}g absorbing! Alert paused 15m.`)}</span>`;
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
@@ -867,11 +867,12 @@ function handleVoiceCommandResult(text) {
 
   const clean = text.toLowerCase();
 
-  // Carb intake matches
+  // Carb intake matches (Defaults to 30g 4Endurance 2:1)
   if (/tomei|toma|comi|gel|hidrato|carbo|hc|grama|\bg\b/.test(clean)) {
     const numMatch = clean.match(/\b(\d+)\b/);
-    const grams = numMatch ? parseInt(numMatch[1], 10) : 20;
-    recordCarbsIntake(grams, 'voice');
+    const grams = numMatch ? parseInt(numMatch[1], 10) : 30;
+    const src = clean.includes('glucody') ? 'glucody_sos' : (clean.includes('4energy') ? '4energy_gel' : '4endurance_gel');
+    recordCarbsIntake(grams, src);
     return;
   }
 
@@ -1228,10 +1229,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: `🚨 HIPO EM ~${minutesTo70} MIN`,
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/60',
-          carbs: '20g Gel Rápido Já',
+          carbs: 'Gel 4Endurance (30g) Já',
           title: 'Alerta Preditivo: Risco de Hipo Iminente',
-          adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em ~${minutesTo70}m. Antecipa o atraso do sensor!`,
-          spokenText: `Atenção urgente! Glicémia a ${sgv}, queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Antecipa o sensor: toma um gel de vinte gramas já!`
+          adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em ~${minutesTo70}m. Toma um gel 4Endurance (30g) já!`,
+          spokenText: `Atenção urgente! Glicémia a ${sgv}, queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Antecipa o sensor: toma o teu gel 4Endurance de trinta gramas já!`
         };
       } else {
         return {
@@ -1239,10 +1240,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: `🚨 HYPO IN ~${minutesTo70} MIN`,
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/60',
-          carbs: '20g Fast Gel Now',
+          carbs: '4Endurance Gel (30g) Now',
           title: 'Predictive Alert: Hypo Risk Ahead',
           adviceText: `Fast drop of ${Math.abs(delta)} mg/dL in 5m. Projected to hit 70 mg/dL in about ${minutesTo70} minutes. Anticipate sensor lag!`,
-          spokenText: `Urgent warning! Blood glucose ${sgv}, rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take 20 grams of gel now!`
+          spokenText: `Urgent warning! Blood glucose ${sgv}, rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take your 30-gram 4Endurance gel now!`
         };
       }
     }
@@ -1255,10 +1256,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ QUEBRA EM ~20 MIN',
           badgeColor: 'bg-amber-600 text-white animate-pulse',
           cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: '15g a 20g Gel Antecipado',
+          carbs: 'Gel 4Endurance (30g)',
           title: 'Alerta Antecipado: Projeção de Quebra',
-          adviceText: `Glicémia a ${sgv} com tendência de queda. Projeção cinemática indica descida aos ~${proj25} mg/dL em 20-25m. Toma um gel antes da digestão atrasar!`,
-          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma quinze a vinte gramas de hidratos já!`
+          adviceText: `Glicémia a ${sgv} com tendência de queda. Projeção cinemática indica descida aos ~${proj25} mg/dL em 20-25m. Toma um gel 4Endurance antes da digestão atrasar!`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma o teu gel 4Endurance de trinta gramas já!`
         };
       } else {
         return {
@@ -1266,10 +1267,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ DROP IN ~20 MIN',
           badgeColor: 'bg-amber-600 text-white animate-pulse',
           cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: '15g-20g Proactive Gel',
+          carbs: '4Endurance Gel (30g)',
           title: 'Proactive Alert: Projected Drop',
-          adviceText: `Glucose at ${sgv} dropping. Kinematic projection forecasts ~${proj25} mg/dL in 20-25m. Take gel early!`,
-          spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Proactive alert: projection indicates low in twenty minutes. Take 15 to 20 grams of gel now!`
+          adviceText: `Glucose at ${sgv} dropping. Kinematic projection forecasts ~${proj25} mg/dL in 20-25m. Take 4Endurance early!`,
+          spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Proactive alert: projection indicates low in twenty minutes. Take your 30-gram 4Endurance gel now!`
         };
       }
     }
@@ -1364,10 +1365,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ QUEDA RÁPIDA',
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/50',
-          carbs: '20g a 25g HC (Gel)',
-          title: 'Queda rápida: Toma gel de 20g a 25g já',
-          adviceText: `Glicémia nos ${sgv} em queda rápida. O sangue real já está em quebra iminente. Toma gel agora!`,
-          spokenText: `Aviso urgente! Glicémia a ${sgv}, em descida rápida. Toma vinte a vinte e cinco gramas de gel agora mesmo!`
+          carbs: 'Gel 4Endurance (30g) Já',
+          title: 'Queda rápida: Toma gel 4Endurance já',
+          adviceText: `Glicémia nos ${sgv} em queda rápida. O sangue real já está em quebra iminente. Toma gel 4Endurance agora!`,
+          spokenText: `Aviso urgente! Glicémia a ${sgv}, em descida rápida. Toma o teu gel 4Endurance de trinta gramas agora mesmo!`
         };
       } else {
         return {
@@ -1375,10 +1376,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ FAST DROP',
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/50',
-          carbs: '20g to 25g Carbs (Gel)',
-          title: 'Fast drop: Take 20g-25g gel now',
-          adviceText: `Glucose at ${sgv} falling fast. Take a gel immediately!`,
-          spokenText: `Warning! Blood glucose ${sgv}, dropping fast. Take 20 to 25 grams of carbs now!`
+          carbs: '4Endurance Gel (30g) Now',
+          title: 'Fast drop: Take 4Endurance gel now',
+          adviceText: `Glucose at ${sgv} falling fast. Take 4Endurance gel immediately!`,
+          spokenText: `Warning! Blood glucose ${sgv}, dropping fast. Take your 30-gram 4Endurance gel now!`
         };
       }
     }
@@ -1496,10 +1497,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ QUEDA RÁPIDA: ANTECIPAÇÃO',
           badgeColor: 'bg-amber-600 text-white animate-pulse',
           cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: '20g Gel Agressivo',
-          title: 'Queda rápida: Toma gel de 20g antecipado',
+          carbs: 'Gel 4Endurance (30g)',
+          title: 'Queda rápida: Toma gel 4Endurance antecipado',
           adviceText: `Glicémia nos ${sgv} em queda rápida. O gel demora 12-15m a atuar; toma agora para travar a quebra antes de bater nos 90.`,
-          spokenText: `Glicémia a ${sgv}, em descida rápida. Antecipa o atraso do sensor: toma um gel de vinte gramas já para travar a quebra!`
+          spokenText: `Glicémia a ${sgv}, em descida rápida. Antecipa o atraso do sensor: toma o teu gel 4Endurance de trinta gramas já para travar a quebra!`
         };
       } else {
         return {
@@ -1507,10 +1508,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ FAST DROP: PROACTIVE',
           badgeColor: 'bg-amber-600 text-white animate-pulse',
           cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: '20g Proactive Gel',
-          title: 'Fast drop: Take 20g proactive gel now',
+          carbs: '4Endurance Gel (30g)',
+          title: 'Fast drop: Take 4Endurance gel now',
           adviceText: `Glucose at ${sgv} dropping fast. Gels take 12-15m to absorb; take now before dropping into hypo.`,
-          spokenText: `Blood glucose ${sgv}, falling fast. Anticipate sensor lag: take a 20 gram gel now to stop the crash!`
+          spokenText: `Blood glucose ${sgv}, falling fast. Anticipate sensor lag: take your 30-gram 4Endurance gel now to stop the crash!`
         };
       }
     }
@@ -1822,7 +1823,7 @@ function applyLanguageUI() {
   setT('btnSaveSettings', texts.btnSaveSettings);
 
   const isPt = lang === 'pt-PT';
-  setT('labelQuickGel', isPt ? 'Tomei Gel (20g)' : 'Took Gel (20g)');
+  setT('labelQuickGel', isPt ? 'Tomei 4Endurance (30g)' : 'Took 4Endurance (30g)');
   setT('labelMicBtn', isPt ? 'Voz' : 'Voice');
   setT('labelProfHalf', isPt ? 'Meia-Maratona' : 'Half Marathon');
   setT('labelProfZone2', isPt ? 'Longo (130-170)' : 'Long Run (130-170)');
@@ -1971,7 +1972,26 @@ function timeAgo(date) {
   return `há ${Math.floor(minutes / 60)}h`;
 }
 
-// ── Real-time SVG Sparkline Micro-Chart ─────────────────────────────────────
+// ── Real-time SVG Sparkline Micro-Chart with Cubic Spline Interpolation ──
+function getCubicBezierPath(points) {
+  if (!points || points.length < 2) return '';
+  let d = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? i : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) * 0.16;
+    const cp1y = p1.y + (p2.y - p0.y) * 0.16;
+    const cp2x = p2.x - (p3.x - p1.x) * 0.16;
+    const cp2y = p2.y - (p3.y - p1.y) * 0.16;
+
+    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
 function renderGlucoseSparkline(entries) {
   const svg = document.getElementById('glucoseSparklineSvg');
   if (!svg || !Array.isArray(entries) || entries.length === 0) return;
@@ -1994,33 +2014,41 @@ function renderGlucoseSparkline(entries) {
 
   const coords = pts.map((p, idx) => ({ x: getX(idx), y: getY(p.sgv), sgv: p.sgv }));
 
-  // Update Target Corridor dashed lines
+  // Update Target Corridor dashed lines & visual band
+  const yMax = getY(maxTarget);
+  const yMin = getY(minTarget);
+
   const lineMax = document.getElementById('sparklineTargetMax');
   const lineMin = document.getElementById('sparklineTargetMin');
+  const targetBand = document.getElementById('sparklineTargetBand');
+
   if (lineMax) {
-    const yMax = getY(maxTarget);
     lineMax.setAttribute('y1', yMax);
     lineMax.setAttribute('y2', yMax);
   }
   if (lineMin) {
-    const yMin = getY(minTarget);
     lineMin.setAttribute('y1', yMin);
     lineMin.setAttribute('y2', yMin);
   }
+  if (targetBand) {
+    const topY = Math.min(yMax, yMin);
+    const bandHeight = Math.max(2, Math.abs(yMin - yMax));
+    targetBand.setAttribute('y', topY);
+    targetBand.setAttribute('height', bandHeight);
+  }
 
-  // Build SVG Path
-  const pathD = coords.reduce((acc, pt, i) => {
-    return i === 0 ? `M ${pt.x},${pt.y}` : `${acc} L ${pt.x},${pt.y}`;
-  }, '');
-
+  // Smooth Cubic Bezier Spline Path
+  const smoothPath = getCubicBezierPath(coords);
   const pathEl = document.getElementById('sparklinePath');
-  if (pathEl) pathEl.setAttribute('d', pathD);
+  if (pathEl) pathEl.setAttribute('d', smoothPath);
 
-  // Build Area Polygon
+  // Smooth Shaded Area under Bezier Curve
   const areaEl = document.getElementById('sparklineArea');
   if (areaEl) {
-    const polyPoints = `0,48 ${coords.map(c => `${c.x},${c.y}`).join(' ')} 300,48`;
-    areaEl.setAttribute('points', polyPoints);
+    const firstPt = coords[0];
+    const lastPt = coords[coords.length - 1];
+    const areaD = `${smoothPath} L ${lastPt.x},48 L ${firstPt.x},48 Z`;
+    areaEl.setAttribute('d', areaD);
   }
 
   // Dynamic Theme according to latest reading
@@ -2039,12 +2067,18 @@ function renderGlucoseSparkline(entries) {
   if (pathEl) pathEl.setAttribute('stroke', themeColor);
   if (areaEl) areaEl.setAttribute('fill', gradUrl);
 
-  // Position and color latest active pulsing dot
+  // Position and color latest active pulsing radar ring & core dot
   const dotEl = document.getElementById('sparklineCurrentDot');
+  const pulseEl = document.getElementById('sparklineCurrentDotPulse');
   if (dotEl) {
     dotEl.setAttribute('cx', latest.x);
     dotEl.setAttribute('cy', latest.y);
     dotEl.setAttribute('fill', themeColor);
+  }
+  if (pulseEl) {
+    pulseEl.setAttribute('cx', latest.x);
+    pulseEl.setAttribute('cy', latest.y);
+    pulseEl.setAttribute('stroke', themeColor);
   }
 
   // Update target label
@@ -2165,7 +2199,36 @@ function updateUIWithReading(current, previous, delta, advice) {
   const adviceDesc = document.getElementById('carbDescription');
   const mainCard = document.getElementById('glucoseCard');
 
-  if (sgvEl) sgvEl.textContent = current.sgv;
+  const minTarget = config.targetMin || 110;
+  const maxTarget = config.targetMax || 170;
+
+  if (sgvEl && current && current.sgv) {
+    sgvEl.textContent = current.sgv;
+    if (current.sgv < minTarget) {
+      sgvEl.className = 'text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-black tracking-tight text-rose-400 tabular-nums drop-shadow-[0_0_30px_rgba(244,63,94,0.45)]';
+    } else if (current.sgv > maxTarget) {
+      sgvEl.className = 'text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-black tracking-tight text-amber-300 tabular-nums drop-shadow-[0_0_30px_rgba(245,158,11,0.4)]';
+    } else {
+      sgvEl.className = 'text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-black tracking-tight text-white tabular-nums drop-shadow-[0_0_24px_rgba(52,211,153,0.3)]';
+    }
+  }
+
+  // Dynamic Ambient Aura/Halo behind Glucose Card
+  const aura1 = document.getElementById('glucoseAura');
+  const aura2 = document.getElementById('glucoseAura2');
+  if (aura1 && current && current.sgv) {
+    if (current.sgv < minTarget) {
+      aura1.className = 'absolute -top-12 -right-12 w-56 h-56 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-60 bg-rose-600/35 animate-breathe';
+      if (aura2) aura2.className = 'absolute -bottom-10 -left-10 w-44 h-44 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-40 bg-rose-500/25';
+    } else if (current.sgv > maxTarget) {
+      aura1.className = 'absolute -top-12 -right-12 w-56 h-56 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-50 bg-amber-500/30 animate-breathe';
+      if (aura2) aura2.className = 'absolute -bottom-10 -left-10 w-44 h-44 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-30 bg-amber-600/20';
+    } else {
+      aura1.className = 'absolute -top-12 -right-12 w-56 h-56 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-45 bg-emerald-500/25 animate-breathe';
+      if (aura2) aura2.className = 'absolute -bottom-10 -left-10 w-44 h-44 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-25 bg-teal-500/20';
+    }
+  }
+
   if (trendEl) {
     const dirInfo = I18N[lang]?.directions[current.direction] || I18N[lang]?.directions.Flat;
     trendEl.textContent = dirInfo.symbol;
@@ -2216,15 +2279,15 @@ function updateUIWithReading(current, previous, delta, advice) {
   }
 
   if (mainCard) {
-    mainCard.className = `relative overflow-hidden rounded-2xl bg-slate-900/90 border-2 px-4 py-2 sm:py-3 backdrop-blur-xl transition-all duration-300 shadow-xl ${advice.cardBorder}`;
+    mainCard.className = `relative overflow-hidden rounded-3xl glass-panel border-2 px-4 py-3 sm:py-4 md:py-6 shadow-2xl transition-all duration-500 shrink-0 flex-1 flex flex-col justify-center ${advice.cardBorder}`;
   }
 
   const coachCard = document.getElementById('carbCoachCard');
   if (coachCard) {
     if (advice.status === 'absorbing') {
-      coachCard.className = 'rounded-2xl bg-gradient-to-b from-sky-950/90 to-slate-950/95 border-2 border-sky-500/80 p-2 sm:p-2.5 shadow-lg shadow-sky-900/30 shrink-0 transition-all';
+      coachCard.className = 'rounded-3xl glass-panel border-2 border-sky-500/80 p-2 sm:p-3 shadow-xl shadow-sky-900/30 shrink-0 transition-all';
     } else {
-      coachCard.className = 'rounded-2xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border border-slate-800 p-2 sm:p-2.5 shadow-md shrink-0 transition-all';
+      coachCard.className = 'rounded-3xl glass-panel border border-slate-800 p-2 sm:p-3 shadow-lg shrink-0 transition-all';
     }
   }
 }
@@ -2442,64 +2505,69 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 17,
-  versionName: '2.6',
+  versionCode: 18,
+  versionName: '2.7',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 2.6 • Blindagem Cibersegurança, Sparkline SVG & Seletor de Géis',
-    btnDismiss: 'Entendido! 🚀',
+    sub: 'Versão 2.7 • Cockpit Atlético OLED, Curva Spline Cúbica, Aura & 4Endurance 30g',
+    btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
       {
-        icon: '🛡️',
-        title: 'Blindagem de Cibersegurança Avançada',
-        desc: 'Proteção total contra SSRF e DNS Rebinding nos proxies internos, Rate Limiting dinâmico por IP anti-DoS, sanitização de TTS e cabeçalhos CSP/HSTS.'
+        icon: '🎨',
+        title: 'Design Cockpit Atlético & OLED Obsidian Dark',
+        desc: 'Interface completamente redesenhada com Glassmorphism aeroespacial, auras de iluminação indireta, botões táteis de alta precisão e máximo contraste.'
       },
       {
         icon: '📈',
-        title: 'Sparkline SVG de Glicémia em Tempo Real',
-        desc: 'Micro-gráfico neon embutido diretamente no Card de Glicémia: curva da última hora (12 leituras), corredor alvo e ponto pulsante dinâmico.'
+        title: 'Curva Spline Cúbica (Bezier) Ultra-Suave',
+        desc: 'O micro-gráfico de 1 hora agora desenha uma curva médica contínua e suave (spline cúbica) com gradiente luminoso, banda do alvo e radar pulsing dot.'
       },
       {
-        icon: '🍬',
-        title: 'Seletor de Géis & Dextrose Calibrado',
-        desc: 'Novo menu de 1-toque com os teus produtos reais: Glucody SOS (12g rápida), 4Energy Gel (20g líquida) e 4Endurance 2:1 (30g lenta), além de stepper manual.'
+        icon: '🌟',
+        title: 'Halo / Aura Dinâmica de Alerta em Tempo Real',
+        desc: 'Aura radiante atrás da glicémia que respira suavemente em verde no alvo (110-170), brilha em âmbar na subida e alerta em carmesim nas quebras.'
       },
       {
-        icon: '⚡',
-        title: 'Sincronização 1-Tap c/ Intervals.icu',
-        desc: 'Botão dedicado no resumo de treino que envia glicémia média, TIR, hidratos consumidos e frequência cardíaca diretamente para o treino do dia no Intervals.icu.'
+        icon: '🔋',
+        title: 'Gel Padrão 4Endurance 2:1 (30g HC)',
+        desc: '4Endurance 2:1 calibrado como o combustível de referência em todos os botões de 1-toque, comandos de voz e algoritmos de recomendação do treinador.'
       },
       {
-        icon: '📱',
-        title: 'Layout Adaptativo Tablet & Telemóvel',
-        desc: 'Visual responsivo OLED de alto contraste que se ajusta em telemóvel e tablet com cronómetro sticky no ginásio.'
+        icon: '💓',
+        title: 'Cardio EKG & Visualizador de Voz em Tempo Real',
+        desc: 'Coração com batimento EKG animado na telemetria e equalizador de ondas de áudio no topo enquanto o assistente fala.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 2.6 • Cybersecurity Shield, Live Sparkline & Custom Gels',
-    btnDismiss: "Got it! 🚀",
+    sub: 'Version 2.7 • OLED Athletic Cockpit, Cubic Spline Sparkline, Aura & 4Endurance 30g',
+    btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
       {
-        icon: '🛡️',
-        title: 'Cybersecurity Shield & DoS Defense',
-        desc: 'Full SSRF and DNS Rebinding protection, IP rate limiting, TTS input sanitization, and strict CSP/HSTS security headers.'
+        icon: '🎨',
+        title: 'OLED Obsidian Dark Athletic Cockpit',
+        desc: 'Completely redesigned interface with frosted glass panels, ambient backlight auras, high-precision tactile buttons, and maximum outdoor contrast.'
       },
       {
         icon: '📈',
-        title: 'Real-time SVG Glucose Sparkline',
-        desc: 'Neon micro-chart inside the main glucose card showing the last 1-hour trend, target corridor, and live pulsing dot.'
+        title: 'Ultra-Smooth Cubic Spline (Bezier) Sparkline',
+        desc: 'The 1-hour glucose trend now renders as a mathematically smoothed cubic bezier medical curve with neon gradient fill and pulsing radar dot.'
       },
       {
-        icon: '🍬',
-        title: 'Calibrated Gel & Fast Dextrose Selector',
-        desc: '1-tap quick buttons for Glucody SOS (12g fast dextrose), 4Energy Liquid Gel (20g), and 4Endurance 2:1 (30g), plus numeric stepper.'
+        icon: '🌟',
+        title: 'Real-time Ambient Alert Halo / Aura',
+        desc: 'Breathing radiant halo behind your glucose that glows emerald in-target, amber when rising, and crimson during drops and hypo risks.'
       },
       {
-        icon: '⚡',
-        title: '1-Tap Sync with Intervals.icu',
-        desc: 'Sync workout glucose stats, time in range (TIR), carbs consumed, and heart rate directly to your Intervals.icu workout.'
+        icon: '🔋',
+        title: 'Default 4Endurance 2:1 Gel (30g Carbs)',
+        desc: '4Endurance 2:1 is now the default fuel across quick action buttons, voice recognition, and coach advice.'
+      },
+      {
+        icon: '💓',
+        title: 'EKG Heartbeat & Audio Waveform Visualizer',
+        desc: 'Animated EKG heartbeat rhythm on the telemetry bar and dynamic 4-bar sound equalizer when voice audio speaks.'
       }
     ]
   }

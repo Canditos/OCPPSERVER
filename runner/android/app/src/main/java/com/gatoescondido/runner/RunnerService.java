@@ -88,7 +88,7 @@ public class RunnerService extends Service {
     }
 
     public static void recordCarbIntake(int grams, long timestamp) {
-        lastCarbGrams = grams > 0 ? grams : 20;
+        lastCarbGrams = grams > 0 ? grams : 30;
         lastCarbTimestamp = timestamp > 0 ? timestamp : System.currentTimeMillis();
         Log.d(TAG, "Carb intake recorded in RunnerService: " + lastCarbGrams + "g at " + lastCarbTimestamp);
         RunnerService instance = activeInstance;
@@ -220,7 +220,7 @@ public class RunnerService extends Service {
             long prevTs = intent.getLongExtra(EXTRA_LAST_CARB_TS, 0);
             if (prevTs > 0 && (System.currentTimeMillis() - prevTs < 15 * 60 * 1000)) {
                 lastCarbTimestamp = prevTs;
-                lastCarbGrams = intent.getIntExtra(EXTRA_LAST_CARB_GRAMS, 20);
+                lastCarbGrams = intent.getIntExtra(EXTRA_LAST_CARB_GRAMS, 30);
                 Log.d(TAG, "Restored previous carb intake: " + lastCarbGrams + "g at " + lastCarbTimestamp);
             }
         }
@@ -757,21 +757,21 @@ public class RunnerService extends Service {
                 float dropPerMin = Math.max(0.5f, Math.abs(delta) / 5.0f);
                 int minutesTo70 = Math.max(1, Math.round((sgv - 70) / dropPerMin));
                 a.title = isEn ? "Predictive Alert: Hypo in ~" + minutesTo70 + "m" : "Alerta Preditivo: Hipo em ~" + minutesTo70 + "m";
-                a.dose = isEn ? "20g FAST GEL NOW" : "20g GEL RÁPIDO AGORA";
+                a.dose = isEn ? "30g 4ENDURANCE GEL" : "30g GEL 4ENDURANCE";
                 a.spokenText = isEn
-                        ? "Urgent warning! Blood glucose " + sgv + ", rapid drop. Risk of hypoglycemia in " + minutesTo70 + " minutes. Take 20 grams of gel now!"
-                        : "Atenção urgente! Glicémia nos " + sgv + ", queda rápida. Risco de hipoglicémia dentro de " + minutesTo70 + " minutos. Antecipa o sensor: toma um gel de vinte gramas já!";
+                        ? "Urgent warning! Blood glucose " + sgv + ", rapid drop. Risk of hypoglycemia in " + minutesTo70 + " minutes. Take your 30-gram 4Endurance gel now!"
+                        : "Atenção urgente! Glicémia nos " + sgv + ", queda rápida. Risco de hipoglicémia dentro de " + minutesTo70 + " minutos. Antecipa o sensor: toma o teu gel 4Endurance de trinta gramas já!";
                 return a;
             }
 
             // Stage 1: Half-Marathon Proactive Early Warning (Projected <= 85 within ~20-25m)
             if (isRunningSession && proj25 <= 85 && isDropping && sgv <= 150) {
                 a.title = isEn ? "Proactive Warning: Drop in ~20m" : "Alerta Antecipado: Quebra em ~20m";
-                a.dose = isEn ? "15-20g PROACTIVE GEL" : "15 a 20g GEL ANTECIPADO";
+                a.dose = isEn ? "30g 4ENDURANCE GEL" : "30g GEL 4ENDURANCE";
                 a.symbol = "⚠️";
                 a.spokenText = isEn
-                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Proactive alert: projection indicates drop in twenty minutes. Take 15 to 20 grams of gel now!"
-                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma quinze a vinte gramas de hidratos já!";
+                        ? "Blood glucose " + sgv + ", " + trendSpoken + ". Proactive alert: projection indicates drop in twenty minutes. Take your 30-gram 4Endurance gel now!"
+                        : "Glicémia nos " + sgv + ", " + trendSpoken + ". Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma o teu gel 4Endurance de trinta gramas já!";
                 return a;
             }
         }
@@ -808,11 +808,11 @@ public class RunnerService extends Service {
                         : "Glicémia nos " + sgv + ", " + trendSpoken + ". Boa recuperação! Os hidratos já estão a fazer efeito, não tomes mais géis para não disparar a glicose.";
             } else if (isDroppingFast) {
                 a.title = isEn ? "Fast Drop: Take gel immediately" : "Queda Rápida: Toma gel imediatamente";
-                a.dose = isEn ? "20-25g CARBS (Gel)" : "20 a 25g HIDRATOS (Gel)";
+                a.dose = isEn ? "30g 4ENDURANCE GEL" : "30g GEL 4ENDURANCE";
                 a.symbol = "🚨";
                 a.spokenText = isEn
-                        ? "Warning: Blood glucose " + sgv + ", dropping fast. Take 20 to 25 grams of carbs now!"
-                        : "Aviso urgente! Glicémia nos " + sgv + ", em queda rápida. Toma vinte a vinte e cinco gramas de gel agora mesmo!";
+                        ? "Warning: Blood glucose " + sgv + ", dropping fast. Take your 30-gram 4Endurance gel now!"
+                        : "Aviso urgente! Glicémia nos " + sgv + ", em queda rápida. Toma o teu gel 4Endurance de trinta gramas agora mesmo!";
             } else if (isDroppingSlow) {
                 a.title = isEn ? "Downward Drift: Refuel Carbs" : "Descida Suave: Reforça Hidratos";
                 a.dose = isEn ? "15-20g CARBS (Gel)" : "15 a 20g HIDRATOS (Gel)";
@@ -849,10 +849,10 @@ public class RunnerService extends Service {
                         : "Glicémia nos " + sgv + ", " + trendSpoken + ". Subida controlada, ritmo seguro. Não precisas de hidratos.";
             } else if (isDroppingFast) {
                 a.title = isEn ? "Fast Drop: Proactive Gel" : "Queda Rápida: Gel Agressivo";
-                a.dose = isEn ? "20g PROACTIVE GEL" : "20g GEL AGRESSIVO (ANTECIPAÇÃO)";
+                a.dose = isEn ? "30g 4ENDURANCE GEL" : "30g GEL 4ENDURANCE";
                 a.spokenText = isEn
-                        ? "Blood glucose " + sgv + ", falling fast. Anticipate sensor lag: take a 20 gram gel now to stop the crash!"
-                        : "Glicémia nos " + sgv + ", em descida rápida. Antecipa o atraso do sensor: toma um gel de vinte gramas já para travar a quebra!";
+                        ? "Blood glucose " + sgv + ", falling fast. Anticipate sensor lag: take your 30-gram 4Endurance gel now to stop the crash!"
+                        : "Glicémia nos " + sgv + ", em descida rápida. Antecipa o atraso do sensor: toma o teu gel 4Endurance de trinta gramas já para travar a quebra!";
             } else if (isDroppingSlow) {
                 a.title = isEn ? "Downward Drift: Take Carbs" : "Descida Suave: Reforça Hidratos";
                 a.dose = isEn ? "15-20g GEL / CHEWS" : "15 a 20g GEL OU GOMAS";

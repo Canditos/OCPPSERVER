@@ -49,7 +49,7 @@ public class VoiceAudioPlugin extends Plugin {
 
     @PluginMethod
     public void notifyCarbIntake(PluginCall call) {
-        int grams = call.getInt("grams", 20);
+        int grams = call.getInt("grams", 30);
         long timestamp = call.getLong("timestamp", System.currentTimeMillis());
         RunnerService.recordCarbIntake(grams, timestamp);
         JSObject ret = new JSObject();

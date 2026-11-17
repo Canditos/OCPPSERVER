@@ -14,10 +14,83 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    :root {
+      --color-bg-base: #060913;
+    }
     body {
       overscroll-behavior-y: contain;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       -webkit-tap-highlight-color: transparent;
+      background-color: #060913;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.09) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    /* High-tech Athletic Cockpit Glassmorphism */
+    .glass-panel {
+      background: rgba(13, 20, 36, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-panel-interactive {
+      background: rgba(13, 20, 36, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glass-panel-interactive:hover {
+      border-color: rgba(56, 189, 248, 0.35);
+      transform: translateY(-1px);
+    }
+
+    /* Equalizer Sound Wave Animation */
+    @keyframes soundWave {
+      0%, 100% { height: 4px; }
+      50% { height: 14px; }
+    }
+    .equalizer-bar-1 { animation: soundWave 0.7s infinite ease-in-out; }
+    .equalizer-bar-2 { animation: soundWave 0.5s infinite ease-in-out 0.15s; }
+    .equalizer-bar-3 { animation: soundWave 0.8s infinite ease-in-out 0.35s; }
+    .equalizer-bar-4 { animation: soundWave 0.6s infinite ease-in-out 0.1s; }
+
+    /* EKG Heartbeat Animation */
+    @keyframes heartbeatKeyframe {
+      0% { transform: scale(1); }
+      14% { transform: scale(1.28); }
+      28% { transform: scale(1); }
+      42% { transform: scale(1.18); }
+      70% { transform: scale(1); }
+    }
+    .animate-heartbeat {
+      animation: heartbeatKeyframe 1.25s infinite ease-in-out;
+      display: inline-block;
+    }
+
+    /* Dynamic Glucose Aura Breathing */
+    @keyframes breatheGlow {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 0.65; transform: scale(1.06); }
+    }
+    .animate-breathe {
+      animation: breatheGlow 3s infinite ease-in-out;
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -45,11 +118,14 @@
       </div>
 
       <div class="flex items-center gap-1.5">
-        <!-- Speaking visual pulse indicator -->
-        <div id="audioPulseIndicator" class="hidden flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/20 border border-sky-400/40 text-sky-300 text-[10px] font-semibold animate-pulse">
-          <svg class="w-3 h-3 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-          </svg>
+        <!-- Speaking visual pulse indicator with Equalizer Waveform -->
+        <div id="audioPulseIndicator" class="hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-500/15 border border-sky-400/40 text-sky-300 text-[10px] font-bold">
+          <div class="flex items-end gap-0.5 h-3 px-0.5">
+            <span class="w-1 bg-sky-400 rounded-full equalizer-bar-1"></span>
+            <span class="w-1 bg-sky-400 rounded-full equalizer-bar-2"></span>
+            <span class="w-1 bg-sky-400 rounded-full equalizer-bar-3"></span>
+            <span class="w-1 bg-sky-400 rounded-full equalizer-bar-4"></span>
+          </div>
           <span id="labelSpeaking">Speaking</span>
         </div>
 
@@ -72,8 +148,8 @@
 
   <!-- Navigation Tab Bar (Corrida vs Ginásio) -->
   <div class="px-3.5 pt-1.5 shrink-0 max-w-md md:max-w-4xl lg:max-w-6xl mx-auto w-full z-20">
-    <div class="flex items-center gap-1 p-1 bg-slate-900/95 rounded-2xl border border-slate-800 shadow-sm">
-      <button id="tabBtnRunning" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-sky-500 text-white shadow-sm cursor-pointer">
+    <div class="flex items-center gap-1 p-1 bg-slate-900/80 rounded-2xl border border-white/5 shadow-inner backdrop-blur-md">
+      <button id="tabBtnRunning" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/25 cursor-pointer">
         <span>🏃</span> <span id="labelTabRunning">Corrida & Glicémia</span>
       </button>
       <button id="tabBtnGym" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800/60 cursor-pointer">
@@ -92,20 +168,20 @@
       <div class="flex flex-col gap-1.5 sm:gap-2 md:gap-2.5 md:col-span-6 lg:col-span-6">
         <!-- Top Status Row -->
         <div class="flex items-center justify-between shrink-0 gap-1">
-          <div id="workoutStatusBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-slate-900 text-slate-400 border border-slate-800 flex items-center gap-1.5 shrink-0">
+          <div id="workoutStatusBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-slate-900/90 text-slate-400 border border-white/5 flex items-center gap-1.5 shrink-0 shadow-sm">
             <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
             <span id="workoutStatusText">Workout Stopped</span>
           </div>
 
           <div class="flex items-center gap-1 shrink-0">
             <!-- Heart Rate Badge (HUAWEI WATCH / BLE) -->
-            <button id="hrStatusBadge" type="button" class="flex items-center gap-1 text-[11px] text-rose-300 font-semibold bg-rose-950/40 border border-rose-800/60 px-2 py-0.5 rounded-full transition-all cursor-pointer active:scale-95 select-none" title="Emparelhar HUAWEI WATCH GT / Fita Cardíaca">
+            <button id="hrStatusBadge" type="button" class="flex items-center gap-1 text-[11px] text-rose-300 font-semibold bg-rose-950/50 border border-rose-800/60 px-2 py-0.5 rounded-full transition-all cursor-pointer active:scale-95 select-none shadow-sm shadow-rose-950/30" title="Emparelhar HUAWEI WATCH GT / Fita Cardíaca">
               <span id="hrIcon" class="text-xs">❤️</span>
               <span id="labelHr" class="truncate max-w-[95px]">Ligar Watch</span>
             </button>
 
             <!-- Bluetooth / Audio output status badge -->
-            <div id="audioStatusBadge" class="flex items-center gap-1 text-[11px] text-slate-400 font-medium bg-slate-900/80 border border-slate-800 px-2 py-0.5 rounded-full transition-all cursor-pointer select-none" title="Estado da saída de áudio">
+            <div id="audioStatusBadge" class="flex items-center gap-1 text-[11px] text-slate-400 font-medium bg-slate-900/90 border border-white/5 px-2 py-0.5 rounded-full transition-all cursor-pointer select-none" title="Estado da saída de áudio">
               <span id="audioStatusIcon" class="flex items-center">
                 <svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77zm-2.5 4.77l-4.5 4.5H3v3h4l4.5 4.5V8zM16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
@@ -117,116 +193,128 @@
         </div>
 
         <!-- Quick Workout Profile Selector -->
-        <div class="flex items-center justify-between gap-1 bg-slate-900/70 p-1 rounded-xl border border-slate-800/80 text-xs shrink-0">
-          <button id="profHalf" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] text-center transition flex items-center justify-center gap-1 bg-sky-500 text-white shadow-sm cursor-pointer" title="Alvo Meia-Maratona: 135-165 mg/dL (Consenso ADA/EASD)">
+        <div class="flex items-center justify-between gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-white/5 text-xs shrink-0 backdrop-blur-md shadow-sm">
+          <button id="profHalf" type="button" class="profile-btn flex-1 py-1 px-1 rounded-xl font-bold text-[10px] sm:text-[11px] text-center transition flex items-center justify-center gap-1 bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/25 cursor-pointer" title="Alvo Meia-Maratona: 135-165 mg/dL (Consenso ADA/EASD)">
             <span>🏅</span><span id="labelProfHalf">Meia-Maratona</span>
           </button>
-          <button id="profZone2" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Treino Longo / Zona 2: 130-170 mg/dL">
+          <button id="profZone2" type="button" class="profile-btn flex-1 py-1 px-1 rounded-xl font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Treino Longo / Zona 2: 130-170 mg/dL">
             <span>🏃‍♂️</span><span id="labelProfZone2">Longo</span>
           </button>
-          <button id="profHIIT" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Treino Rápido / Séries: 110-150 mg/dL">
+          <button id="profHIIT" type="button" class="profile-btn flex-1 py-1 px-1 rounded-xl font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Treino Rápido / Séries: 110-150 mg/dL">
             <span>⚡</span><span id="labelProfHIIT">Séries</span>
           </button>
-          <button id="profWalk" type="button" class="profile-btn flex-1 py-1 px-1 rounded-lg font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Caminhada: 90-140 mg/dL">
+          <button id="profWalk" type="button" class="profile-btn flex-1 py-1 px-1 rounded-xl font-medium text-[10px] sm:text-[11px] text-slate-400 hover:text-white text-center transition flex items-center justify-center gap-1 cursor-pointer" title="Caminhada: 90-140 mg/dL">
             <span>🚶</span><span id="labelProfWalk">Caminhada</span>
           </button>
         </div>
 
         <!-- Dedicated Heart Rate Quick Bar -->
-        <div id="heartRateQuickBar" class="flex items-center justify-between gap-2 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-rose-900/40 text-xs shrink-0 cursor-pointer hover:border-rose-700/60 transition active:scale-[0.99]" title="Configurar e ligar HUAWEI WATCH / Sensor Cardíaco">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-base text-rose-500 animate-pulse shrink-0">❤️</span>
+        <div id="heartRateQuickBar" class="glass-panel-interactive flex items-center justify-between gap-2 px-3 py-2 rounded-2xl border border-rose-900/40 text-xs shrink-0 cursor-pointer shadow-sm shadow-rose-950/30 active:scale-[0.99]" title="Configurar e ligar HUAWEI WATCH / Sensor Cardíaco">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
+              <span class="text-sm text-rose-500 animate-heartbeat">❤️</span>
+            </div>
             <div class="min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span id="quickBarHrTitle" class="text-[11px] font-bold text-white">FC:</span>
-                <span id="quickBarHrValue" class="text-xs font-black text-rose-300 font-mono">-- bpm</span>
+                <span id="quickBarHrValue" class="text-xs sm:text-sm font-black text-rose-300 font-mono">-- bpm</span>
                 <span id="quickBarHrZone" class="hidden text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase bg-rose-950 text-rose-300 border border-rose-800/50">--</span>
                 <span class="text-slate-600">|</span>
                 <span class="text-[11px] font-bold text-white">GPS:</span>
-                <span id="quickBarGpsPace" class="text-xs font-black text-emerald-400 font-mono">--/km</span>
+                <span id="quickBarGpsPace" class="text-xs sm:text-sm font-black text-emerald-400 font-mono">--/km</span>
                 <span id="quickBarGpsDist" class="text-[10px] font-bold text-slate-300 font-mono">0.00 km</span>
               </div>
               <p id="quickBarHrSub" class="text-[10px] text-slate-400 truncate">HUAWEI WATCH GT 6 Pro · Toca para ligar</p>
             </div>
           </div>
-          <button id="btnQuickConnectHr" type="button" class="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-[10px] transition shrink-0 cursor-pointer">
+          <button id="btnQuickConnectHr" type="button" class="px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-[10px] transition shrink-0 cursor-pointer shadow-sm shadow-rose-600/30">
             Ligar Watch
           </button>
         </div>
 
-        <!-- Glucose Big High-Contrast Card -->
-        <div id="glucoseCard" class="relative overflow-hidden rounded-2xl bg-slate-900/90 border-2 border-slate-800 px-4 py-3 sm:py-4 md:py-6 backdrop-blur-xl shadow-xl transition-all duration-300 shrink-0 flex-1 flex flex-col justify-center">
-          <div class="flex justify-between items-center mb-1">
-            <span id="labelGlucoseTitle" class="text-[10px] md:text-xs font-bold tracking-widest uppercase text-slate-400">CURRENT GLUCOSE</span>
+        <!-- Glucose Big High-Contrast Card with Dynamic Halo/Aura -->
+        <div id="glucoseCard" class="relative overflow-hidden rounded-3xl glass-panel border-2 border-slate-800 px-4 py-3 sm:py-4 md:py-6 shadow-2xl transition-all duration-500 shrink-0 flex-1 flex flex-col justify-center">
+          <!-- Dynamic Ambient Background Glow Halo -->
+          <div id="glucoseAura" class="absolute -top-12 -right-12 w-52 h-52 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-40 bg-emerald-500/25 animate-breathe"></div>
+          <div id="glucoseAura2" class="absolute -bottom-10 -left-10 w-44 h-44 rounded-full blur-3xl pointer-events-none transition-all duration-700 opacity-20 bg-sky-500/20"></div>
+
+          <div class="relative z-10 flex justify-between items-center mb-1">
+            <span id="labelGlucoseTitle" class="text-[10px] md:text-xs font-black tracking-widest uppercase text-slate-400 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-ping"></span>
+              CURRENT GLUCOSE
+            </span>
             <div class="flex items-center gap-1.5">
-              <span id="pumpBolusBadge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/60 flex items-center gap-1">
+              <span id="pumpBolusBadge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 flex items-center gap-1">
                 <span>💉</span>
                 <span id="pumpBolusText">Bólus recente</span>
               </span>
-              <span id="readingTime" class="text-[10px] font-medium text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded-full">loading...</span>
+              <span id="readingTime" class="text-[10px] font-semibold text-slate-400 bg-slate-900/80 border border-white/5 px-2.5 py-0.5 rounded-full backdrop-blur">loading...</span>
             </div>
           </div>
 
-          <div class="flex items-baseline justify-center my-1 sm:my-2 md:my-3 gap-2.5 sm:gap-4">
+          <div class="relative z-10 flex items-baseline justify-center my-1 sm:my-2 md:my-3 gap-2.5 sm:gap-4">
             <!-- Giant SGV number for readability in motion / tablet across room -->
-            <span id="currentSgv" class="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white tabular-nums drop-shadow-md">
+            <span id="currentSgv" class="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-black tracking-tight text-white tabular-nums drop-shadow-[0_4px_24px_rgba(0,0,0,0.8)]">
               --
             </span>
             <div class="flex flex-col items-center">
-              <span id="currentTrend" class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-sky-400 leading-none" title="Trend">
+              <span id="currentTrend" class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-sky-400 leading-none drop-shadow-[0_0_15px_rgba(56,189,248,0.4)]" title="Trend">
                 →
               </span>
-              <span class="text-[10px] sm:text-xs font-medium text-slate-400 mt-1">mg/dL</span>
+              <span class="text-[10px] sm:text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider">mg/dL</span>
             </div>
           </div>
 
           <!-- Real-time SVG Sparkline Micro-Chart (Last 1 hour / 12 readings) -->
-          <div class="w-full h-11 sm:h-12 my-1 relative flex items-center justify-center bg-slate-950/40 rounded-xl px-1.5 py-0.5 border border-slate-800/50">
+          <div class="relative z-10 w-full h-12 sm:h-14 my-1 relative flex items-center justify-center bg-slate-950/50 rounded-2xl px-2 py-1 border border-white/5 backdrop-blur-md">
             <svg id="glucoseSparklineSvg" class="w-full h-full overflow-visible" viewBox="0 0 300 48" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="sparklineGradNormal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45" />
+                  <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55" />
                   <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0" />
                 </linearGradient>
                 <linearGradient id="sparklineGradHigh" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.45" />
+                  <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.55" />
                   <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0" />
                 </linearGradient>
                 <linearGradient id="sparklineGradLow" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.5" />
+                  <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.6" />
                   <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0" />
                 </linearGradient>
                 <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="1.8" result="blur" />
+                  <feGaussianBlur stdDeviation="2.2" result="blur" />
                   <feMerge>
                     <feMergeNode in="blur" />
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
               </defs>
-              <!-- Target Corridor guides -->
-              <line id="sparklineTargetMax" x1="0" y1="12" x2="300" y2="12" stroke="#334155" stroke-width="0.8" stroke-dasharray="3,3" opacity="0.6" />
-              <line id="sparklineTargetMin" x1="0" y1="36" x2="300" y2="36" stroke="#334155" stroke-width="0.8" stroke-dasharray="3,3" opacity="0.6" />
-              <!-- Gradient Area & Trend Path -->
-              <polygon id="sparklineArea" fill="url(#sparklineGradNormal)" points="0,48 300,48" opacity="0.8" />
-              <path id="sparklinePath" d="" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonGlow)" />
-              <!-- Pulsing active latest dot -->
-              <circle id="sparklineCurrentDot" cx="295" cy="24" r="3.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" class="animate-pulse" />
+              <!-- Target Corridor Visual Band (Smooth zone highlighting) -->
+              <rect id="sparklineTargetBand" x="0" y="14" width="300" height="20" fill="rgba(16, 185, 129, 0.08)" rx="4" />
+              <!-- Target Corridor guide lines -->
+              <line id="sparklineTargetMax" x1="0" y1="14" x2="300" y2="14" stroke="#10b981" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.4" />
+              <line id="sparklineTargetMin" x1="0" y1="34" x2="300" y2="34" stroke="#10b981" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.4" />
+              <!-- Smooth Cubic Spline Shaded Area & Stroke Path -->
+              <path id="sparklineArea" d="M 0,48 L 300,48 Z" fill="url(#sparklineGradNormal)" opacity="0.85" />
+              <path id="sparklinePath" d="" fill="none" stroke="#38bdf8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonGlow)" />
+              <!-- Pulsing active radar ping ring + solid white-bordered core dot -->
+              <circle id="sparklineCurrentDotPulse" cx="295" cy="24" r="6" fill="none" stroke="#38bdf8" stroke-width="1.5" class="animate-ping" opacity="0.7" />
+              <circle id="sparklineCurrentDot" cx="295" cy="24" r="3.8" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
             </svg>
             <div id="sparklineLabels" class="absolute inset-0 flex justify-between items-end pointer-events-none text-[8px] text-slate-500 font-mono px-2 pb-0.5">
               <span>-60m</span>
-              <span id="sparklineTargetLabel" class="text-slate-500/80">Alvo 110-170</span>
+              <span id="sparklineTargetLabel" class="text-emerald-400/70 font-semibold">Alvo 110-170</span>
               <span class="text-sky-400 font-bold">Agora</span>
             </div>
           </div>
 
-          <div class="flex items-center justify-center gap-3 pt-2 border-t border-slate-800/80">
+          <div class="relative z-10 flex items-center justify-center gap-3 pt-2 border-t border-white/5">
             <div class="flex items-center gap-1.5">
               <span id="labelVar5m" class="text-[10px] sm:text-xs text-slate-400 uppercase font-semibold">5M DELTA:</span>
               <span id="currentDelta" class="text-xs sm:text-sm font-bold text-slate-300">--</span>
             </div>
-            <div id="glucoseCardHrBox" class="hidden flex items-center gap-1.5 border-l border-slate-800 pl-3">
-              <span class="text-xs text-rose-500 animate-pulse">❤️</span>
+            <div id="glucoseCardHrBox" class="hidden flex items-center gap-1.5 border-l border-white/10 pl-3">
+              <span class="text-xs text-rose-500 animate-heartbeat">❤️</span>
               <span id="glucoseCardHrValue" class="text-xs sm:text-sm font-bold text-rose-300">-- bpm</span>
               <span id="glucoseCardHrZone" class="text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase bg-rose-950 text-rose-300 border border-rose-800/50">Z2</span>
             </div>
@@ -237,66 +325,64 @@
       <!-- Coluna Direita: Treinador de Hidratos, Ações, Tempos de Voz e Iniciar Treino -->
       <div class="flex flex-col gap-1.5 sm:gap-2 md:gap-2.5 md:col-span-6 lg:col-span-6 mt-1.5 md:mt-0 justify-between">
         <!-- Sports Carb Coach Decision Box -->
-        <div id="carbCoachCard" class="rounded-2xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border border-slate-800 p-2 sm:p-3 shadow-md shrink-0">
-          <div class="flex items-center justify-between mb-1">
-            <span id="labelCoachTitle" class="text-[10px] md:text-xs font-bold tracking-wider uppercase text-slate-400 flex items-center gap-1">
-              <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm0-9a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm0 8a1 1 0 100-2 1 1 0 000 2z"/>
-              </svg>
+        <div id="carbCoachCard" class="rounded-3xl glass-panel border border-slate-800 p-2 sm:p-3 shadow-lg shrink-0">
+          <div class="flex items-center justify-between mb-1.5">
+            <span id="labelCoachTitle" class="text-[10px] md:text-xs font-black tracking-wider uppercase text-slate-400 flex items-center gap-1.5">
+              <span class="text-amber-400">⚡</span>
               Carb Coach
             </span>
-            <span id="carbBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400">
+            <span id="carbBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-800/80 text-slate-400 border border-white/5">
               Evaluating
             </span>
           </div>
 
-          <div class="bg-slate-950/70 rounded-xl p-2.5 border border-slate-800/80">
+          <div class="bg-slate-950/70 rounded-2xl p-2.5 sm:p-3 border border-white/5">
             <div class="flex items-baseline justify-between gap-2">
               <div class="flex items-baseline gap-1.5">
-                <span id="labelDose" class="text-[10px] md:text-xs text-slate-400 font-semibold uppercase">DOSE:</span>
-                <span id="carbAmount" class="text-xs sm:text-sm font-black text-amber-400">No carbs needed</span>
+                <span id="labelDose" class="text-[10px] md:text-xs text-slate-400 font-bold uppercase">DOSE:</span>
+                <span id="carbAmount" class="text-xs sm:text-sm font-black text-amber-400">Sem hidratos necessários</span>
               </div>
-              <span id="carbTitle" class="text-xs font-bold text-slate-200 truncate">Target Running Zone</span>
+              <span id="carbTitle" class="text-xs font-bold text-slate-200 truncate">Zona Alvo</span>
             </div>
             <p id="carbDescription" class="text-[11px] md:text-xs text-slate-400 mt-1 leading-snug line-clamp-1 sm:line-clamp-2 md:line-clamp-3">
-              The coach evaluates your current glucose and drop rate to tell you via audio if you need energy gels, chews, or just water.
+              O treinador avalia a glicémia e taxa de queda para recomendar via áudio se precisas de tomar 4Endurance (30g), SOS ou água.
             </p>
           </div>
         </div>
 
         <!-- Quick Carb & Voice Command Action Bar -->
-        <div class="flex items-center gap-1.5 shrink-0">
-          <button id="btnQuickGel" type="button" class="flex-1 py-1.5 sm:py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer">
-            <span class="text-sm">🍬</span>
-            <span id="labelQuickGel">Tomei Gel (20g)</span>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btnQuickGel" type="button" class="flex-1 py-2 sm:py-3 px-3.5 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border-2 border-amber-500/40 hover:border-amber-400 text-amber-300 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition active:scale-95 cursor-pointer">
+            <span class="text-base">🔋</span>
+            <span id="labelQuickGel">Tomei 4Endurance (30g)</span>
           </button>
-          <button id="btnVoiceCommand" type="button" class="py-1.5 sm:py-2.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/40 text-sky-400 font-bold text-xs sm:text-sm flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer" title="Comando de Voz">
+          <button id="btnVoiceCommand" type="button" class="py-2 sm:py-3 px-3.5 rounded-2xl glass-panel-interactive border border-slate-700 hover:border-sky-400 text-sky-400 font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-md" title="Comando de Voz">
             <span class="text-sm" id="micIcon">🎙️</span>
             <span id="labelMicBtn">Voz</span>
           </button>
-          <button id="btnCustomCarb" type="button" class="py-1.5 sm:py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold text-xs sm:text-sm flex items-center justify-center transition active:scale-95 cursor-pointer" title="Outra quantidade">
+          <button id="btnCustomCarb" type="button" class="py-2 sm:py-3 px-3 rounded-2xl glass-panel-interactive border border-slate-700 hover:border-slate-500 text-slate-300 font-bold text-xs sm:text-sm flex items-center justify-center transition active:scale-95 cursor-pointer" title="Outra quantidade">
             <span>+ Outro</span>
           </button>
         </div>
 
         <!-- Workout Stats Bar (Interval countdown, workout duration) -->
-        <div class="grid grid-cols-3 gap-1.5 text-center bg-slate-900/60 rounded-xl p-2 border border-slate-800/60 shrink-0">
-          <div>
+        <div class="grid grid-cols-3 gap-1.5 text-center glass-panel rounded-2xl p-2.5 border border-white/5 shrink-0 shadow-sm">
+          <div class="flex flex-col items-center">
             <p id="labelNextVoice" class="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400">Next Audio</p>
             <p id="countdownText" class="text-sm sm:text-base font-black text-sky-400 tabular-nums">2:00</p>
           </div>
-          <div class="border-x border-slate-800">
+          <div class="flex flex-col items-center border-x border-white/5">
             <p id="labelDuration" class="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400">Duration</p>
             <p id="workoutDuration" class="text-sm sm:text-base font-black text-white tabular-nums">0:00</p>
           </div>
-          <div>
+          <div class="flex flex-col items-center">
             <p id="labelAnnouncements" class="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400">Announcements</p>
             <p id="announcementCount" class="text-sm sm:text-base font-black text-indigo-400 tabular-nums">0</p>
           </div>
         </div>
 
         <!-- Session Mode Selector: Corrida vs Dia a Dia (Só Glicémia) -->
-        <div class="flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-2xl border border-slate-800 shrink-0">
+        <div class="flex items-center gap-1 p-1 bg-slate-900/80 rounded-2xl border border-white/5 shrink-0 backdrop-blur-md">
           <button id="btnModeRunning" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white shadow-sm cursor-pointer">
             <span>🏃 Treino / Corrida</span>
           </button>
@@ -308,30 +394,34 @@
         <!-- Action Buttons -->
         <div class="flex flex-col gap-1.5 sm:gap-2 shrink-0">
           <!-- Main Big Button: Start / Stop Workout -->
-          <button id="btnStartWorkout" class="w-full py-2.5 sm:py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] text-white font-extrabold text-base shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2 transition cursor-pointer">
-            <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            <span id="startBtnText" class="truncate">Iniciar Treino (Voz a cada 2 min)</span>
+          <button id="btnStartWorkout" class="relative overflow-hidden w-full py-3 sm:py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] text-white font-black text-sm sm:text-base shadow-lg shadow-emerald-500/25 border border-emerald-400/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer">
+            <div class="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+            <span id="startBtnText" class="truncate tracking-wide">INICIAR TREINO (Voz a cada 2 min)</span>
           </button>
 
-          <button id="btnStopWorkout" class="hidden w-full py-2.5 sm:py-3.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 active:scale-[0.98] text-white font-extrabold text-base shadow-md shadow-rose-600/30 flex items-center justify-center gap-2 transition cursor-pointer">
-            <svg class="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
-              <path d="M6 6h12v12H6z"/>
-            </svg>
-            <span id="stopBtnText">Stop Workout</span>
+          <button id="btnStopWorkout" class="hidden relative overflow-hidden w-full py-3 sm:py-3.5 px-4 rounded-2xl bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-500 hover:to-red-500 active:scale-[0.98] text-white font-black text-sm sm:text-base shadow-lg shadow-rose-600/30 border border-rose-400/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer">
+            <div class="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                <path d="M6 6h12v12H6z"/>
+              </svg>
+            </div>
+            <span id="stopBtnText" class="truncate tracking-wide">PARAR TREINO</span>
           </button>
 
           <!-- Secondary Quick Actions -->
-          <div class="grid grid-cols-2 gap-1.5">
-            <button id="btnAnnounceNow" class="py-1.5 sm:py-2 px-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs sm:text-sm font-bold text-slate-200 flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer">
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btnAnnounceNow" class="py-2 px-2.5 rounded-xl glass-panel-interactive border border-slate-800 hover:border-sky-500/40 text-xs sm:text-sm font-bold text-slate-200 flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer">
               <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
               </svg>
               <span id="speakNowText">Speak Now</span>
             </button>
 
-            <button id="btnTestAudio" class="py-1.5 sm:py-2 px-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs sm:text-sm font-bold text-slate-200 flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer">
+            <button id="btnTestAudio" class="py-2 px-2.5 rounded-xl glass-panel-interactive border border-slate-800 hover:border-indigo-500/40 text-xs sm:text-sm font-bold text-slate-200 flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer">
               <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
@@ -472,7 +562,7 @@
       <div id="footerTip" class="truncate mr-2 leading-none">💡 Auriculares: Botão ouve glicémia instantânea</div>
       <div class="flex items-center gap-1 shrink-0">
         <button id="btnFooterWhatsNew" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-800 hover:border-sky-500/40 shadow-sm transition active:scale-95 cursor-pointer">
-          <span>✨ v2.6</span>
+          <span>✨ v2.7</span>
         </button>
         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950/90 text-emerald-400 border border-emerald-500/40 shadow-sm">
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -583,7 +673,7 @@
         <!-- Changelog link inside Settings -->
         <div class="pt-2">
           <button id="btnSettingsWhatsNew" type="button" class="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-sky-400 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-700/50 transition cursor-pointer">
-            <span>✨ Ver o que há de novo na v1.8</span>
+            <span>✨ Ver o que há de novo na v2.7</span>
           </button>
         </div>
 
@@ -591,18 +681,18 @@
         <div class="pt-2 border-t border-slate-800/80 text-[11px] font-mono text-slate-400 space-y-1">
           <div class="flex items-center justify-between">
             <span>Live OTA:</span>
-            <span class="text-emerald-400 font-bold">v1.8 (Ativo)</span>
+            <span class="text-emerald-400 font-bold">v2.7 (Ativo)</span>
           </div>
           <div class="flex items-center justify-between">
             <span>Wrapper Nativo:</span>
-            <span id="settingsNativeVersion" class="text-slate-300">Android APK v1.8</span>
+            <span id="settingsNativeVersion" class="text-slate-300">Android APK v2.7</span>
           </div>
         </div>
 
         <!-- Manual Native APK Update / Reinstall -->
         <div class="pt-1">
           <button id="btnSettingsDownloadApk" type="button" class="w-full py-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 font-bold text-xs flex items-center justify-center gap-2 border border-indigo-500/40 transition cursor-pointer">
-            <span>📲 Atualizar / Reinstalar APK Nativo (v2.2)</span>
+            <span>📲 Atualizar / Reinstalar APK Nativo (v2.7)</span>
           </button>
         </div>
 
@@ -758,15 +848,15 @@
         <button id="btnCloseCustomCarbTop" type="button" class="text-slate-400 hover:text-white p-1 text-sm cursor-pointer">✕</button>
       </div>
 
-      <!-- Presets for Marco's tested products -->
+      <!-- Presets for Marco's tested products (4Endurance as Default) -->
       <div class="grid grid-cols-2 gap-2 mb-3">
-        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-rose-950/40 text-left border border-rose-800/40 hover:border-rose-500 transition active:scale-95 cursor-pointer group" data-grams="12" data-source="glucody_sos">
+        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-sky-950/50 hover:bg-sky-900/60 text-left border-2 border-sky-400 transition active:scale-95 cursor-pointer group shadow-sm shadow-sky-950" data-grams="30" data-source="4endurance_gel">
           <div class="flex items-center justify-between">
-            <span class="text-sm font-black text-rose-300">12g HC</span>
-            <span class="text-[8px] px-1.5 py-0.5 rounded bg-rose-900/60 text-rose-200 font-extrabold uppercase">SOS</span>
+            <span class="text-sm font-black text-sky-300">30g HC</span>
+            <span class="text-[8px] px-1.5 py-0.5 rounded bg-sky-400 text-slate-950 font-black uppercase">PADRÃO</span>
           </div>
-          <p class="text-xs font-bold text-white mt-1">Glucody Dextrose</p>
-          <p class="text-[9px] text-slate-400 leading-tight">Ação imediata (5-10m)</p>
+          <p class="text-xs font-bold text-white mt-1">4Endurance 2:1</p>
+          <p class="text-[9px] text-sky-200/80 leading-tight">Gel Principal (30g)</p>
         </button>
 
         <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-amber-950/40 text-left border border-amber-800/40 hover:border-amber-500 transition active:scale-95 cursor-pointer group" data-grams="20" data-source="4energy_gel">
@@ -778,19 +868,19 @@
           <p class="text-[9px] text-slate-400 leading-tight">Manutenção fluida</p>
         </button>
 
-        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-sky-950/40 text-left border border-sky-800/40 hover:border-sky-500 transition active:scale-95 cursor-pointer group" data-grams="30" data-source="4endurance_gel">
+        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-rose-950/40 text-left border border-rose-800/40 hover:border-rose-500 transition active:scale-95 cursor-pointer group" data-grams="12" data-source="glucody_sos">
           <div class="flex items-center justify-between">
-            <span class="text-sm font-black text-sky-300">30g HC</span>
-            <span class="text-[8px] px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-200 font-extrabold uppercase">2:1</span>
+            <span class="text-sm font-black text-rose-300">12g HC</span>
+            <span class="text-[8px] px-1.5 py-0.5 rounded bg-rose-900/60 text-rose-200 font-extrabold uppercase">SOS</span>
           </div>
-          <p class="text-xs font-bold text-white mt-1">4Endurance 2:1</p>
-          <p class="text-[9px] text-slate-400 leading-tight">Energia prolongada</p>
+          <p class="text-xs font-bold text-white mt-1">Glucody Dextrose</p>
+          <p class="text-[9px] text-slate-400 leading-tight">Ação imediata (5-10m)</p>
         </button>
 
         <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-slate-800 text-left border border-slate-800 hover:border-slate-600 transition active:scale-95 cursor-pointer group" data-grams="15" data-source="standard_15">
           <div class="flex items-center justify-between">
             <span class="text-sm font-black text-slate-200">15g HC</span>
-            <span class="text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold uppercase">Padrão</span>
+            <span class="text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold uppercase">15g</span>
           </div>
           <p class="text-xs font-bold text-white mt-1">Gel Padrão</p>
           <p class="text-[9px] text-slate-400 leading-tight">Regra 15g ADA</p>
@@ -803,7 +893,7 @@
         <div class="flex items-center justify-center gap-2">
           <button id="btnCarbMinus" type="button" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition active:scale-95 cursor-pointer">-</button>
           <div class="flex items-center justify-center bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 w-24">
-            <input id="inputCustomCarbs" type="number" min="1" max="120" value="25" class="bg-transparent text-center text-xs font-black text-amber-300 w-10 focus:outline-none font-mono">
+            <input id="inputCustomCarbs" type="number" min="1" max="120" value="30" class="bg-transparent text-center text-xs font-black text-amber-300 w-10 focus:outline-none font-mono">
             <span class="text-[10px] text-slate-400 font-bold ml-1">g HC</span>
           </div>
           <button id="btnCarbPlus" type="button" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition active:scale-95 cursor-pointer">+</button>
@@ -893,6 +983,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=40"></script>
+  <script src="/app.js?v=42"></script>
 </body>
 </html>

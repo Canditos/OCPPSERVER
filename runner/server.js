@@ -173,42 +173,42 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 1.1 App Version endpoint for in-app updates (v2.6)
+  // 1.1 App Version endpoint for in-app updates (v2.7)
   if (parsedUrl.pathname === '/api/version') {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 17,
-      versionName: '2.6',
-      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=17',
-      releaseNotes: 'Blindagem de Cibersegurança (SSRF & DoS Shield), Sparkline SVG em Tempo Real no Card de Glicémia, Seletor Especializado de Géis (Glucody, 4Energy, 4Endurance) e Sincronização 1-Tap c/ Intervals.icu.',
+      versionCode: 18,
+      versionName: '2.7',
+      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=18',
+      releaseNotes: 'Design Cockpit Atlético OLED, Curva Spline Cúbica (Bezier) Ultra-Suave, Halo / Aura Dinâmica de Alerta, Gel Padrão 4Endurance 2:1 (30g) e EKG Cardio em Tempo Real.',
       features: [
         {
-          icon: '🛡️',
-          title: 'Blindagem de Cibersegurança Avançada',
-          desc: 'Proteção contra SSRF e DNS Rebinding nos proxies, limitação de débito (Rate Limiting anti-DoS), cabeçalhos CSP/HSTS e proteção contra Path Traversal.'
+          icon: '🎨',
+          title: 'Design Cockpit Atlético & OLED Obsidian Dark',
+          desc: 'Interface de corrida de última geração com painéis de vidro translúcido (Glassmorphism), máxima legibilidade sob luz solar direta e toques hápticos de precisão.'
         },
         {
           icon: '📈',
-          title: 'Sparkline SVG de Glicémia em Tempo Real',
-          desc: 'Micro-gráfico neon integrado diretamente no Card de Glicémia: histórico da última hora, corredor alvo e ponto pulsante dinâmico.'
+          title: 'Curva Spline Cúbica (Bezier) Ultra-Suave',
+          desc: 'Micro-gráfico de glicémia com interpolação spline cúbica matemática que desenha uma curva biológica contínua, banda de zona alvo e radar pulsante.'
         },
         {
-          icon: '🍬',
-          title: 'Seletor de Géis & Dextrose Especializado',
-          desc: 'Chips rápidos de 1-toque calibrados para Glucody SOS (12g dextrose rápida), 4Energy Líquido (20g) e 4Endurance 2:1 (30g), com registo personalizado.'
+          icon: '🌟',
+          title: 'Halo / Aura Dinâmica de Alerta',
+          desc: 'Iluminação indireta ambiente atrás do valor de glicémia: respiração esmeralda no alvo, alerta âmbar na subida e aviso carmesim nas quebras.'
         },
         {
-          icon: '⚡',
-          title: 'Sincronização 1-Tap com Intervals.icu',
-          desc: 'Botão dedicado no resumo de treino para enviar notas clínicas completas de glicémia, TIR, hidratos consumidos e frequência cardíaca diretamente para o treino do dia.'
+          icon: '🔋',
+          title: 'Gel Padrão 4Endurance 2:1 (30g HC)',
+          desc: '4Endurance 2:1 calibrado como combustível padrão nos botões de 1-toque, reconhecimento por voz e recomendações do treinador.'
         },
         {
-          icon: '📱',
-          title: 'Layout Adaptativo Tablet & Telemóvel',
-          desc: 'Visual responsivo OLED de alto contraste que se ajusta em telemóvel e tablet com cronómetro sticky no ginásio.'
+          icon: '💓',
+          title: 'Cardio EKG & Visualizador Equalizador de Áudio',
+          desc: 'Indicador de batimento cardíaco EKG animado na telemetria e equalizador gráfico de 4 barras quando o assistente de voz fala.'
         }
       ]
     }));
