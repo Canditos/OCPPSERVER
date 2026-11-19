@@ -350,18 +350,34 @@
           </div>
         </div>
 
+        <!-- Active Workout Gel Bar (Menu de Géis da Corrida) -->
+        <div class="flex items-center justify-between px-3 py-1.5 rounded-2xl bg-slate-900/80 border border-white/5 text-xs shrink-0 shadow-sm backdrop-blur-md">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-sm">🎯</span>
+            <div class="min-w-0">
+              <span class="text-[9px] uppercase font-extrabold tracking-wider text-slate-400 block leading-none">Gel Desta Corrida:</span>
+              <p id="activeGelSummary" class="text-xs font-black text-amber-300 truncate leading-tight mt-0.5">4Endurance 2:1 (30g HC)</p>
+            </div>
+          </div>
+          <button id="btnOpenGelMenu" type="button" class="py-1 px-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-[10px] sm:text-xs flex items-center gap-1 transition active:scale-95 cursor-pointer shrink-0">
+            <span>⚙️</span>
+            <span>Mudar Gel</span>
+          </button>
+        </div>
+
         <!-- Quick Carb & Voice Command Action Bar -->
         <div class="flex items-center gap-2 shrink-0">
           <button id="btnQuickGel" type="button" class="flex-1 py-2 sm:py-3 px-3.5 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border-2 border-amber-500/40 hover:border-amber-400 text-amber-300 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition active:scale-95 cursor-pointer">
-            <span class="text-base">🔋</span>
+            <span class="text-base" id="iconQuickGel">🔋</span>
             <span id="labelQuickGel">Tomei 4Endurance (30g)</span>
           </button>
           <button id="btnVoiceCommand" type="button" class="py-2 sm:py-3 px-3.5 rounded-2xl glass-panel-interactive border border-slate-700 hover:border-sky-400 text-sky-400 font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-md" title="Comando de Voz">
             <span class="text-sm" id="micIcon">🎙️</span>
             <span id="labelMicBtn">Voz</span>
           </button>
-          <button id="btnCustomCarb" type="button" class="py-2 sm:py-3 px-3 rounded-2xl glass-panel-interactive border border-slate-700 hover:border-slate-500 text-slate-300 font-bold text-xs sm:text-sm flex items-center justify-center transition active:scale-95 cursor-pointer" title="Outra quantidade">
-            <span>+ Outro</span>
+          <button id="btnCustomCarb" type="button" class="py-2 sm:py-3 px-3 rounded-2xl glass-panel-interactive border border-slate-700 hover:border-amber-500/40 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer" title="Menu Completo de Géis & SOS">
+            <span>🍬</span>
+            <span>Géis / SOS</span>
           </button>
         </div>
 
@@ -834,76 +850,132 @@
     <button id="btnCancelVoice" type="button" class="text-slate-400 hover:text-white p-1 text-sm cursor-pointer">✕</button>
   </div>
 
-  <!-- Custom Carbs Modal -->
-  <div id="customCarbModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-all">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative animate-in fade-in zoom-in duration-200">
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">🍬</span>
+  <!-- Menu de Géis da Corrida & Hidratos Modal -->
+  <div id="customCarbModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 transition-all">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-4 sm:p-5 shadow-2xl relative animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-2.5 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-lg">
+            🍬
+          </div>
           <div>
-            <h3 class="text-sm font-extrabold text-white" id="customCarbTitle">Registar Hidratos Consumidos</h3>
-            <p class="text-[10px] text-amber-400 font-medium">Géis & Dextrose Calibrados</p>
+            <h3 class="text-sm sm:text-base font-black text-white" id="customCarbTitle">Menu de Géis da Corrida</h3>
+            <p class="text-[10px] sm:text-[11px] text-amber-400 font-medium">Gel do Treino & Registo de Hidratos</p>
           </div>
         </div>
         <button id="btnCloseCustomCarbTop" type="button" class="text-slate-400 hover:text-white p-1 text-sm cursor-pointer">✕</button>
       </div>
 
-      <!-- Presets for Marco's tested products (4Endurance as Default) -->
-      <div class="grid grid-cols-2 gap-2 mb-3">
-        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-sky-950/50 hover:bg-sky-900/60 text-left border-2 border-sky-400 transition active:scale-95 cursor-pointer group shadow-sm shadow-sky-950" data-grams="30" data-source="4endurance_gel">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-black text-sky-300">30g HC</span>
-            <span class="text-[8px] px-1.5 py-0.5 rounded bg-sky-400 text-slate-950 font-black uppercase">PADRÃO</span>
-          </div>
-          <p class="text-xs font-bold text-white mt-1">4Endurance 2:1</p>
-          <p class="text-[9px] text-sky-200/80 leading-tight">Gel Principal (30g)</p>
+      <!-- Navigation Tabs inside Gel Modal: [ 🎯 Gel do Treino ] vs [ ⚡ Registar Toma / SOS ] -->
+      <div class="flex items-center gap-1 p-1 bg-slate-950/80 rounded-2xl border border-slate-800 my-2.5 shrink-0">
+        <button id="tabGelMenuConfig" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-amber-500 text-slate-950 shadow-sm cursor-pointer">
+          <span>🎯</span> <span>Gel Deste Treino</span>
         </button>
-
-        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-amber-950/40 text-left border border-amber-800/40 hover:border-amber-500 transition active:scale-95 cursor-pointer group" data-grams="20" data-source="4energy_gel">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-black text-amber-300">20g HC</span>
-            <span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-200 font-extrabold uppercase">Líquido</span>
-          </div>
-          <p class="text-xs font-bold text-white mt-1">4Energy Gel</p>
-          <p class="text-[9px] text-slate-400 leading-tight">Manutenção fluida</p>
-        </button>
-
-        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-rose-950/40 text-left border border-rose-800/40 hover:border-rose-500 transition active:scale-95 cursor-pointer group" data-grams="12" data-source="glucody_sos">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-black text-rose-300">12g HC</span>
-            <span class="text-[8px] px-1.5 py-0.5 rounded bg-rose-900/60 text-rose-200 font-extrabold uppercase">SOS</span>
-          </div>
-          <p class="text-xs font-bold text-white mt-1">Glucody Dextrose</p>
-          <p class="text-[9px] text-slate-400 leading-tight">Ação imediata (5-10m)</p>
-        </button>
-
-        <button type="button" class="carb-choice p-2.5 rounded-2xl bg-slate-950/80 hover:bg-slate-800 text-left border border-slate-800 hover:border-slate-600 transition active:scale-95 cursor-pointer group" data-grams="15" data-source="standard_15">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-black text-slate-200">15g HC</span>
-            <span class="text-[8px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold uppercase">15g</span>
-          </div>
-          <p class="text-xs font-bold text-white mt-1">Gel Padrão</p>
-          <p class="text-[9px] text-slate-400 leading-tight">Regra 15g ADA</p>
+        <button id="tabGelMenuLog" type="button" class="flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white cursor-pointer">
+          <span>⚡</span> <span>Registar Toma / SOS</span>
         </button>
       </div>
 
-      <!-- Custom Input Stepper -->
-      <div class="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 mb-3">
-        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 text-center">Ou quantidade personalizada:</label>
-        <div class="flex items-center justify-center gap-2">
-          <button id="btnCarbMinus" type="button" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition active:scale-95 cursor-pointer">-</button>
-          <div class="flex items-center justify-center bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 w-24">
-            <input id="inputCustomCarbs" type="number" min="1" max="120" value="30" class="bg-transparent text-center text-xs font-black text-amber-300 w-10 focus:outline-none font-mono">
-            <span class="text-[10px] text-slate-400 font-bold ml-1">g HC</span>
+      <!-- Scrollable Modal Body -->
+      <div class="overflow-y-auto flex-1 pr-1 space-y-3">
+
+        <!-- TAB 1 CONTENT: Configurar Gel Padrão da Corrida -->
+        <div id="gelMenuTabConfigContent" class="space-y-3">
+          <div class="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800">
+            <p class="text-[11px] text-slate-300 leading-snug">
+              Escolhe o gel que levas contigo hoje. Ficará ativo no <b>botão de 1-toque</b>, nos <b>comandos de voz</b> e no <b>treinador</b>:
+            </p>
           </div>
-          <button id="btnCarbPlus" type="button" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition active:scale-95 cursor-pointer">+</button>
-          <button id="btnCarbConfirmCustom" type="button" class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition active:scale-95 cursor-pointer">
-            Registar
-          </button>
+
+          <!-- List of Saved Gels (Populated dynamically via JS) -->
+          <div id="savedGelsList" class="space-y-2">
+            <!-- Dynamic gel cards with radio selection & delete button -->
+          </div>
+
+          <!-- Add New Custom Gel Form -->
+          <div class="bg-slate-950/60 rounded-2xl border border-dashed border-slate-800 p-3 space-y-2">
+            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>➕</span> <span>Adicionar Novo Gel à Tua Lista</span>
+            </span>
+            <div class="grid grid-cols-12 gap-2 pt-1">
+              <input id="inputNewGelName" type="text" placeholder="Nome do Gel (ex: Maurten 160)" class="col-span-7 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400">
+              <div class="col-span-5 flex items-center gap-1">
+                <input id="inputNewGelGrams" type="number" min="5" max="100" placeholder="HC (g)" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-amber-300 font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-400">
+                <span class="text-[10px] text-slate-400 font-bold shrink-0">g HC</span>
+              </div>
+            </div>
+            <button id="btnSaveNewGel" type="button" class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 font-bold text-xs transition active:scale-95 cursor-pointer">
+              + Guardar Gel na Minha Lista
+            </button>
+          </div>
         </div>
+
+        <!-- TAB 2 CONTENT: Registar Toma Agora / SOS Imediato -->
+        <div id="gelMenuTabLogContent" class="hidden space-y-3">
+          <!-- SOS Glucody 1-Tap Fast Rescue Button -->
+          <button type="button" class="quick-log-carb-btn w-full p-3 rounded-2xl bg-rose-950/40 hover:bg-rose-950/60 border-2 border-rose-500/80 text-left transition active:scale-95 cursor-pointer flex items-center justify-between shadow-lg shadow-rose-950/40" data-grams="12" data-source="glucody_sos" data-name="Glucody SOS Dextrose">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl shrink-0">🚨</span>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm font-black text-rose-200">Glucody SOS Dextrose</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-rose-600 text-white font-black uppercase">SOS Rápido</span>
+                </div>
+                <p class="text-[10px] text-rose-300/80">Ação imediata: glicose pura absorvida em 5-10 minutos</p>
+              </div>
+            </div>
+            <span class="text-base font-black text-rose-300 font-mono shrink-0">12g HC</span>
+          </button>
+
+          <!-- Current Workout Gel 1-Tap Log -->
+          <button id="btnLogCurrentWorkoutGel" type="button" class="w-full p-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border-2 border-amber-500/50 text-left transition active:scale-95 cursor-pointer flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl shrink-0" id="logCurrentGelIcon">🔋</span>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm font-black text-amber-200" id="logCurrentGelName">4Endurance 2:1</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-black uppercase">Gel do Treino</span>
+                </div>
+                <p class="text-[10px] text-amber-300/80">Registar toma do gel principal do treino</p>
+              </div>
+            </div>
+            <span class="text-base font-black text-amber-300 font-mono shrink-0" id="logCurrentGelGrams">30g HC</span>
+          </button>
+
+          <!-- Quick presets list for other gels -->
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Ou outro gel da tua lista:</label>
+            <div id="quickLogOtherGelsList" class="grid grid-cols-2 gap-2">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Stepper Custom Input -->
+          <div class="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800">
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 text-center">Ou dose personalizada:</label>
+            <div class="flex items-center justify-center gap-2">
+              <button id="btnCarbMinus" type="button" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition active:scale-95 cursor-pointer">-</button>
+              <div class="flex items-center justify-center bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1 w-24">
+                <input id="inputCustomCarbs" type="number" min="1" max="120" value="30" class="bg-transparent text-center text-xs font-black text-amber-300 w-10 focus:outline-none font-mono">
+                <span class="text-[10px] text-slate-400 font-bold ml-1">g HC</span>
+              </div>
+              <button id="btnCarbPlus" type="button" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition active:scale-95 cursor-pointer">+</button>
+              <button id="btnCarbConfirmCustom" type="button" class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition active:scale-95 cursor-pointer">
+                Registar
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <button id="btnCancelCustomCarb" type="button" class="w-full py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700 transition cursor-pointer">Fechar</button>
+      <!-- Modal Footer -->
+      <div class="pt-2.5 border-t border-slate-800 shrink-0">
+        <button id="btnCancelCustomCarb" type="button" class="w-full py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700 transition cursor-pointer">
+          Fechar Menu
+        </button>
+      </div>
     </div>
   </div>
 
@@ -983,6 +1055,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=42"></script>
+  <script src="/app.js?v=43"></script>
 </body>
 </html>

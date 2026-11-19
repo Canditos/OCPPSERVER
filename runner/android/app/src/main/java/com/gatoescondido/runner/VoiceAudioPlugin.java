@@ -51,7 +51,8 @@ public class VoiceAudioPlugin extends Plugin {
     public void notifyCarbIntake(PluginCall call) {
         int grams = call.getInt("grams", 30);
         long timestamp = call.getLong("timestamp", System.currentTimeMillis());
-        RunnerService.recordCarbIntake(grams, timestamp);
+        String name = call.getString("name", null);
+        RunnerService.recordCarbIntake(grams, timestamp, name);
         JSObject ret = new JSObject();
         ret.put("recorded", true);
         call.resolve(ret);

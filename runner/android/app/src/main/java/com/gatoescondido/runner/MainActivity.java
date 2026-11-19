@@ -558,8 +558,13 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void notifyCarbIntake(int grams, long timestamp) {
-            Log.d(TAG, "notifyCarbIntake called via JavascriptInterface: " + grams + "g at " + timestamp);
-            RunnerService.recordCarbIntake(grams, timestamp);
+            notifyCarbIntake(grams, timestamp, null);
+        }
+
+        @JavascriptInterface
+        public void notifyCarbIntake(int grams, long timestamp, String name) {
+            Log.d(TAG, "notifyCarbIntake called via JavascriptInterface: " + grams + "g (" + name + ") at " + timestamp);
+            RunnerService.recordCarbIntake(grams, timestamp, name);
         }
 
         @JavascriptInterface

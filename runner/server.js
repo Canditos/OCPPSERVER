@@ -173,42 +173,37 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 1.1 App Version endpoint for in-app updates (v2.7)
+  // 1.1 App Version endpoint for in-app updates (v2.8)
   if (parsedUrl.pathname === '/api/version') {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
       'Access-Control-Allow-Origin': '*'
     });
     res.end(JSON.stringify({
-      versionCode: 18,
-      versionName: '2.7',
-      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=18',
-      releaseNotes: 'Design Cockpit Atlético OLED, Curva Spline Cúbica (Bezier) Ultra-Suave, Halo / Aura Dinâmica de Alerta, Gel Padrão 4Endurance 2:1 (30g) e EKG Cardio em Tempo Real.',
+      versionCode: 19,
+      versionName: '2.8',
+      apkUrl: 'https://runner.gatoescondido.com/nightscout-runner.apk?v=19',
+      releaseNotes: 'Menu de Géis da Corrida Personalizável, Seleção de Gel por Treino, Géis Personalizados com Gramas, Botão 1-Toque Inteligente e Voz Adaptativa.',
       features: [
         {
-          icon: '🎨',
-          title: 'Design Cockpit Atlético & OLED Obsidian Dark',
-          desc: 'Interface de corrida de última geração com painéis de vidro translúcido (Glassmorphism), máxima legibilidade sob luz solar direta e toques hápticos de precisão.'
+          icon: '🎯',
+          title: 'Menu de Géis da Corrida por Treino',
+          desc: 'Escolhe o gel específico para cada treino (4Endurance 30g, 4Energy 20g, Maurten 25g, Glucody 12g SOS ou cria novos géis à tua medida com nome e hidratos).'
         },
         {
-          icon: '📈',
-          title: 'Curva Spline Cúbica (Bezier) Ultra-Suave',
-          desc: 'Micro-gráfico de glicémia com interpolação spline cúbica matemática que desenha uma curva biológica contínua, banda de zona alvo e radar pulsante.'
+          icon: '⚡',
+          title: 'Botão 1-Toque & Comandos de Voz Adaptativos',
+          desc: 'O botão de registo rápido e os comandos de voz ("tomei gel") assumem instantaneamente o gel ativo da sessão com feedback sonoro e visual.'
         },
         {
-          icon: '🌟',
-          title: 'Halo / Aura Dinâmica de Alerta',
-          desc: 'Iluminação indireta ambiente atrás do valor de glicémia: respiração esmeralda no alvo, alerta âmbar na subida e aviso carmesim nas quebras.'
+          icon: '🧠',
+          title: 'Carb Coach Sincronizado ao Teu Gel',
+          desc: 'O treinador desportivo sugere e calcula a absorção com base nas gramas exatas do gel que escolheste levar hoje.'
         },
         {
-          icon: '🔋',
-          title: 'Gel Padrão 4Endurance 2:1 (30g HC)',
-          desc: '4Endurance 2:1 calibrado como combustível padrão nos botões de 1-toque, reconhecimento por voz e recomendações do treinador.'
-        },
-        {
-          icon: '💓',
-          title: 'Cardio EKG & Visualizador Equalizador de Áudio',
-          desc: 'Indicador de batimento cardíaco EKG animado na telemetria e equalizador gráfico de 4 barras quando o assistente de voz fala.'
+          icon: '🚨',
+          title: 'Aba de SOS & Dextrose Rápida',
+          desc: 'Acesso imediato a Glucody SOS Dextrose (12g) ou doses manuais para resgate rápido sem desconfigurar o gel padrão da corrida.'
         }
       ]
     }));

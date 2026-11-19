@@ -16,6 +16,29 @@ const NativeVoice = (window.Capacitor && window.Capacitor.registerPlugin) ? wind
 
 const CONFIG_KEY = 'ns_runner_config_v4';
 
+const DEFAULT_SAVED_GELS = [
+  { id: '4endurance', name: '4Endurance 2:1', grams: 30, icon: '🔋', isDefault: true },
+  { id: '4energy', name: '4Energy Gel', grams: 20, icon: '⚡', isDefault: false },
+  { id: 'glucody', name: 'Glucody SOS Dextrose', grams: 12, icon: '🚨', isDefault: false },
+  { id: 'padrao15', name: 'Gel Padrão (15g)', grams: 15, icon: '🍬', isDefault: false },
+  { id: 'maurten', name: 'Maurten Gel 100', grams: 25, icon: '💧', isDefault: false }
+];
+
+function showToast(msg, icon = '🎯') {
+  const existing = document.getElementById('runnerActiveToast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'runnerActiveToast';
+  toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 max-w-[92vw] bg-slate-900/95 text-amber-200 border border-amber-500/60 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl z-50 transition-opacity duration-300 backdrop-blur text-center flex items-center gap-2 pointer-events-none';
+  toast.innerHTML = `<span class="text-base">${icon}</span><span>${msg}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 400);
+  }, 3500);
+}
+
 const defaultConfig = {
   nsUrl: 'https://diabetes.gatoescondido.com',
   intervalMinutes: 2,
@@ -27,6 +50,8 @@ const defaultConfig = {
   wakeLockEnabled: true,
   enableEarbudShortcuts: false,
   maxHr: 185,
+  defaultWorkoutGel: '4endurance',
+  savedGels: DEFAULT_SAVED_GELS,
   voiceOptions: {
     sgv: true,
     trend: true,
@@ -597,6 +622,13 @@ function loadConfig() {
   } catch (e) {
     console.error('Failed to load config', e);
   }
+  // Safe backward compatibility for gels
+  if (!config.savedGels || !Array.isArray(config.savedGels) || config.savedGels.length === 0) {
+    config.savedGels = [...DEFAULT_SAVED_GELS];
+  }
+  if (!config.defaultWorkoutGel) {
+    config.defaultWorkoutGel = '4endurance';
+  }
 }
 
 function saveConfig() {
@@ -696,32 +728,261 @@ const I18N = {
 // Sports Carb Coach Decision Engine
 
 // ========================================================
-// Voice Commands, Carb Logging & Workout Analytics (v1.6)
+// Workout Gel Management & Carb Coach Integration (v2.8)
 // ========================================================
+
+function getActiveWorkoutGel() {
+  if (!config.savedGels || !Array.isArray(config.savedGels) || config.savedGels.length === 0) {
+    return { id: '4endurance', name: '4Endurance 2:1', grams: 30, icon: '🔋', isDefault: true };
+  }
+  const found = config.savedGels.find(g => g.id === config.defaultWorkoutGel);
+  return found || config.savedGels[0];
+}
+
+function setActiveWorkoutGel(gelId) {
+  const target = config.savedGels.find(g => g.id === gelId);
+  if (!target) return;
+  config.defaultWorkoutGel = gelId;
+  config.savedGels.forEach(g => {
+    g.isDefault = (g.id === gelId);
+  });
+  saveConfig();
+  updateActiveGelUI();
+  updateCarbButtonUI();
+  renderGelMenuList();
+  showToast(`🎯 Gel Desta Corrida: ${target.name} (${target.grams}g HC)`, '🎯');
+
+  if (lastEntry) {
+    const delta = prevEntry ? lastEntry.sgv - prevEntry.sgv : null;
+    const advice = evaluateCarbAdvice(lastEntry.sgv, lastEntry.direction, delta);
+    updateUIWithReading(lastEntry, prevEntry, delta, advice);
+  }
+}
+window.setActiveWorkoutGel = setActiveWorkoutGel;
+
+function saveNewCustomGel(name, grams) {
+  const cleanName = (name || '').trim();
+  const g = parseInt(grams, 10);
+  if (!cleanName) {
+    alert('Por favor introduz o nome do gel (ex: Maurten 160).');
+    return false;
+  }
+  if (!g || g < 5 || g > 150) {
+    alert('Por favor introduz uma quantidade válida de hidratos (entre 5g e 150g).');
+    return false;
+  }
+
+  const newId = 'gel_' + Date.now();
+  const newGel = {
+    id: newId,
+    name: cleanName,
+    grams: g,
+    icon: '⚡',
+    isDefault: true
+  };
+
+  config.savedGels.push(newGel);
+  config.defaultWorkoutGel = newId;
+  config.savedGels.forEach(item => {
+    item.isDefault = (item.id === newId);
+  });
+  saveConfig();
+  renderGelMenuList();
+  updateActiveGelUI();
+  updateCarbButtonUI();
+  showToast(`✅ Adicionado e definido: ${cleanName} (${g}g HC)!`, '✨');
+  return true;
+}
+
+function deleteCustomGel(gelId) {
+  if (config.savedGels.length <= 1) {
+    alert('Tens de manter pelo menos um gel na tua lista.');
+    return;
+  }
+  const gel = config.savedGels.find(g => g.id === gelId);
+  const gelName = gel ? gel.name : 'Gel';
+  if (!confirm(`Tens a certeza que queres eliminar "${gelName}" da tua lista?`)) {
+    return;
+  }
+  config.savedGels = config.savedGels.filter(g => g.id !== gelId);
+  if (config.defaultWorkoutGel === gelId) {
+    config.defaultWorkoutGel = config.savedGels[0].id;
+    config.savedGels[0].isDefault = true;
+  }
+  saveConfig();
+  renderGelMenuList();
+  updateActiveGelUI();
+  updateCarbButtonUI();
+  showToast(`🗑️ "${gelName}" eliminado da lista.`, '🗑️');
+}
+window.deleteCustomGel = deleteCustomGel;
+
+function updateActiveGelUI() {
+  const active = getActiveWorkoutGel();
+
+  // 1. Dashboard Active Gel Bar summary
+  const summaryEl = document.getElementById('activeGelSummary');
+  if (summaryEl) {
+    summaryEl.textContent = `${active.name} (${active.grams}g HC)`;
+  }
+
+  // 2. Tab 2 current workout gel button
+  const logIcon = document.getElementById('logCurrentGelIcon');
+  const logName = document.getElementById('logCurrentGelName');
+  const logGrams = document.getElementById('logCurrentGelGrams');
+  if (logIcon) logIcon.textContent = active.icon || '🔋';
+  if (logName) logName.textContent = active.name;
+  if (logGrams) logGrams.textContent = `${active.grams}g HC`;
+
+  // 3. Action bar quick gel icon
+  const iconQuick = document.getElementById('iconQuickGel');
+  if (iconQuick) iconQuick.textContent = active.icon || '🔋';
+
+  // 4. Stepper initial value
+  const inputCustom = document.getElementById('inputCustomCarbs');
+  if (inputCustom && !inputCustom.dataset.userEdited) {
+    inputCustom.value = active.grams;
+  }
+}
+
+function switchGelMenuTab(tab) {
+  const btnConfig = document.getElementById('tabGelMenuConfig');
+  const btnLog = document.getElementById('tabGelMenuLog');
+  const contentConfig = document.getElementById('gelMenuTabConfigContent');
+  const contentLog = document.getElementById('gelMenuTabLogContent');
+
+  if (tab === 'log') {
+    if (btnLog) {
+      btnLog.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-amber-500 text-slate-950 shadow-sm cursor-pointer';
+    }
+    if (btnConfig) {
+      btnConfig.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white cursor-pointer';
+    }
+    contentConfig?.classList.add('hidden');
+    contentLog?.classList.remove('hidden');
+  } else {
+    if (btnConfig) {
+      btnConfig.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition bg-amber-500 text-slate-950 shadow-sm cursor-pointer';
+    }
+    if (btnLog) {
+      btnLog.className = 'flex-1 py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition text-slate-400 hover:text-white cursor-pointer';
+    }
+    contentLog?.classList.add('hidden');
+    contentConfig?.classList.remove('hidden');
+  }
+}
+
+function renderGelMenuList() {
+  const active = getActiveWorkoutGel();
+  const savedListEl = document.getElementById('savedGelsList');
+  const quickLogListEl = document.getElementById('quickLogOtherGelsList');
+
+  // Tab 1: Saved Gels list with active radio selection & delete button
+  if (savedListEl) {
+    savedListEl.innerHTML = config.savedGels.map(gel => {
+      const isActive = (gel.id === active.id);
+      return `
+        <div class="p-3 rounded-2xl transition border cursor-pointer flex items-center justify-between ${isActive ? 'bg-amber-500/15 border-amber-500/60 shadow-md shadow-amber-950/30' : 'bg-slate-950/60 hover:bg-slate-900 border-slate-800'}" onclick="window.setActiveWorkoutGel('${gel.id}')">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isActive ? 'border-amber-400 bg-amber-500' : 'border-slate-600 bg-slate-900'}">
+              ${isActive ? '<span class="text-slate-950 text-[10px] font-black">✓</span>' : ''}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-xs sm:text-sm font-extrabold text-white truncate">${gel.name}</span>
+                ${isActive ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black uppercase tracking-wider">🎯 Ativo</span>' : ''}
+              </div>
+              <p class="text-[10px] text-slate-400 mt-0.5">${isActive ? 'Gel selecionado para esta corrida' : 'Clica para escolher para esta corrida'}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-xs font-black font-mono text-amber-300 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800">${gel.grams}g HC</span>
+            ${config.savedGels.length > 1 ? `
+              <button type="button" class="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition" title="Eliminar gel" onclick="event.stopPropagation(); window.deleteCustomGel('${gel.id}')">
+                🗑️
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Tab 2: Quick Log Other Gels Grid
+  if (quickLogListEl) {
+    const otherGels = config.savedGels.filter(g => g.id !== active.id && g.id !== 'glucody');
+    if (otherGels.length === 0) {
+      quickLogListEl.innerHTML = `
+        <div class="col-span-2 text-center py-2 text-[10px] text-slate-500">
+          Nenhum outro gel secundário na tua lista.
+        </div>
+      `;
+    } else {
+      quickLogListEl.innerHTML = otherGels.map(g => `
+        <button type="button" class="quick-log-carb-btn p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-left transition active:scale-95 cursor-pointer flex items-center justify-between" data-grams="${g.grams}" data-source="gel_${g.id}" data-name="${g.name}">
+          <div class="min-w-0 pr-1">
+            <span class="block text-xs font-bold text-white truncate">${g.name}</span>
+            <span class="block text-[10px] text-slate-400">Toma avulsa</span>
+          </div>
+          <span class="text-xs font-black text-amber-300 font-mono shrink-0">${g.grams}g</span>
+        </button>
+      `).join('');
+    }
+
+    // Re-bind listeners for dynamic buttons
+    document.querySelectorAll('#quickLogOtherGelsList .quick-log-carb-btn').forEach(btn => {
+      btn.onclick = () => {
+        const grams = parseInt(btn.getAttribute('data-grams'), 10) || 20;
+        const source = btn.getAttribute('data-source') || 'quick_log';
+        const name = btn.getAttribute('data-name') || null;
+        recordCarbsIntake(grams, source, name);
+        closeCustomCarbModal();
+      };
+    });
+  }
+}
+
+function openCustomCarbModal(initialTab = 'config') {
+  switchGelMenuTab(initialTab);
+  renderGelMenuList();
+  updateActiveGelUI();
+  document.getElementById('customCarbModal')?.classList.remove('hidden');
+}
+
+function closeCustomCarbModal() {
+  document.getElementById('customCarbModal')?.classList.add('hidden');
+}
 
 function updateCarbButtonUI() {
   const btn = document.getElementById('btnQuickGel');
   const label = document.getElementById('labelQuickGel');
+  const icon = document.getElementById('iconQuickGel');
   if (!btn || !label) return;
 
+  const active = getActiveWorkoutGel();
   const now = Date.now();
   if (lastCarbIntake && (now - lastCarbIntake.timestamp < 15 * 60 * 1000)) {
     const minsAgo = Math.max(0, Math.floor((now - lastCarbIntake.timestamp) / 60000));
     const minsLeft = Math.max(1, 15 - minsAgo);
-    label.textContent = `✅ 4Endurance Tomado (${minsLeft}m)`;
-    btn.className = 'flex-1 py-1.5 sm:py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-sky-300 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer';
+    const gelTakenName = lastCarbIntake.gelName || active.name;
+    label.textContent = `✅ ${gelTakenName} (${minsLeft}m)`;
+    if (icon) icon.textContent = '⏳';
+    btn.className = 'flex-1 py-2 sm:py-3 px-3.5 rounded-2xl bg-sky-500/20 hover:bg-sky-500/30 border-2 border-sky-500/50 text-sky-300 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-sky-950/40 transition active:scale-95 cursor-pointer';
   } else {
     const isPt = (config.language || 'pt-PT') === 'pt-PT';
-    label.textContent = isPt ? 'Tomei 4Endurance (30g)' : 'Took 4Endurance (30g)';
-    btn.className = 'flex-1 py-1.5 sm:py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer';
+    label.textContent = isPt ? `Tomei ${active.name} (${active.grams}g)` : `Took ${active.name} (${active.grams}g)`;
+    if (icon) icon.textContent = active.icon || '🔋';
+    btn.className = 'flex-1 py-2 sm:py-3 px-3.5 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border-2 border-amber-500/40 hover:border-amber-400 text-amber-300 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition active:scale-95 cursor-pointer';
   }
 }
 
-function recordCarbsIntake(grams, source = 'manual') {
-  const g = parseInt(grams, 10) || 30; // Default to 30g (4Endurance)
+function recordCarbsIntake(grams, source = 'manual', gelName = null) {
+  const activeGel = getActiveWorkoutGel();
+  const g = parseInt(grams, 10) || activeGel.grams || 30;
+  const name = gelName || (g === activeGel.grams ? activeGel.name : null);
   sessionCarbsTotal += g;
   const now = Date.now();
-  const entry = { timestamp: now, grams: g, source };
+  const entry = { timestamp: now, grams: g, source, gelName: name };
   sessionCarbsEntries.push(entry);
   lastCarbIntake = entry;
 
@@ -735,31 +996,25 @@ function recordCarbsIntake(grams, source = 'manual') {
   // 1. Notify Native Android Background Service immediately
   if (window.AndroidVoice && typeof window.AndroidVoice.notifyCarbIntake === 'function') {
     try {
-      window.AndroidVoice.notifyCarbIntake(g, now);
+      window.AndroidVoice.notifyCarbIntake(g, now, name || '');
     } catch (e) {
       console.warn('Failed AndroidVoice.notifyCarbIntake', e);
     }
   } else if (NativeVoice && typeof NativeVoice.notifyCarbIntake === 'function') {
-    NativeVoice.notifyCarbIntake({ grams: g, timestamp: now }).catch(e => console.warn(e));
+    NativeVoice.notifyCarbIntake({ grams: g, timestamp: now, name: name || '' }).catch(e => console.warn(e));
   }
 
   // 2. Play confirmation audio only if not running native (native plays via AudioEngine)
   if (!isRunningNative() && typeof playStudioVoice === 'function') {
     const msg = isPt
-      ? (g === 30 ? 'Gel 4Endurance registado! Trinta gramas em absorção. Alerta silenciado durante quinze minutos.' : `Gel registado! ${g} gramas em absorção. Alerta silenciado durante quinze minutos.`)
-      : (g === 30 ? '4Endurance gel logged! 30 grams absorbing. Alerts paused for fifteen minutes.' : `Carbs logged! ${g} grams absorbing. Alerts paused for fifteen minutes.`);
+      ? (name ? `Gel ${name} registado! ${g} gramas em absorção. Alerta silenciado durante quinze minutos.` : `Gel registado! ${g} gramas em absorção. Alerta silenciado durante quinze minutos.`)
+      : (name ? `${name} gel logged! ${g} grams absorbing. Alerts paused for fifteen minutes.` : `Carbs logged! ${g} grams absorbing. Alerts paused for fifteen minutes.`);
     playStudioVoice(msg);
   }
 
   // 3. Visual toast
-  const toast = document.createElement('div');
-  toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 max-w-[90vw] bg-sky-950/95 text-sky-200 border border-sky-500/60 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl z-50 transition-opacity duration-300 backdrop-blur text-center flex items-center gap-2';
-  toast.innerHTML = `<span>⏳</span><span>${isPt ? (g === 30 ? 'Gel 4Endurance (30g) em absorção! Alerta pausado 15m.' : `Gel registado: ${g}g em absorção! Alerta pausado 15m.`) : (g === 30 ? '4Endurance (30g) absorbing! Alert paused 15m.' : `Logged: ${g}g absorbing! Alert paused 15m.`)}</span>`;
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 400);
-  }, 4000);
+  const labelDesc = name ? `${name} (${g}g)` : `${g}g HC`;
+  showToast(isPt ? `✅ ${labelDesc} em absorção! Alerta pausado 15m.` : `✅ ${labelDesc} absorbing! Alert paused 15m.`, '⏳');
 
   // 4. Update button UI immediately
   updateCarbButtonUI();
@@ -867,12 +1122,33 @@ function handleVoiceCommandResult(text) {
 
   const clean = text.toLowerCase();
 
-  // Carb intake matches (Defaults to 30g 4Endurance 2:1)
+  // Carb intake matches (Defaults to active workout gel, or matches specific gel names if mentioned)
   if (/tomei|toma|comi|gel|hidrato|carbo|hc|grama|\bg\b/.test(clean)) {
     const numMatch = clean.match(/\b(\d+)\b/);
-    const grams = numMatch ? parseInt(numMatch[1], 10) : 30;
-    const src = clean.includes('glucody') ? 'glucody_sos' : (clean.includes('4energy') ? '4energy_gel' : '4endurance_gel');
-    recordCarbsIntake(grams, src);
+    const activeGel = getActiveWorkoutGel();
+    let grams = numMatch ? parseInt(numMatch[1], 10) : activeGel.grams;
+    let gelName = activeGel.name;
+    let src = 'voice_gel';
+
+    if (clean.includes('glucody')) {
+      gelName = 'Glucody SOS Dextrose';
+      grams = numMatch ? parseInt(numMatch[1], 10) : 12;
+      src = 'voice_glucody';
+    } else if (clean.includes('4energy')) {
+      gelName = '4Energy Gel';
+      grams = numMatch ? parseInt(numMatch[1], 10) : 20;
+      src = 'voice_4energy';
+    } else if (clean.includes('maurten')) {
+      gelName = 'Maurten Gel 100';
+      grams = numMatch ? parseInt(numMatch[1], 10) : 25;
+      src = 'voice_maurten';
+    } else if (clean.includes('4endurance')) {
+      gelName = '4Endurance 2:1';
+      grams = numMatch ? parseInt(numMatch[1], 10) : 30;
+      src = 'voice_4endurance';
+    }
+
+    recordCarbsIntake(grams, src, gelName);
     return;
   }
 
@@ -888,7 +1164,8 @@ function handleVoiceCommandResult(text) {
     return;
   }
 
-  recordCarbsIntake(20, 'voice');
+  const active = getActiveWorkoutGel();
+  recordCarbsIntake(active.grams, 'voice', active.name);
 }
 
 window._onSpeechResult = handleVoiceCommandResult;
@@ -907,13 +1184,6 @@ window._onHeadsetButton = () => {
   console.log('[Headset] Earbud media button pressed! Triggering Speak Now.');
   announceCurrent(true);
 };
-
-function openCustomCarbModal() {
-  document.getElementById('customCarbModal')?.classList.remove('hidden');
-}
-function closeCustomCarbModal() {
-  document.getElementById('customCarbModal')?.classList.add('hidden');
-}
 
 // Workout Profiles
 function setWorkoutProfile(profileKey) {
@@ -1161,6 +1431,9 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
     : sgv;
 
   const isRunningSession = (currentSessionMode === 'running');
+  const activeGel = getActiveWorkoutGel();
+  const gelName = activeGel.name;
+  const gelGrams = activeGel.grams;
 
   // 1. Carb Absorption Window (15 minutes silence for carb alarms!)
   if (lastCarbIntake && (Date.now() - lastCarbIntake.timestamp) < 15 * 60 * 1000) {
@@ -1229,10 +1502,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: `🚨 HIPO EM ~${minutesTo70} MIN`,
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/60',
-          carbs: 'Gel 4Endurance (30g) Já',
+          carbs: `Gel ${gelName} (${gelGrams}g) Já`,
           title: 'Alerta Preditivo: Risco de Hipo Iminente',
-          adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em ~${minutesTo70}m. Toma um gel 4Endurance (30g) já!`,
-          spokenText: `Atenção urgente! Glicémia a ${sgv}, queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Antecipa o sensor: toma o teu gel 4Endurance de trinta gramas já!`
+          adviceText: `Queda rápida de ${Math.abs(delta)} mg/dL em 5m. Ao ritmo atual chegas a 70 mg/dL em ~${minutesTo70}m. Toma o teu ${gelName} (${gelGrams}g) já!`,
+          spokenText: `Atenção urgente! Glicémia a ${sgv}, queda rápida. Risco de hipoglicémia dentro de ${minutesTo70} minutos. Antecipa o sensor: toma o teu gel ${gelName} de ${gelGrams} gramas já!`
         };
       } else {
         return {
@@ -1240,10 +1513,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: `🚨 HYPO IN ~${minutesTo70} MIN`,
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/60',
-          carbs: '4Endurance Gel (30g) Now',
+          carbs: `${gelName} Gel (${gelGrams}g) Now`,
           title: 'Predictive Alert: Hypo Risk Ahead',
           adviceText: `Fast drop of ${Math.abs(delta)} mg/dL in 5m. Projected to hit 70 mg/dL in about ${minutesTo70} minutes. Anticipate sensor lag!`,
-          spokenText: `Urgent warning! Blood glucose ${sgv}, rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take your 30-gram 4Endurance gel now!`
+          spokenText: `Urgent warning! Blood glucose ${sgv}, rapid drop. Risk of hypoglycemia in ${minutesTo70} minutes. Take your ${gelGrams}-gram ${gelName} gel now!`
         };
       }
     }
@@ -1256,10 +1529,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ QUEBRA EM ~20 MIN',
           badgeColor: 'bg-amber-600 text-white animate-pulse',
           cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: 'Gel 4Endurance (30g)',
+          carbs: `Gel ${gelName} (${gelGrams}g)`,
           title: 'Alerta Antecipado: Projeção de Quebra',
-          adviceText: `Glicémia a ${sgv} com tendência de queda. Projeção cinemática indica descida aos ~${proj25} mg/dL em 20-25m. Toma um gel 4Endurance antes da digestão atrasar!`,
-          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma o teu gel 4Endurance de trinta gramas já!`
+          adviceText: `Glicémia a ${sgv} com tendência de queda. Projeção cinemática indica descida aos ~${proj25} mg/dL em 20-25m. Toma o teu ${gelName} antes da digestão atrasar!`,
+          spokenText: `Glicémia a ${sgv}, ${dirSpoken}. Alerta antecipado: projeção indica quebra nos próximos vinte minutos. Toma o teu gel ${gelName} de ${gelGrams} gramas já!`
         };
       } else {
         return {
@@ -1267,10 +1540,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ DROP IN ~20 MIN',
           badgeColor: 'bg-amber-600 text-white animate-pulse',
           cardBorder: 'border-amber-500 shadow-amber-900/40',
-          carbs: '4Endurance Gel (30g)',
+          carbs: `${gelName} Gel (${gelGrams}g)`,
           title: 'Proactive Alert: Projected Drop',
-          adviceText: `Glucose at ${sgv} dropping. Kinematic projection forecasts ~${proj25} mg/dL in 20-25m. Take 4Endurance early!`,
-          spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Proactive alert: projection indicates low in twenty minutes. Take your 30-gram 4Endurance gel now!`
+          adviceText: `Glucose at ${sgv} dropping. Kinematic projection forecasts ~${proj25} mg/dL in 20-25m. Take ${gelName} early!`,
+          spokenText: `Blood glucose ${sgv}, ${dirSpoken}. Proactive alert: projection indicates low in twenty minutes. Take your ${gelGrams}-gram ${gelName} gel now!`
         };
       }
     }
@@ -1365,10 +1638,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ QUEDA RÁPIDA',
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/50',
-          carbs: 'Gel 4Endurance (30g) Já',
-          title: 'Queda rápida: Toma gel 4Endurance já',
-          adviceText: `Glicémia nos ${sgv} em queda rápida. O sangue real já está em quebra iminente. Toma gel 4Endurance agora!`,
-          spokenText: `Aviso urgente! Glicémia a ${sgv}, em descida rápida. Toma o teu gel 4Endurance de trinta gramas agora mesmo!`
+          carbs: `Gel ${gelName} (${gelGrams}g) Já`,
+          title: `Queda rápida: Toma gel ${gelName} já`,
+          adviceText: `Glicémia nos ${sgv} em queda rápida. O sangue real já está em quebra iminente. Toma gel ${gelName} agora!`,
+          spokenText: `Aviso urgente! Glicémia a ${sgv}, em descida rápida. Toma o teu gel ${gelName} de ${gelGrams} gramas agora mesmo!`
         };
       } else {
         return {
@@ -1376,10 +1649,10 @@ function evaluateCarbAdvice(sgv, direction, delta, accelParam) {
           badge: '⚠️ FAST DROP',
           badgeColor: 'bg-rose-600 text-white animate-pulse',
           cardBorder: 'border-rose-500 shadow-rose-900/50',
-          carbs: '4Endurance Gel (30g) Now',
-          title: 'Fast drop: Take 4Endurance gel now',
-          adviceText: `Glucose at ${sgv} falling fast. Take 4Endurance gel immediately!`,
-          spokenText: `Warning! Blood glucose ${sgv}, dropping fast. Take your 30-gram 4Endurance gel now!`
+          carbs: `${gelName} Gel (${gelGrams}g) Now`,
+          title: `Fast drop: Take ${gelName} gel now`,
+          adviceText: `Glucose at ${sgv} falling fast. Take ${gelName} gel immediately!`,
+          spokenText: `Warning! Blood glucose ${sgv}, dropping fast. Take your ${gelGrams}-gram ${gelName} gel now!`
         };
       }
     }
@@ -2505,69 +2778,59 @@ function announceCurrent(forceFetch = false) {
 
 // What's New & Release Changelog System
 const CHANGELOG_DATA = {
-  versionCode: 18,
-  versionName: '2.7',
+  versionCode: 19,
+  versionName: '2.8',
   'pt-PT': {
     title: 'O que há de novo',
-    sub: 'Versão 2.7 • Cockpit Atlético OLED, Curva Spline Cúbica, Aura & 4Endurance 30g',
+    sub: 'Versão 2.8 • Menu de Géis por Treino, Géis Personalizados & 1-Toque Inteligente',
     btnDismiss: 'Entendido, Vamos Correr! 🏃‍♂️',
     features: [
       {
-        icon: '🎨',
-        title: 'Design Cockpit Atlético & OLED Obsidian Dark',
-        desc: 'Interface completamente redesenhada com Glassmorphism aeroespacial, auras de iluminação indireta, botões táteis de alta precisão e máximo contraste.'
+        icon: '🎯',
+        title: 'Menu de Géis da Corrida (Personalizável)',
+        desc: 'Escolhe o gel específico para cada treino (4Endurance 30g, 4Energy 20g, Maurten 25g, Glucody 12g SOS ou cria novos géis com nome e gramas).'
       },
       {
-        icon: '📈',
-        title: 'Curva Spline Cúbica (Bezier) Ultra-Suave',
-        desc: 'O micro-gráfico de 1 hora agora desenha uma curva médica contínua e suave (spline cúbica) com gradiente luminoso, banda do alvo e radar pulsing dot.'
+        icon: '⚡',
+        title: 'Botão de 1-Toque & Voz Dinâmicos',
+        desc: 'O botão de registo rápido e os comandos de voz ("tomei gel") assumem automaticamente o gel ativo que escolheste para este treino.'
       },
       {
-        icon: '🌟',
-        title: 'Halo / Aura Dinâmica de Alerta em Tempo Real',
-        desc: 'Aura radiante atrás da glicémia que respira suavemente em verde no alvo (110-170), brilha em âmbar na subida e alerta em carmesim nas quebras.'
+        icon: '🧠',
+        title: 'Carb Coach Calibrado ao Teu Gel',
+        desc: 'O treinador preditivo recomenda exatamente o gel e as gramas que levas contigo hoje nas projeções de quebra.'
       },
       {
-        icon: '🔋',
-        title: 'Gel Padrão 4Endurance 2:1 (30g HC)',
-        desc: '4Endurance 2:1 calibrado como o combustível de referência em todos os botões de 1-toque, comandos de voz e algoritmos de recomendação do treinador.'
-      },
-      {
-        icon: '💓',
-        title: 'Cardio EKG & Visualizador de Voz em Tempo Real',
-        desc: 'Coração com batimento EKG animado na telemetria e equalizador de ondas de áudio no topo enquanto o assistente fala.'
+        icon: '🚨',
+        title: 'Aba de SOS & Dextrose Rápida',
+        desc: 'Acesso imediato a Glucody SOS Dextrose (12g) ou doses manuais para resgate de emergência sem alterar o gel padrão.'
       }
     ]
   },
   'en': {
     title: "What's New",
-    sub: 'Version 2.7 • OLED Athletic Cockpit, Cubic Spline Sparkline, Aura & 4Endurance 30g',
+    sub: 'Version 2.8 • Workout Gel Menu, Custom Gels & Dynamic 1-Tap Coach',
     btnDismiss: "Got it, Let's Run! 🏃‍♂️",
     features: [
       {
-        icon: '🎨',
-        title: 'OLED Obsidian Dark Athletic Cockpit',
-        desc: 'Completely redesigned interface with frosted glass panels, ambient backlight auras, high-precision tactile buttons, and maximum outdoor contrast.'
+        icon: '🎯',
+        title: 'Workout Gel Menu & Custom Gels',
+        desc: 'Choose your specific gel for each workout (4Endurance 30g, 4Energy 20g, Maurten 25g, Glucody 12g SOS, or add your custom gels).'
       },
       {
-        icon: '📈',
-        title: 'Ultra-Smooth Cubic Spline (Bezier) Sparkline',
-        desc: 'The 1-hour glucose trend now renders as a mathematically smoothed cubic bezier medical curve with neon gradient fill and pulsing radar dot.'
+        icon: '⚡',
+        title: 'Dynamic 1-Tap & Voice Logging',
+        desc: 'The quick button and voice recognition ("took gel") dynamically adapt to your active gel for this session.'
       },
       {
-        icon: '🌟',
-        title: 'Real-time Ambient Alert Halo / Aura',
-        desc: 'Breathing radiant halo behind your glucose that glows emerald in-target, amber when rising, and crimson during drops and hypo risks.'
+        icon: '🧠',
+        title: 'Carb Coach Tuned to Your Active Gel',
+        desc: 'Predictive hypo alerts recommend the exact gel and carb amount you are carrying today.'
       },
       {
-        icon: '🔋',
-        title: 'Default 4Endurance 2:1 Gel (30g Carbs)',
-        desc: '4Endurance 2:1 is now the default fuel across quick action buttons, voice recognition, and coach advice.'
-      },
-      {
-        icon: '💓',
-        title: 'EKG Heartbeat & Audio Waveform Visualizer',
-        desc: 'Animated EKG heartbeat rhythm on the telemetry bar and dynamic 4-bar sound equalizer when voice audio speaks.'
+        icon: '🚨',
+        title: 'Fast SOS & Dextrose Tab',
+        desc: 'Immediate 1-tap rescue logging for Glucody Dextrose (12g) or custom grams without changing your workout gel.'
       }
     ]
   }
@@ -3431,27 +3694,65 @@ window.addEventListener('DOMContentLoaded', () => {
     setSessionMode(currentSessionMode);
     checkLatestPumpBolus();
 
-    // Quick Carb Intake & Voice
+    // Active Workout Gel & Gel Menu Events
+    updateActiveGelUI();
     updateCarbButtonUI();
-    document.getElementById('btnQuickGel')?.addEventListener('click', () => recordCarbsIntake(20, 'button'));
-    document.getElementById('btnVoiceCommand')?.addEventListener('click', startVoiceListening);
-    document.getElementById('btnCancelVoice')?.addEventListener('click', stopVoiceListening);
-    document.getElementById('btnCustomCarb')?.addEventListener('click', openCustomCarbModal);
+
+    document.getElementById('btnOpenGelMenu')?.addEventListener('click', () => openCustomCarbModal('config'));
+    document.getElementById('btnCustomCarb')?.addEventListener('click', () => openCustomCarbModal('log'));
     document.getElementById('btnCancelCustomCarb')?.addEventListener('click', closeCustomCarbModal);
     document.getElementById('btnCloseCustomCarbTop')?.addEventListener('click', closeCustomCarbModal);
 
-    document.querySelectorAll('.carb-choice').forEach(b => {
+    // Tab buttons in Gel Modal
+    document.getElementById('tabGelMenuConfig')?.addEventListener('click', () => switchGelMenuTab('config'));
+    document.getElementById('tabGelMenuLog')?.addEventListener('click', () => switchGelMenuTab('log'));
+
+    // 1-Tap Quick Gel button in action bar (dynamically logs active workout gel!)
+    document.getElementById('btnQuickGel')?.addEventListener('click', () => {
+      const active = getActiveWorkoutGel();
+      recordCarbsIntake(active.grams, 'button', active.name);
+    });
+
+    // 1-Tap Current Workout Gel button inside Modal Tab 2
+    document.getElementById('btnLogCurrentWorkoutGel')?.addEventListener('click', () => {
+      const active = getActiveWorkoutGel();
+      recordCarbsIntake(active.grams, 'modal_workout_gel', active.name);
+      closeCustomCarbModal();
+    });
+
+    // Save new gel in Modal Tab 1
+    document.getElementById('btnSaveNewGel')?.addEventListener('click', () => {
+      const nameInput = document.getElementById('inputNewGelName');
+      const gramsInput = document.getElementById('inputNewGelGrams');
+      if (nameInput && gramsInput) {
+        const ok = saveNewCustomGel(nameInput.value, gramsInput.value);
+        if (ok) {
+          nameInput.value = '';
+          gramsInput.value = '';
+        }
+      }
+    });
+
+    // Quick log buttons (.quick-log-carb-btn) inside modal
+    document.querySelectorAll('.quick-log-carb-btn').forEach(b => {
       b.addEventListener('click', (e) => {
         const grams = parseInt(e.currentTarget.getAttribute('data-grams'), 10) || 20;
-        const source = e.currentTarget.getAttribute('data-source') || 'custom_picker';
-        recordCarbsIntake(grams, source);
+        const source = e.currentTarget.getAttribute('data-source') || 'quick_log';
+        const name = e.currentTarget.getAttribute('data-name') || null;
+        recordCarbsIntake(grams, source, name);
         closeCustomCarbModal();
       });
     });
 
+    // Voice recognition
+    document.getElementById('btnVoiceCommand')?.addEventListener('click', startVoiceListening);
+    document.getElementById('btnCancelVoice')?.addEventListener('click', stopVoiceListening);
+
+    // Stepper in Tab 2
     document.getElementById('btnCarbMinus')?.addEventListener('click', () => {
       const input = document.getElementById('inputCustomCarbs');
       if (input) {
+        input.dataset.userEdited = 'true';
         let v = parseInt(input.value, 10) || 20;
         input.value = Math.max(1, v - 5);
       }
@@ -3460,6 +3761,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnCarbPlus')?.addEventListener('click', () => {
       const input = document.getElementById('inputCustomCarbs');
       if (input) {
+        input.dataset.userEdited = 'true';
         let v = parseInt(input.value, 10) || 20;
         input.value = Math.min(120, v + 5);
       }
@@ -3468,7 +3770,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnCarbConfirmCustom')?.addEventListener('click', () => {
       const input = document.getElementById('inputCustomCarbs');
       const g = input ? (parseInt(input.value, 10) || 20) : 20;
-      recordCarbsIntake(g, 'stepper_custom');
+      recordCarbsIntake(g, 'stepper_custom', `Dose Personalizada (${g}g)`);
       closeCustomCarbModal();
     });
 

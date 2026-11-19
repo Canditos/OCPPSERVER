@@ -52,6 +52,7 @@ public class RunnerService extends Service {
 
     private static volatile long lastCarbTimestamp = 0;
     private static volatile int lastCarbGrams = 0;
+    private static volatile String lastCarbName = null;
 
     private static volatile RunnerService activeInstance = null;
     private static volatile boolean isServiceRunning = false;
@@ -88,30 +89,40 @@ public class RunnerService extends Service {
     }
 
     public static void recordCarbIntake(int grams, long timestamp) {
+        recordCarbIntake(grams, timestamp, null);
+    }
+
+    public static void recordCarbIntake(int grams, long timestamp, String name) {
         lastCarbGrams = grams > 0 ? grams : 30;
         lastCarbTimestamp = timestamp > 0 ? timestamp : System.currentTimeMillis();
-        Log.d(TAG, "Carb intake recorded in RunnerService: " + lastCarbGrams + "g at " + lastCarbTimestamp);
+        lastCarbName = (name != null && !name.trim().isEmpty()) ? name.trim() : null;
+        Log.d(TAG, "Carb intake recorded in RunnerService: " + lastCarbGrams + "g (" + lastCarbName + ") at " + lastCarbTimestamp);
         RunnerService instance = activeInstance;
         if (instance != null) {
-            instance.onCarbIntakeLogged(lastCarbGrams);
+            instance.onCarbIntakeLogged(lastCarbGrams, lastCarbName);
         }
     }
 
-    private void onCarbIntakeLogged(int grams) {
+    private void onCarbIntakeLogged(int grams, String name) {
         try {
             int bpm = HeartRateManager.getInstance(this).getLatestBpm();
             String hrSuffix = (bpm > 0 ? " · ❤️ " + bpm + " bpm" : "");
             String paceSuffix = (currentPaceSecondsPerKm > 0 ? " · ⏱️ " + (currentPaceSecondsPerKm / 60) + ":" + String.format("%02d", currentPaceSecondsPerKm % 60) + "/km" : "");
             String distSuffix = (totalDistanceMeters > 50 ? " · " + String.format("%.2f", totalDistanceMeters / 1000.0f) + "km" : "");
 
+            String nameLabel = (name != null && !name.isEmpty()) ? " (" + name + ")" : "";
             String title = "🏃 " + (lastSgv > 0 ? lastSgv + " mg/dL ⏳" : "⏳") + hrSuffix + paceSuffix;
-            String content = "EM ABSORÇÃO (" + grams + "g) · Alerta em pausa" + distSuffix;
+            String content = "EM ABSORÇÃO (" + grams + "g" + nameLabel + ") · Alerta em pausa" + distSuffix;
             updateNotification(title, content);
 
             boolean isPt = language.equals("pt-PT");
             String confirmText = isPt
-                    ? "Gel registado! " + grams + " gramas em absorção. Alerta silenciado durante quinze minutos."
-                    : "Carbs logged! " + grams + " grams absorbing. Alerts paused for fifteen minutes.";
+                    ? (name != null && !name.isEmpty()
+                        ? "Gel " + name + " registado! " + grams + " gramas em absorção. Alerta silenciado durante quinze minutos."
+                        : "Gel registado! " + grams + " gramas em absorção. Alerta silenciado durante quinze minutos.")
+                    : (name != null && !name.isEmpty()
+                        ? name + " gel logged! " + grams + " grams absorbing. Alerts paused for fifteen minutes."
+                        : "Carbs logged! " + grams + " grams absorbing. Alerts paused for fifteen minutes.");
             String ttsUrl = apiBase + "/api/tts?text=" + URLEncoder.encode(confirmText, "UTF-8") + "&lang=" + URLEncoder.encode(language, "UTF-8");
             AudioEngine.playVoice(getApplicationContext(), ttsUrl, null);
         } catch (Exception e) {
@@ -127,6 +138,7 @@ public class RunnerService extends Service {
             obj.put("absorbing", absorbing);
             obj.put("timestamp", lastCarbTimestamp);
             obj.put("grams", lastCarbGrams);
+            obj.put("name", lastCarbName != null ? lastCarbName : "");
             int minsAgo = absorbing ? (int) Math.max(0, (now - lastCarbTimestamp) / 60000) : -1;
             obj.put("minsAgo", minsAgo);
         } catch (Exception ignored) {}
