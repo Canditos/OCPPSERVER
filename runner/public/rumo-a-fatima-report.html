@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="pt-PT" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rumo a Fátima — Relatório Executivo de Evolução</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              950: '#070b14',
+              900: '#0f172a',
+              850: '#131e36',
+              800: '#1e293b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #0f172a !important; color: #fff !important; -webkit-print-color-adjust: exact; }
+      .page-break { page-break-before: always; }
+    }
+    .glow-emerald {
+      box-shadow: 0 0 35px -10px rgba(16, 185, 129, 0.35);
+    }
+    .glow-amber {
+      box-shadow: 0 0 35px -10px rgba(245, 158, 11, 0.35);
+    }
+    .glow-sky {
+      box-shadow: 0 0 35px -10px rgba(14, 165, 233, 0.35);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-amber-500 selection:text-slate-950 antialiased">
+
+  <!-- Ambient Light Orbs Background -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+    <div class="absolute -top-40 -left-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
+    <div class="absolute top-1/3 -right-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
+    <div class="absolute bottom-10 left-1/3 w-[32rem] h-[32rem] bg-sky-500/10 rounded-full blur-3xl"></div>
+  </div>
+
+  <div class="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- Top Header Bar -->
+    <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
+      <div class="space-y-1">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold font-mono tracking-wider uppercase">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          Missão Fátima 2027 • Microciclo S2 Concluído
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
+          <span>Rumo a Fátima</span>
+          <span class="text-xl sm:text-2xl text-slate-500 font-light">| Relatório de Evolução</span>
+        </h1>
+        <p class="text-sm text-slate-400">
+          Atleta: <span class="text-slate-200 font-semibold">Marco Cândido</span> • Intervalos.icu ID: <span class="font-mono text-sky-400 font-semibold">i470647</span> • Tandem t:slim X2 & Dexcom G7
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2.5 no-print">
+        <button onclick="window.print()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-200 hover:text-white transition flex items-center gap-2 shadow-sm cursor-pointer">
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          <span>Imprimir / PDF</span>
+        </button>
+        <a href="https://runner.gatoescondido.com" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95">
+          <span>🏃 Abrir App de Corrida</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Key Metrics Ribbon (KPI Cards) -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <!-- Card 1: Volume -->
+      <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-sky-500/50 transition">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Volume Total</div>
+        <div class="text-2xl font-black text-white font-mono mt-1">89,1 <span class="text-sm font-semibold text-sky-400">km</span></div>
+        <div class="text-[10px] text-emerald-400 font-medium mt-1 flex items-center gap-1">
+          <span>▲ +25%</span> <span class="text-slate-500">vs semana ant.</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Fitness CTL -->
+      <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-emerald-500/50 transition glow-emerald">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Fitness (CTL)</div>
+        <div class="text-2xl font-black text-emerald-400 font-mono mt-1">11,2</div>
+        <div class="text-[10px] text-emerald-300 font-medium mt-1">
+          +58% esta semana 🚀
+        </div>
+      </div>
+
+      <!-- Card 3: Form TSB -->
+      <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-amber-500/50 transition">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Forma (TSB)</div>
+        <div class="text-2xl font-black text-amber-400 font-mono mt-1">-18,2</div>
+        <div class="text-[10px] text-amber-300 font-medium mt-1">
+          Zona Ótima (Verde)
+        </div>
+      </div>
+
+      <!-- Card 4: Adesão -->
+      <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-emerald-500/50 transition">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Adesão ao Plano</div>
+        <div class="text-2xl font-black text-white font-mono mt-1">100 <span class="text-sm text-emerald-400">%</span></div>
+        <div class="text-[10px] text-slate-400 font-medium mt-1">
+          15 em 15 treinos feitos
+        </div>
+      </div>
+
+      <!-- Card 5: Glicémia Média -->
+      <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-indigo-500/50 transition">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Glicémia Longo</div>
+        <div class="text-2xl font-black text-indigo-300 font-mono mt-1">114 <span class="text-xs text-slate-400">mg/dL</span></div>
+        <div class="text-[10px] text-emerald-400 font-medium mt-1">
+          100% no alvo estrito
+        </div>
+      </div>
+
+      <!-- Card 6: Dias até Fátima -->
+      <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-amber-500/50 transition">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Meta Fátima</div>
+        <div class="text-2xl font-black text-amber-400 font-mono mt-1">133 <span class="text-xs text-slate-400">dias</span></div>
+        <div class="text-[10px] text-slate-400 font-medium mt-1">
+          04 de Abril de 2027
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Graphs Section (2 Columns) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Chart 1: Fitness & Fatigue Curve (Banister Model) -->
+      <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-extrabold text-white flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <span>Curva de Aptidão (CTL) vs Fadiga (ATL)</span>
+            </h2>
+            <p class="text-xs text-slate-400">Evolução do modelo fisiológico de carga nos últimos 14 dias</p>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-bold">
+            Ótimo Estímulo
+          </span>
+        </div>
+        <div class="relative h-64 w-full">
+          <canvas id="chartFitnessFatigue"></canvas>
+        </div>
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
+          <div>
+            <p class="text-[10px] uppercase font-bold text-slate-400">Fitness (CTL)</p>
+            <p class="text-sm font-extrabold text-emerald-400 font-mono">11,2 <span class="text-[10px] text-slate-500">(+58%)</span></p>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase font-bold text-slate-400">Fadiga (ATL)</p>
+            <p class="text-sm font-extrabold text-rose-400 font-mono">29,4 <span class="text-[10px] text-slate-500">(Aguda)</span></p>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase font-bold text-slate-400">Forma (TSB)</p>
+            <p class="text-sm font-extrabold text-amber-400 font-mono">-18,2 <span class="text-[10px] text-slate-500">(Verde)</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart 2: Weekly Progression (Kilometers & Hours) -->
+      <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-extrabold text-white flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+              <span>Progressão de Volume Semanal (km)</span>
+            </h2>
+            <p class="text-xs text-slate-400">Crescimento progressivo sustentado (Realizado + Próximas semanas)</p>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800/60 font-bold">
+            +10% / sem
+          </span>
+        </div>
+        <div class="relative h-64 w-full">
+          <canvas id="chartWeeklyVolume"></canvas>
+        </div>
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
+          <div>
+            <p class="text-[10px] uppercase font-bold text-slate-400">Semana 45</p>
+            <p class="text-sm font-extrabold text-slate-300 font-mono">20,6 km</p>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase font-bold text-slate-400">Semana 46 (S1)</p>
+            <p class="text-sm font-extrabold text-slate-300 font-mono">30,4 km</p>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase font-bold text-slate-400">Semana 47 (S2)</p>
+            <p class="text-sm font-extrabold text-sky-400 font-mono">38,1 km</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Heart Rate Intensity & Metabolic Radar (2 Columns) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Doughnut: Distribution of Effort (Polarized 80/20) -->
+      <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
+            <span>🎯</span> <span>Distribuição de Zonas Cardíacas</span>
+          </h3>
+          <span class="text-[10px] font-mono text-emerald-400 font-bold">80/20 Piramidal</span>
+        </div>
+        <div class="relative h-52 w-full flex items-center justify-center">
+          <canvas id="chartZonesDoughnut"></canvas>
+        </div>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="flex items-center gap-2 text-slate-300">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> <span>Z2 Base Aeróbia (< 144 bpm)</span>
+            </span>
+            <span class="font-mono font-bold text-emerald-400">72%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="flex items-center gap-2 text-slate-300">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> <span>Z4 Limiar Anaeróbio (152-161 bpm)</span>
+            </span>
+            <span class="font-mono font-bold text-amber-400">18%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="flex items-center gap-2 text-slate-300">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> <span>Z5+ VO2 Max / Sprints (> 165 bpm)</span>
+            </span>
+            <span class="font-mono font-bold text-rose-400">10%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Radar: Capacidades Atléticas do Corredor -->
+      <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
+            <span>⚡</span> <span>Radar de Capacidades Atléticas</span>
+          </h3>
+          <span class="text-[10px] font-mono text-sky-400 font-bold">Equilíbrio Geral</span>
+        </div>
+        <div class="relative h-52 w-full flex items-center justify-center">
+          <canvas id="chartRadarCapabilities"></canvas>
+        </div>
+        <p class="text-[11px] text-slate-400 leading-snug">
+          Elevadíssima consistência (100%) e resistência de base em subida acelerada. O reforço muscular de quarta-feira equilibra a estabilidade articular.
+        </p>
+      </div>
+
+      <!-- Diabetes & Tandem t:slim X2 Clinical Panel -->
+      <div class="rounded-3xl bg-gradient-to-br from-indigo-950/40 via-slate-900/90 to-slate-950 border border-indigo-800/40 p-5 shadow-2xl flex flex-col justify-between space-y-4">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">💉</span>
+              <h3 class="text-sm font-extrabold text-indigo-300 uppercase tracking-wider">Metabolismo & Tandem t:slim X2</h3>
+            </div>
+            <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/60">
+              Control-IQ
+            </span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            A gestão de esforço aliada à bomba Tandem t:slim X2 e Dexcom G7 permitiu atingir métricas de segurança clínica excecionais esta semana:
+          </p>
+        </div>
+
+        <div class="space-y-2.5 bg-slate-950/60 p-3.5 rounded-2xl border border-indigo-900/30 font-mono text-xs">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Tempo no Alvo (Longo Dom):</span>
+            <span class="text-emerald-400 font-bold">100% (70-160)</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Glicémia Média em Treino:</span>
+            <span class="text-sky-400 font-bold">114 mg/dL</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Episódios Hipo Grave:</span>
+            <span class="text-emerald-400 font-bold">0</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Ativação Modo Exercício:</span>
+            <span class="text-amber-400 font-bold">T-60 a T-90 min</span>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-indigo-200/90 bg-indigo-900/20 p-2.5 rounded-xl border border-indigo-800/40">
+          💡 <strong>Protocolo validado:</strong> Não ingerir cafeína com adrenalina em dias de sprint VO2; manter o gel de 20-30g reservado para os 30-40 min em treinos superiores a 8 km.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Roadmap "Rumo a Fátima" 2027 (Phased Milestones) -->
+    <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-6 shadow-2xl space-y-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <div>
+          <h2 class="text-xl font-extrabold text-white flex items-center gap-2.5">
+            <span>🗺️</span> <span>Roadmap Rumo à Meia Maratona de Fátima 2027</span>
+          </h2>
+          <p class="text-xs text-slate-400">Plano estruturado em 5 fases de periodização fisiológica</p>
+        </div>
+        <div class="text-right font-mono">
+          <span class="text-xs text-amber-400 font-bold">04 de Abril de 2027 • 21,097 km</span>
+        </div>
+      </div>
+
+      <!-- Roadmap Phases -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <!-- Fase 1: Atual -->
+        <div class="rounded-2xl bg-emerald-950/40 border-2 border-emerald-500/80 p-4 relative space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-900/60 px-2 py-0.5 rounded-full">FASE 1 • 50%</span>
+            <span class="text-xs">🏃</span>
+          </div>
+          <h4 class="text-sm font-extrabold text-white">Base & Tendões</h4>
+          <p class="text-[11px] text-slate-300">Semanas 1 a 4 (Nov-Dez)</p>
+          <p class="text-[10px] text-slate-400 leading-snug">
+            Adaptação biomecânica, 100% ginásio máquinas e rodagens até 10 km.
+          </p>
+        </div>
+
+        <!-- Fase 2 -->
+        <div class="rounded-2xl bg-slate-950/60 border border-slate-800 p-4 space-y-2 opacity-80 hover:opacity-100 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">FASE 2</span>
+            <span class="text-xs">📈</span>
+          </div>
+          <h4 class="text-sm font-extrabold text-white">Construção Aeróbia</h4>
+          <p class="text-[11px] text-slate-300">Semanas 5 a 8 (Dez-Jan)</p>
+          <p class="text-[10px] text-slate-400 leading-snug">
+            Volume semanal de 38 a 45 km. Introdução de blocos contínuos de limiar.
+          </p>
+        </div>
+
+        <!-- Fase 3 -->
+        <div class="rounded-2xl bg-slate-950/60 border border-slate-800 p-4 space-y-2 opacity-80 hover:opacity-100 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">FASE 3</span>
+            <span class="text-xs">⛰️</span>
+          </div>
+          <h4 class="text-sm font-extrabold text-white">Sobrecarga Específica</h4>
+          <p class="text-[11px] text-slate-300">Semanas 9 a 14 (Jan-Fev)</p>
+          <p class="text-[10px] text-slate-400 leading-snug">
+            Longões de 13 a 17 km. Trabalho em ondulação similar ao percurso de Fátima.
+          </p>
+        </div>
+
+        <!-- Fase 4 -->
+        <div class="rounded-2xl bg-slate-950/60 border border-slate-800 p-4 space-y-2 opacity-80 hover:opacity-100 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">FASE 4</span>
+            <span class="text-xs">🔥</span>
+          </div>
+          <h4 class="text-sm font-extrabold text-white">Pico & Simulação</h4>
+          <p class="text-[11px] text-slate-300">Semanas 15 a 18 (Março)</p>
+          <p class="text-[10px] text-slate-400 leading-snug">
+            Longão máximo de 19 km. Teste geral de hidratos, ritmo alvo e equipamento.
+          </p>
+        </div>
+
+        <!-- Fase 5 -->
+        <div class="rounded-2xl bg-amber-950/30 border border-amber-600/50 p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-mono font-bold text-amber-400 bg-amber-950 px-2 py-0.5 rounded-full">FASE 5 • META</span>
+            <span class="text-xs">⛪</span>
+          </div>
+          <h4 class="text-sm font-extrabold text-amber-300">Fátima 2027</h4>
+          <p class="text-[11px] text-slate-300">Semanas 19-20 (Abril)</p>
+          <p class="text-[10px] text-slate-400 leading-snug">
+            Tapering (redução de volume), pernas frescas e conquista dos 21,1 km!
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Complete Log Table of Week 2 -->
+    <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-extrabold text-white flex items-center gap-2">
+            <span>📋</span> <span>Caderno de Campo — Todas as Sessões da Semana 2</span>
+          </h2>
+          <p class="text-xs text-slate-400">100% de execução • 38,12 km percorridos • 6 sessões concluídas</p>
+        </div>
+        <span class="text-xs font-mono font-bold text-emerald-400 bg-emerald-950 px-3 py-1 rounded-xl border border-emerald-800/60">
+          Nota Semanal: 10/10 ⭐
+        </span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
+            <tr>
+              <th class="py-2.5 px-3">Data</th>
+              <th class="py-2.5 px-3">Sessão / Nome</th>
+              <th class="py-2.5 px-3">Tipo</th>
+              <th class="py-2.5 px-3">Distância / Duração</th>
+              <th class="py-2.5 px-3">Ritmo Médio</th>
+              <th class="py-2.5 px-3">FC Média (Pico)</th>
+              <th class="py-2.5 px-3">Load</th>
+              <th class="py-2.5 px-3">Glicémia & Notas Clínicas</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 text-slate-300">
+            <!-- Seg -->
+            <tr class="hover:bg-slate-800/30 transition">
+              <td class="py-3 px-3 font-mono text-slate-400">16 Nov (Seg)</td>
+              <td class="py-3 px-3 font-bold text-white">S2 - 8x400m VO2</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-950 text-sky-400 border border-sky-800/60">VO2 Max</span></td>
+              <td class="py-3 px-3 font-mono font-semibold">9,28 km (53m17s)</td>
+              <td class="py-3 px-3 font-mono font-bold text-sky-400">5:44 /km</td>
+              <td class="py-3 px-3 font-mono">160 bpm (179)</td>
+              <td class="py-3 px-3 font-mono font-bold text-amber-400">58</td>
+              <td class="py-3 px-3 text-[11px] text-slate-400">Sprints muito velozes. Subida tardia por cafeína + adrenalina já mapeada.</td>
+            </tr>
+            <!-- Ter -->
+            <tr class="hover:bg-slate-800/30 transition">
+              <td class="py-3 px-3 font-mono text-slate-400">17 Nov (Ter)</td>
+              <td class="py-3 px-3 font-bold text-white">S2 - Rodagem 5km Z2</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">Z2 Base</span></td>
+              <td class="py-3 px-3 font-mono font-semibold">5,07 km (31m14s)</td>
+              <td class="py-3 px-3 font-mono font-bold text-emerald-400">6:09 /km</td>
+              <td class="py-3 px-3 font-mono">151 bpm (159)</td>
+              <td class="py-3 px-3 font-mono font-bold text-amber-400">30</td>
+              <td class="py-3 px-3 text-[11px] text-slate-400">Regeneração exemplar. Coração controlado em Z2, reciclagem de lactato.</td>
+            </tr>
+            <!-- Qua -->
+            <tr class="hover:bg-slate-800/30 transition">
+              <td class="py-3 px-3 font-mono text-slate-400">18 Nov (Qua)</td>
+              <td class="py-3 px-3 font-bold text-white">S2 - Ginásio Força & Tendões</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-800/60">100% Máquinas</span></td>
+              <td class="py-3 px-3 font-mono font-semibold">40 min (07:30h)</td>
+              <td class="py-3 px-3 font-mono text-slate-500">—</td>
+              <td class="py-3 px-3 font-mono text-slate-500">—</td>
+              <td class="py-3 px-3 font-mono font-bold text-amber-400">~25</td>
+              <td class="py-3 px-3 text-[11px] text-slate-400">6 máquinas concluídas com cronómetro 60s. Foco no tendão de Aquiles e pélvis.</td>
+            </tr>
+            <!-- Qui -->
+            <tr class="hover:bg-slate-800/30 transition">
+              <td class="py-3 px-3 font-mono text-slate-400">19 Nov (Qui)</td>
+              <td class="py-3 px-3 font-bold text-white">S2 - 2x12m Limiar Z4</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950 text-rose-400 border border-rose-800/60">Limiar Z4</span></td>
+              <td class="py-3 px-3 font-mono font-semibold">9,07 km (49m11s)</td>
+              <td class="py-3 px-3 font-mono font-bold text-rose-400">5:25 /km 🔥</td>
+              <td class="py-3 px-3 font-mono">162 bpm (179)</td>
+              <td class="py-3 px-3 font-mono font-bold text-amber-400">61</td>
+              <td class="py-3 px-3 text-[11px] text-slate-400">Ritmo de topo! Glicémia perfeita: 139 ➔ 85 mg/dL (média 127 mg/dL). 100% no alvo.</td>
+            </tr>
+            <!-- Sex -->
+            <tr class="hover:bg-slate-800/30 transition">
+              <td class="py-3 px-3 font-mono text-slate-400">20 Nov (Sex)</td>
+              <td class="py-3 px-3 font-bold text-white">S2 - 5km Z2 + 4 Retas</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">Z2 + Retas</span></td>
+              <td class="py-3 px-3 font-mono font-semibold">5,69 km (33m42s)</td>
+              <td class="py-3 px-3 font-mono font-bold text-emerald-400">5:55 /km</td>
+              <td class="py-3 px-3 font-mono text-slate-500">—</td>
+              <td class="py-3 px-3 font-mono font-bold text-amber-400">35</td>
+              <td class="py-3 px-3 text-[11px] text-slate-400">Cadência firme de 162 spm. Limpeza de glicose (217 ➔ 66 ➔ estabilização 101 mg/dL).</td>
+            </tr>
+            <!-- Dom -->
+            <tr class="hover:bg-slate-800/30 transition bg-amber-500/5">
+              <td class="py-3 px-3 font-mono text-amber-400 font-bold">22 Nov (Dom)</td>
+              <td class="py-3 px-3 font-extrabold text-white">S2 - Longo 8.5km Z2</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-600/60">Longo Base</span></td>
+              <td class="py-3 px-3 font-mono font-extrabold text-amber-300">9,01 km (54m38s)</td>
+              <td class="py-3 px-3 font-mono font-bold text-white">6:03 /km</td>
+              <td class="py-3 px-3 font-mono">157 bpm (169)</td>
+              <td class="py-3 px-3 font-mono font-bold text-amber-400">54</td>
+              <td class="py-3 px-3 text-[11px] text-emerald-300 font-medium">Textbook clínico! 157 ➔ 131 mg/dL (média 114 mg/dL). Zero sintomas, energia pura!</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Briefing for Week 3 -->
+    <div class="rounded-3xl bg-gradient-to-r from-slate-900 to-amber-950/40 border border-amber-900/50 p-6 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div class="space-y-1">
+        <div class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400 font-mono">
+          <span>🚀</span> <span>Próximo Passo: Semana 3</span>
+        </div>
+        <h3 class="text-base sm:text-lg font-extrabold text-white">
+          Amanhã arrancam as séries de 5x600m VO2!
+        </h3>
+        <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
+          O primeiro longo de dois dígitos (10 km) chega no próximo domingo (29/11). Mantém a disciplina nos ritmos fáceis em Z2 para poderes voar nos dias de intensidade.
+        </p>
+      </div>
+      <a href="https://intervals.icu/athlete/i470647/activities" target="_blank" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition active:scale-95 shadow-md shrink-0 flex items-center gap-1.5 cursor-pointer">
+        <span>Abrir no Intervals.icu ↗</span>
+      </a>
+    </div>
+
+    <!-- Footer -->
+    <footer class="pt-4 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500 font-mono">
+      <div>Relatório gerado automaticamente • Antigravity Coach Engine • v2.4</div>
+      <div>Projeto: Rumo a Fátima 2027 • Meia Maratona 21,1 km</div>
+    </footer>
+
+  </div>
+
+  <!-- Chart.js Scripts Initialization -->
+  <script>
+    // 1. Fitness & Fatigue Curve Chart
+    const ctx1 = document.getElementById('chartFitnessFatigue').getContext('2d');
+    new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels: ["09/11", "10/11", "11/11", "12/11", "13/11", "14/11", "15/11", "16/11", "17/11", "18/11", "19/11", "20/11", "21/11", "22/11"],
+        datasets: [
+          {
+            label: 'Fitness (CTL)',
+            data: [4.2, 4.7, 4.6, 5.8, 6.4, 6.2, 7.1, 8.3, 8.8, 8.6, 9.8, 10.4, 10.2, 11.2],
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            borderWidth: 3,
+            tension: 0.35,
+            pointRadius: 3,
+            pointBackgroundColor: '#10b981'
+          },
+          {
+            label: 'Fadiga (ATL)',
+            data: [16.7, 18.1, 15.7, 20.6, 22.0, 19.1, 22.3, 27.0, 27.4, 23.8, 28.7, 29.6, 25.6, 29.4],
+            borderColor: '#f43f5e',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [4, 4],
+            tension: 0.35,
+            pointRadius: 2,
+            pointBackgroundColor: '#f43f5e'
+          },
+          {
+            label: 'Forma (TSB)',
+            data: [-12.5, -13.3, -11.0, -14.9, -15.7, -12.9, -15.2, -18.7, -18.6, -15.2, -18.9, -19.2, -15.5, -18.2],
+            borderColor: '#f59e0b',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            tension: 0.35,
+            pointRadius: 3,
+            pointBackgroundColor: '#f59e0b'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              color: '#94a3b8',
+              font: { family: 'Plus Jakarta Sans', size: 11 }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+          }
+        }
+      }
+    });
+
+    // 2. Weekly Volume Chart
+    const ctx2 = document.getElementById('chartWeeklyVolume').getContext('2d');
+    new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: ["Sem 45 (Base)", "Sem 46 (S1)", "Sem 47 (S2)", "Sem 48 (S3 - Prev)", "Sem 49 (S4 - Prev)", "Sem 50 (S5 - Prev)"],
+        datasets: [{
+          label: 'Quilómetros (km)',
+          data: [20.6, 30.4, 38.1, 38.5, 41.0, 44.0],
+          backgroundColor: [
+            '#334155',
+            '#0284c7',
+            '#38bdf8',
+            'rgba(56, 189, 248, 0.35)',
+            'rgba(56, 189, 248, 0.25)',
+            'rgba(56, 189, 248, 0.15)'
+          ],
+          borderColor: [
+            '#475569',
+            '#0ea5e9',
+            '#38bdf8',
+            '#38bdf8',
+            '#38bdf8',
+            '#38bdf8'
+          ],
+          borderWidth: 1.5,
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 10 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+          }
+        }
+      }
+    });
+
+    // 3. Heart Rate Zones Doughnut
+    const ctx3 = document.getElementById('chartZonesDoughnut').getContext('2d');
+    new Chart(ctx3, {
+      type: 'doughnut',
+      data: {
+        labels: ['Z2 Base Aeróbia', 'Z4 Limiar', 'Z5+ VO2 Max'],
+        datasets: [{
+          data: [72, 18, 10],
+          backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'],
+          borderWidth: 0,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    // 4. Radar Capabilities
+    const ctx4 = document.getElementById('chartRadarCapabilities').getContext('2d');
+    new Chart(ctx4, {
+      type: 'radar',
+      data: {
+        labels: ['Resistência Z2', 'Potência VO2', 'Limiar Z4', 'Força / Tendões', 'Metabolismo TIR', 'Consistência'],
+        datasets: [{
+          label: 'Capacidade Atual',
+          data: [88, 85, 84, 80, 92, 100],
+          backgroundColor: 'rgba(56, 189, 248, 0.2)',
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          pointBackgroundColor: '#38bdf8'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+            grid: { color: 'rgba(255, 255, 255, 0.07)' },
+            pointLabels: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 9 } },
+            ticks: { display: false, min: 0, max: 100 }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
