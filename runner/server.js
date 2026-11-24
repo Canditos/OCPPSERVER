@@ -8,6 +8,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { URL } = require('url');
+const reportGenerator = require('./report_generator');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -228,6 +229,33 @@ const server = http.createServer((req, res) => {
       fs.createReadStream(apkPath).pipe(res);
       return;
     }
+  }
+
+  // 1.25 Rumo a Fátima Report Refresh & Sync Route
+  if (parsedUrl.pathname === '/api/report/refresh') {
+    if (!checkRateLimit(`report_refresh_${clientIp}`, 10, 60000)) {
+      res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Muitos pedidos de atualização. Aguarda 1 minuto.' }));
+      return;
+    }
+
+    reportGenerator.updateReportFile()
+      .then(syncData => {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({
+          success: true,
+          message: 'Relatório atualizado com sucesso a partir do Intervals.icu!',
+          data: syncData
+        }));
+      })
+      .catch(err => {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({
+          success: false,
+          error: 'Falha ao atualizar relatório: ' + err.message
+        }));
+      });
+    return;
   }
 
   // 1. Diagnostics endpoint
@@ -1091,5 +1119,58 @@ server.listen(PORT, '0.0.0.0', () => {
     });
   }
   console.log(`======================================================\n`);
+
+  // ==========================================
+  // ⏰ AGENDADOR AUTOMÁTICO: ATUALIZAÇÃO ÀS 00:00 (LISBOA)
+  // ==========================================
+  function scheduleDailyReportSync() {
+    function runSync() {
+      console.log(`⏰ [00:00 Auto-Sync] A sincronizar dados com Intervals.icu e a regenerar relatório...`);
+      reportGenerator.updateReportFile()
+        .then(res => {
+          console.log(`✅ [00:00 Auto-Sync] Relatório Rumo a Fátima atualizado com sucesso! (${res.totalRuns} corridas, data: ${res.date})`);
+        })
+        .catch(err => {
+          console.error(`❌ [00:00 Auto-Sync] Erro na atualização do relatório:`, err.message);
+        })
+        .finally(() => {
+          planNextMidnight();
+        });
+    }
+
+    function planNextMidnight() {
+      try {
+        const now = new Date();
+        const lisbonStr = now.toLocaleString('en-US', { timeZone: 'Europe/Lisbon' });
+        const lisbonNow = new Date(lisbonStr);
+
+        const nextMidnight = new Date(lisbonNow);
+        nextMidnight.setDate(nextMidnight.getDate() + 1);
+        nextMidnight.setHours(0, 0, 10, 0);
+
+        const msUntilMidnight = Math.max(nextMidnight.getTime() - lisbonNow.getTime(), 1000);
+        const hoursUntil = (msUntilMidnight / (1000 * 60 * 60)).toFixed(2);
+        console.log(`📅 [Agendador 00:00] Próxima atualização automática do relatório em ${hoursUntil}h (00:00:10 hora de Lisboa).`);
+
+        setTimeout(runSync, msUntilMidnight);
+      } catch (e) {
+        console.error('Erro ao agendar atualização das 00:00:', e.message);
+        setTimeout(runSync, 24 * 60 * 60 * 1000);
+      }
+    }
+
+    // Executa uma sincronização no arranque para garantir dados frescos
+    reportGenerator.updateReportFile()
+      .then(res => {
+        console.log(`🚀 [Boot Sync] Relatório Rumo a Fátima sincronizado no arranque (${res.totalRuns} corridas, data: ${res.date})!`);
+      })
+      .catch(e => {
+        console.warn(`⚠️ [Boot Sync] Aviso: sincronização inicial do relatório falhou:`, e.message);
+      });
+
+    planNextMidnight();
+  }
+
+  scheduleDailyReportSync();
 });
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rumo a Fátima — Relatório Executivo & Auditoria de Treinos</title>
+  <title>Rumo a Fátima — Relatório Executivo & Auditoria Diária</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js CDN -->
@@ -27,26 +27,16 @@
   </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;800&display=swap');
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-    }
-    .font-mono {
-      font-family: 'JetBrains Mono', monospace;
-    }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
     @media print {
       .no-print { display: none !important; }
       body { background: #0f172a !important; color: #fff !important; -webkit-print-color-adjust: exact; }
       .page-break { page-break-before: always; }
     }
-    .glow-emerald {
-      box-shadow: 0 0 35px -10px rgba(16, 185, 129, 0.35);
-    }
-    .glow-amber {
-      box-shadow: 0 0 35px -10px rgba(245, 158, 11, 0.35);
-    }
-    .glow-sky {
-      box-shadow: 0 0 35px -10px rgba(14, 165, 233, 0.35);
-    }
+    .glow-emerald { box-shadow: 0 0 35px -10px rgba(16, 185, 129, 0.35); }
+    .glow-amber { box-shadow: 0 0 35px -10px rgba(245, 158, 11, 0.35); }
+    .glow-sky { box-shadow: 0 0 35px -10px rgba(14, 165, 233, 0.35); }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-amber-500 selection:text-slate-950 antialiased">
@@ -72,17 +62,31 @@
           <span class="text-xl sm:text-2xl text-slate-500 font-light">| Relatório de Evolução & Validação</span>
         </h1>
         <p class="text-sm text-slate-400">
-          Atleta: <span class="text-slate-200 font-semibold">Marco Cândido</span> • Intervals.icu: <span class="font-mono text-sky-400 font-semibold">i470647</span> • Tandem t:slim X2 & Dexcom G7 • Nightscout Live
+          Atleta: <span class="text-slate-200 font-semibold">Marco Cândido</span> • Intervals.icu: <span class="font-mono text-sky-400 font-semibold">i470647</span> • Tandem t:slim X2 & Dexcom G7
         </p>
       </div>
 
-      <div class="flex items-center gap-2.5 no-print">
+      <div class="flex flex-wrap items-center gap-2.5 no-print">
+        <!-- Live Sync Status Badge -->
+        <div class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Sincronizado: <strong class="text-slate-200 font-mono">24/11/2026 00:42</strong></span>
+          <span class="text-slate-600">|</span>
+          <span class="text-[11px] text-amber-400 font-mono">00:00 Auto</span>
+        </div>
+
+        <button id="refreshBtn" onclick="manualSyncReport()" class="px-3.5 py-2 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-sky-400 hover:text-sky-300 transition flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95">
+          <svg id="syncIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span id="syncText">Sincronizar</span>
+        </button>
+
         <button onclick="window.print()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-200 hover:text-white transition flex items-center gap-2 shadow-sm cursor-pointer">
           <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-          <span>Imprimir / PDF</span>
+          <span>PDF</span>
         </button>
+
         <a href="https://runner.gatoescondido.com" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95">
-          <span>🏃 Abrir App de Corrida</span>
+          <span>🏃 App Corrida</span>
         </a>
       </div>
     </header>
@@ -94,25 +98,25 @@
         <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Volume Acumulado</div>
         <div class="text-2xl font-black text-white font-mono mt-1">95,2 <span class="text-sm font-semibold text-sky-400">km</span></div>
         <div class="text-[10px] text-emerald-400 font-medium mt-1 flex items-center gap-1">
-          <span>▲ +6,1 km hoje</span>
+          <span>▲ 15 sessões registadas</span>
         </div>
       </div>
 
       <!-- Card 2: Fitness CTL -->
       <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-emerald-500/50 transition glow-emerald">
         <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Fitness (CTL)</div>
-        <div class="text-2xl font-black text-emerald-400 font-mono mt-1">11,9</div>
+        <div class="text-2xl font-black text-emerald-400 font-mono mt-1">13,0</div>
         <div class="text-[10px] text-emerald-300 font-medium mt-1">
-          Pico 13,0 atingido 🚀
+          Aptidão em Subida 🚀
         </div>
       </div>
 
       <!-- Card 3: Form TSB -->
       <div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 shadow-xl relative overflow-hidden group hover:border-amber-500/50 transition">
         <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Forma (TSB)</div>
-        <div class="text-2xl font-black text-amber-400 font-mono mt-1">-19,2</div>
+        <div class="text-2xl font-black text-amber-400 font-mono mt-1">-21,7</div>
         <div class="text-[10px] text-amber-300 font-medium mt-1">
-          Zona Ótima (Verde)
+          Zona Ótima de Estímulo
         </div>
       </div>
 
@@ -121,7 +125,7 @@
         <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Adesão ao Plano</div>
         <div class="text-2xl font-black text-white font-mono mt-1">100 <span class="text-sm text-emerald-400">%</span></div>
         <div class="text-[10px] text-emerald-400 font-medium mt-1">
-          12/12 treinos no plano (16 tot)
+          Rigor Máximo Cumprido ⭐
         </div>
       </div>
 
@@ -130,7 +134,7 @@
         <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Glicémia em Treino</div>
         <div class="text-2xl font-black text-indigo-300 font-mono mt-1">118 <span class="text-xs text-slate-400">mg/dL</span></div>
         <div class="text-[10px] text-emerald-400 font-medium mt-1">
-          100% no alvo durante o esforço
+          100% no alvo estrito
         </div>
       </div>
 
@@ -147,7 +151,7 @@
     <!-- Main Graphs Section (2 Columns) -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-      <!-- Chart 1: Fitness & Fatigue Curve (Banister Model) -->
+      <!-- Chart 1: Fitness & Fatigue Curve -->
       <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
         <div class="flex items-center justify-between">
           <div>
@@ -155,7 +159,7 @@
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
               <span>Curva de Aptidão (CTL) vs Fadiga (ATL)</span>
             </h2>
-            <p class="text-xs text-slate-400">Evolução do modelo fisiológico de carga nos últimos 14 dias (incluindo S3)</p>
+            <p class="text-xs text-slate-400">Evolução do modelo fisiológico de carga nos últimos 14 dias (Intervals.icu)</p>
           </div>
           <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-bold">
             Ótimo Estímulo
@@ -167,20 +171,20 @@
         <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-center">
           <div>
             <p class="text-[10px] uppercase font-bold text-slate-400">Fitness (CTL)</p>
-            <p class="text-sm font-extrabold text-emerald-400 font-mono">11,9 <span class="text-[10px] text-slate-500">(+60%)</span></p>
+            <p class="text-sm font-extrabold text-emerald-400 font-mono">13,0 <span class="text-[10px] text-slate-500">(+60%)</span></p>
           </div>
           <div>
             <p class="text-[10px] uppercase font-bold text-slate-400">Fadiga (ATL)</p>
-            <p class="text-sm font-extrabold text-rose-400 font-mono">31,1 <span class="text-[10px] text-slate-500">(Sustentada)</span></p>
+            <p class="text-sm font-extrabold text-rose-400 font-mono">34,7 <span class="text-[10px] text-slate-500">(Sustentada)</span></p>
           </div>
           <div>
             <p class="text-[10px] uppercase font-bold text-slate-400">Forma (TSB)</p>
-            <p class="text-sm font-extrabold text-amber-400 font-mono">-19,2 <span class="text-[10px] text-slate-500">(Verde)</span></p>
+            <p class="text-sm font-extrabold text-amber-400 font-mono">-21,7 <span class="text-[10px] text-slate-500">(Verde)</span></p>
           </div>
         </div>
       </div>
 
-      <!-- Chart 2: Weekly Progression (Kilometers & Hours) -->
+      <!-- Chart 2: Weekly Progression (Kilometers) -->
       <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
         <div class="flex items-center justify-between">
           <div>
@@ -211,18 +215,18 @@
             <p class="text-sm font-extrabold text-sky-400 font-mono">38,1 km</p>
           </div>
           <div>
-            <p class="text-[10px] uppercase font-bold text-slate-400">Sem 48 (S3 Atual)</p>
-            <p class="text-sm font-extrabold text-emerald-400 font-mono">6,1 / 38,5 km</p>
+            <p class="text-[10px] uppercase font-bold text-slate-400">Sem 48 (S3)</p>
+            <p class="text-sm font-extrabold text-emerald-400 font-mono">6,09 / 38,5 km</p>
           </div>
         </div>
       </div>
 
     </div>
 
-    <!-- Heart Rate Intensity & Metabolic Radar (3 Columns) -->
+    <!-- Heart Rate Intensity & Radar & Diabetes Panel -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-      <!-- Doughnut: Distribution of Effort (Polarized 80/20) -->
+      <!-- Doughnut: Distribution of Effort -->
       <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
@@ -236,7 +240,7 @@
         <div class="space-y-1.5 text-xs">
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-2 text-slate-300">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> <span>Z2 Base Aeróbia (< 144 bpm)</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> <span>Z2 Base Aeróbia (&lt; 144 bpm)</span>
             </span>
             <span class="font-mono font-bold text-emerald-400">73%</span>
           </div>
@@ -248,14 +252,14 @@
           </div>
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-2 text-slate-300">
-              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> <span>Z5+ VO2 Max / Sprints (> 165 bpm)</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> <span>Z5+ VO2 Max / Sprints (&gt; 165 bpm)</span>
             </span>
             <span class="font-mono font-bold text-rose-400">9%</span>
           </div>
         </div>
       </div>
 
-      <!-- Radar: Capacidades Atléticas do Corredor -->
+      <!-- Radar: Capacidades Atléticas -->
       <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-5 shadow-2xl space-y-4">
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
@@ -267,7 +271,7 @@
           <canvas id="chartRadarCapabilities"></canvas>
         </div>
         <p class="text-[11px] text-slate-400 leading-snug">
-          Consistência perfeita (100% de treinos cumpridos) e volume acumulado a caminho dos 100 km. Excelente gestão de ritmo de base (5:23/km hoje em rodagem fluida).
+          Consistência perfeita (100% de treinos cumpridos) e volume acumulado a caminho dos 100 km. Excelente gestão de ritmo de base (5:23/km em rodagem fluida).
         </p>
       </div>
 
@@ -294,7 +298,7 @@
             <span class="text-emerald-400 font-bold">100% (70-160 mg/dL)</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-slate-400">Glicémia na Rodagem de Hoje:</span>
+            <span class="text-slate-400">Glicémia na Última Sessão:</span>
             <span class="text-sky-400 font-bold">153 ➔ 91 mg/dL</span>
           </div>
           <div class="flex items-center justify-between">
@@ -314,7 +318,7 @@
 
     </div>
 
-    <!-- Roadmap "Rumo a Fátima" 2027 (Phased Milestones) -->
+    <!-- Phased Milestones Roadmap -->
     <div class="rounded-3xl bg-slate-900/85 border border-slate-800 p-6 shadow-2xl space-y-6">
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
@@ -328,7 +332,6 @@
         </div>
       </div>
 
-      <!-- Roadmap Phases -->
       <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
         <!-- Fase 1: Atual -->
         <div class="rounded-2xl bg-emerald-950/40 border-2 border-emerald-500/80 p-4 relative space-y-2">
@@ -425,17 +428,13 @@
             <span>🏃</span> <span>Base (Sem 45)</span>
           </button>
           <button onclick="switchTab('all')" id="tabBtn-all" class="tab-btn px-4 py-2 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center gap-1.5 font-semibold">
-            <span>📋</span> <span>Todas as Sessões</span>
+            <span>📋</span> <span>Todas as Sessões (15)</span>
           </button>
         </div>
       </div>
 
-      <!-- ========================================== -->
-      <!-- TAB CONTENT: SEMANA 3 (ATUAL - EM CURSO)   -->
-      <!-- ========================================== -->
+      <!-- TAB CONTENT: SEMANA 3 -->
       <div id="tabContent-week3" class="tab-content space-y-6">
-        
-        <!-- Summary Cards for Week 3 -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5">
             <span class="text-[10px] font-mono uppercase text-slate-400">Volume Semana 3 (Em Curso)</span>
@@ -459,7 +458,6 @@
           </div>
         </div>
 
-        <!-- Daily Audit Table for Week 3 -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
             <thead class="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
@@ -474,8 +472,6 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/60 text-slate-300">
-              
-              <!-- 23 Nov: Seg -->
               <tr class="hover:bg-slate-800/30 transition bg-emerald-500/5">
                 <td class="py-3.5 px-3 font-mono text-emerald-400 font-bold whitespace-nowrap">23 Nov (Seg)</td>
                 <td class="py-3.5 px-3">
@@ -506,7 +502,6 @@
                 </td>
               </tr>
 
-              <!-- 24 Nov: Ter (Planeado) -->
               <tr class="hover:bg-slate-800/30 transition opacity-80">
                 <td class="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">24 Nov (Ter)</td>
                 <td class="py-3.5 px-3">
@@ -519,11 +514,9 @@
                   <div class="text-slate-500">Recuperação: 2m trote</div>
                 </td>
                 <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-slate-400">
-                  <span class="italic">Agendado para amanhã</span>
+                  <span class="italic">Agendado para hoje</span>
                 </td>
-                <td class="py-3.5 px-3 font-mono text-slate-500">
-                  —
-                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
                 <td class="py-3.5 px-3 whitespace-nowrap">
                   <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-slate-400 border border-slate-700 font-mono text-[10px]">
                     ⏳ A Realizar
@@ -534,17 +527,112 @@
                 </td>
               </tr>
 
+              <tr class="hover:bg-slate-800/30 transition opacity-80">
+                <td class="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">25 Nov (Qua)</td>
+                <td class="py-3.5 px-3">
+                  <span class="font-bold text-white block">S3 - Ginásio Estabilidade & Rotação</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-950 text-amber-400 border border-amber-800/60 uppercase">100% Máquinas</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight">
+                  <div class="text-slate-300">40 min • 6 máquinas</div>
+                  <div class="text-slate-500">Estabilidade pélvica & tendões</div>
+                  <div class="text-slate-500">Sem barra livre</div>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-slate-400">
+                  <span class="italic">Agendado</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
+                <td class="py-3.5 px-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-slate-400 border border-slate-700 font-mono text-[10px]">
+                    ⏳ A Realizar
+                  </span>
+                </td>
+                <td class="py-3.5 px-3 text-[11px] text-slate-400 leading-snug">
+                  Reforço de glúteos e tendão rotuliano com foco em máquinas guiadas. Intervalos de 60s controlados.
+                </td>
+              </tr>
+
+              <tr class="hover:bg-slate-800/30 transition opacity-80">
+                <td class="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">26 Nov (Qui)</td>
+                <td class="py-3.5 px-3">
+                  <span class="font-bold text-white block">S3 - 5km Ritmo Prova</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-950 text-rose-400 border border-rose-800/60 uppercase">Ritmo Prova</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight">
+                  <div class="text-slate-300">~8,68 km • 47m</div>
+                  <div class="text-slate-500">5km contínuos @ 4:40-4:50/km</div>
+                  <div class="text-slate-500">Aquecimento + Arrefecimento</div>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-slate-400">
+                  <span class="italic">Agendado</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
+                <td class="py-3.5 px-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-slate-400 border border-slate-700 font-mono text-[10px]">
+                    ⏳ A Realizar
+                  </span>
+                </td>
+                <td class="py-3.5 px-3 text-[11px] text-slate-400 leading-snug">
+                  Simulação de ritmo sustentado em terreno plano com avisos de contagem decrescente no Huawei GT5.
+                </td>
+              </tr>
+
+              <tr class="hover:bg-slate-800/30 transition opacity-80">
+                <td class="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">27 Nov (Sex)</td>
+                <td class="py-3.5 px-3">
+                  <span class="font-bold text-white block">S3 - Rodagem 5km Z2</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60 uppercase">Z2 Base</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight">
+                  <div class="text-slate-300">5,00 km • 31m</div>
+                  <div class="text-slate-500">Z2 @ 6:00-6:30/km</div>
+                  <div class="text-slate-500">Regeneração</div>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-slate-400">
+                  <span class="italic">Agendado</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
+                <td class="py-3.5 px-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-slate-400 border border-slate-700 font-mono text-[10px]">
+                    ⏳ A Realizar
+                  </span>
+                </td>
+                <td class="py-3.5 px-3 text-[11px] text-slate-400 leading-snug">
+                  Corrida ligeira regenerativa para lavar o lactato e oxigenar os tecidos antes do descanso de sábado.
+                </td>
+              </tr>
+
+              <tr class="hover:bg-slate-800/30 transition opacity-80 bg-amber-500/5">
+                <td class="py-3.5 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">29 Nov (Dom)</td>
+                <td class="py-3.5 px-3">
+                  <span class="font-extrabold text-white block">S3 - Longo 10km Z2</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-950 text-amber-300 border border-amber-600/60 uppercase">Primeiro 10K</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight">
+                  <div class="text-slate-300">10,00 km • ~60m</div>
+                  <div class="text-slate-500">Z2 @ 5:50-6:20/km</div>
+                  <div class="text-slate-500">Marco Histórico</div>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-slate-400">
+                  <span class="italic">Agendado</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
+                <td class="py-3.5 px-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-slate-400 border border-slate-700 font-mono text-[10px]">
+                    ⏳ A Realizar
+                  </span>
+                </td>
+                <td class="py-3.5 px-3 text-[11px] text-slate-400 leading-snug">
+                  Primeiro treino de 2 dígitos do ciclo! Teste com 1 gel energético aos 45m e Modo Exercício ativado aos 90m pré-corrida.
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- ========================================== -->
-      <!-- TAB CONTENT: SEMANA 2 (CONCLUÍDA)          -->
-      <!-- ========================================== -->
+      <!-- TAB CONTENT: SEMANA 2 -->
       <div id="tabContent-week2" class="tab-content hidden space-y-6">
-        
-        <!-- Summary Cards for Week 2 -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5">
             <span class="text-[10px] font-mono uppercase text-slate-400">Volume Semana 2</span>
@@ -568,7 +656,6 @@
           </div>
         </div>
 
-        <!-- Table for Week 2 -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
             <thead class="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
@@ -583,8 +670,6 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/60 text-slate-300">
-              
-              <!-- 16 Nov: Seg -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">16 Nov (Seg)</td>
                 <td class="py-3.5 px-3">
@@ -615,7 +700,6 @@
                 </td>
               </tr>
 
-              <!-- 17 Nov: Ter -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">17 Nov (Ter)</td>
                 <td class="py-3.5 px-3">
@@ -646,7 +730,6 @@
                 </td>
               </tr>
 
-              <!-- 18 Nov: Qua -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">18 Nov (Qua)</td>
                 <td class="py-3.5 px-3">
@@ -663,9 +746,7 @@
                   <div>6 Máquinas Feitas</div>
                   <div class="text-amber-400">Load Estimado: ~25</div>
                 </td>
-                <td class="py-3.5 px-3 font-mono text-slate-500">
-                  —
-                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
                 <td class="py-3.5 px-3 whitespace-nowrap">
                   <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-mono text-[10px] font-bold">
                     ✅ 100% Cumprido
@@ -676,7 +757,6 @@
                 </td>
               </tr>
 
-              <!-- 19 Nov: Qui -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">19 Nov (Qui)</td>
                 <td class="py-3.5 px-3">
@@ -703,11 +783,10 @@
                   </span>
                 </td>
                 <td class="py-3.5 px-3 text-[11px] text-slate-300 leading-snug">
-                  <span class="text-amber-300 font-semibold">Excelente potência e sustentação aeróbia.</span> Telemetria Dexcom: 139 ➔ 85 mg/dL (média 127 mg/dL). 100% no alvo estrito, sem qualquer sintoma de quebra ou quebra de ritmo nos minutos finais de cada bloco.
+                  <span class="text-amber-300 font-semibold">Excelente potência e sustentação aeróbia.</span> Telemetria Dexcom: 139 ➔ 85 mg/dL (média 127 mg/dL). 100% no alvo estrito, sem qualquer sintoma de quebra ou perda de ritmo nos minutos finais de cada bloco.
                 </td>
               </tr>
 
-              <!-- 20 Nov: Sex -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">20 Nov (Sex)</td>
                 <td class="py-3.5 px-3">
@@ -724,9 +803,7 @@
                   <div>Ritmo Médio: 5:55/km</div>
                   <div class="text-sky-400">Cadência: 162 spm</div>
                 </td>
-                <td class="py-3.5 px-3 font-mono text-slate-500">
-                  —
-                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
                 <td class="py-3.5 px-3 whitespace-nowrap">
                   <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-mono text-[10px] font-bold">
                     ✅ 100% Cumprido
@@ -737,7 +814,6 @@
                 </td>
               </tr>
 
-              <!-- 22 Nov: Dom -->
               <tr class="hover:bg-slate-800/30 transition bg-amber-500/5">
                 <td class="py-3.5 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">22 Nov (Dom)</td>
                 <td class="py-3.5 px-3">
@@ -767,18 +843,13 @@
                   <span class="text-emerald-400 font-bold">A melhor sessão clínica até hoje!</span> Curva perfeitamente estável (157 ➔ 131 mg/dL, média 114 mg/dL). 100% de tempo no alvo estrito, hidratos de resgate desnecessários, fecho perfeito da Semana 2!
                 </td>
               </tr>
-
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- ========================================== -->
-      <!-- TAB CONTENT: SEMANA 1 (CONCLUÍDA)          -->
-      <!-- ========================================== -->
+      <!-- TAB CONTENT: SEMANA 1 -->
       <div id="tabContent-week1" class="tab-content hidden space-y-6">
-        
-        <!-- Summary Cards for Week 1 -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5">
             <span class="text-[10px] font-mono uppercase text-slate-400">Volume Semana 1</span>
@@ -802,7 +873,6 @@
           </div>
         </div>
 
-        <!-- Table for Week 1 -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
             <thead class="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
@@ -817,8 +887,6 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/60 text-slate-300">
-              
-              <!-- 09 Nov: Seg -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">09 Nov (Seg)</td>
                 <td class="py-3.5 px-3">
@@ -849,7 +917,6 @@
                 </td>
               </tr>
 
-              <!-- 10 Nov: Ter -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">10 Nov (Ter)</td>
                 <td class="py-3.5 px-3">
@@ -880,7 +947,6 @@
                 </td>
               </tr>
 
-              <!-- 12 Nov: Qui -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">12 Nov (Qui)</td>
                 <td class="py-3.5 px-3">
@@ -911,7 +977,6 @@
                 </td>
               </tr>
 
-              <!-- 13 Nov: Sex -->
               <tr class="hover:bg-slate-800/30 transition">
                 <td class="py-3.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">13 Nov (Sex)</td>
                 <td class="py-3.5 px-3">
@@ -942,7 +1007,6 @@
                 </td>
               </tr>
 
-              <!-- 15 Nov: Dom -->
               <tr class="hover:bg-slate-800/30 transition bg-amber-500/5">
                 <td class="py-3.5 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">15 Nov (Dom)</td>
                 <td class="py-3.5 px-3">
@@ -972,18 +1036,13 @@
                   <span class="text-emerald-400 font-bold">Primeiro longo superado com nota máxima.</span> Estabilidade clínica exemplar: 139 mg/dL no arranque, 124 mg/dL no fim (média 146 mg/dL). Nenhuma descida aos 70 mg/dL e fecho positivo da Semana 1!
                 </td>
               </tr>
-
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- ========================================== -->
-      <!-- TAB CONTENT: SEMANA 45 (BASE PRÉ-PLANO)    -->
-      <!-- ========================================== -->
+      <!-- TAB CONTENT: SEMANA 45 -->
       <div id="tabContent-week45" class="tab-content hidden space-y-6">
-        
-        <!-- Summary Cards for Week 45 -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5">
             <span class="text-[10px] font-mono uppercase text-slate-400">Volume Pré-Plano</span>
@@ -1007,7 +1066,6 @@
           </div>
         </div>
 
-        <!-- Table for Week 45 -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
             <thead class="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
@@ -1063,21 +1121,17 @@
         </div>
       </div>
 
-      <!-- ========================================== -->
-      <!-- TAB CONTENT: TODAS AS SESSÕES (HISTÓRICO)  -->
-      <!-- ========================================== -->
+      <!-- TAB CONTENT: TODAS AS SESSÕES -->
       <div id="tabContent-all" class="tab-content hidden space-y-4">
         <div class="flex items-center justify-between bg-slate-950/50 p-3 rounded-2xl border border-slate-800/70">
           <div class="flex items-center gap-2.5">
             <span class="w-3 h-3 rounded-full bg-amber-400"></span>
-            <span class="font-bold text-white text-xs">Histórico Completo (02 a 23 Nov 2026)</span>
+            <span class="font-bold text-white text-xs">Histórico Completo</span>
             <span class="text-slate-500">•</span>
-            <span class="text-xs text-slate-300 font-mono">16 sessões • 95,17 km corridos</span>
-            <span class="text-slate-500">•</span>
-            <span class="text-xs text-amber-400 font-mono font-bold">653 Total Load</span>
+            <span class="text-xs text-slate-300 font-mono">15 sessões • 95,2 km corridos</span>
           </div>
           <span class="text-xs font-mono font-bold text-amber-400 bg-amber-950 px-2.5 py-0.5 rounded-lg border border-amber-800/60">
-            4 Semanas Registadas
+            Base + Plano Ativo
           </span>
         </div>
 
@@ -1086,197 +1140,182 @@
             <thead class="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
               <tr>
                 <th class="py-2.5 px-3">Data</th>
-                <th class="py-2.5 px-3">Semana</th>
                 <th class="py-2.5 px-3">Sessão / Nome</th>
                 <th class="py-2.5 px-3">Tipo</th>
                 <th class="py-2.5 px-3">Distância</th>
                 <th class="py-2.5 px-3">Ritmo</th>
                 <th class="py-2.5 px-3">FC Média</th>
                 <th class="py-2.5 px-3">Load</th>
-                <th class="py-2.5 px-3">Cumprimento</th>
+                <th class="py-2.5 px-3">Validação</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/60 text-slate-300">
-              <!-- S3 -->
-              <tr class="hover:bg-slate-800/30 transition bg-emerald-500/10">
-                <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">23 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">S3</td>
-                <td class="py-2.5 px-3 font-bold text-white">S3 - Rodagem 6km Z2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">Z2 Base</span></td>
-                <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">6,09 km</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-white">5:23 /km</td>
-                <td class="py-2.5 px-3 font-mono">158 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">42</td>
-                <td class="py-2.5 px-3"><span class="text-amber-400 font-bold font-mono text-[10px]">Superado ⭐</span></td>
-              </tr>
-              <!-- S2 -->
-              <tr class="hover:bg-slate-800/30 transition bg-amber-500/5">
-                <td class="py-2.5 px-3 font-mono text-amber-400 font-bold">22 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">S2</td>
-                <td class="py-2.5 px-3 font-bold text-white">S2 - Longo 8.5km Z2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-950 text-amber-300 border border-amber-600/60">Longo</span></td>
-                <td class="py-2.5 px-3 font-mono font-bold text-white">9,01 km</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-white">6:03 /km</td>
-                <td class="py-2.5 px-3 font-mono">157 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">54</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">20 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400">S2</td>
-                <td class="py-2.5 px-3 font-bold text-white">S2 - 5km Z2 + 4 Retas</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">Z2+Retas</span></td>
-                <td class="py-2.5 px-3 font-mono">5,69 km</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">5:55 /km</td>
-                <td class="py-2.5 px-3 font-mono">—</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">35</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">19 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400">S2</td>
-                <td class="py-2.5 px-3 font-bold text-white">S2 - 2x12m Limiar Z4</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-950 text-rose-400 border border-rose-800/60">Limiar</span></td>
-                <td class="py-2.5 px-3 font-mono">9,07 km</td>
-                <td class="py-2.5 px-3 font-mono text-rose-400 font-bold">5:25 /km</td>
-                <td class="py-2.5 px-3 font-mono">162 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">61</td>
-                <td class="py-2.5 px-3"><span class="text-amber-400 font-bold font-mono text-[10px]">Superado ⭐</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">18 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400">S2</td>
-                <td class="py-2.5 px-3 font-bold text-white">S2 - Ginásio Força & Tendões</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-950 text-amber-400 border border-amber-800/60">Ginásio</span></td>
-                <td class="py-2.5 px-3 font-mono">40 min</td>
-                <td class="py-2.5 px-3 font-mono text-slate-500">—</td>
-                <td class="py-2.5 px-3 font-mono text-slate-500">—</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">~25</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">17 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400">S2</td>
-                <td class="py-2.5 px-3 font-bold text-white">S2 - Rodagem 5km Z2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">Z2 Base</span></td>
-                <td class="py-2.5 px-3 font-mono">5,07 km</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">6:09 /km</td>
-                <td class="py-2.5 px-3 font-mono">151 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">30</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">16 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400">S2</td>
-                <td class="py-2.5 px-3 font-bold text-white">S2 - 8x400m VO2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-sky-950 text-sky-400 border border-sky-800/60">VO2 Max</span></td>
-                <td class="py-2.5 px-3 font-mono">9,28 km</td>
-                <td class="py-2.5 px-3 font-mono text-sky-400 font-bold">5:44 /km</td>
-                <td class="py-2.5 px-3 font-mono">160 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">58</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <!-- S1 -->
-              <tr class="hover:bg-slate-800/30 transition bg-sky-500/5">
-                <td class="py-2.5 px-3 font-mono text-sky-400 font-bold">15 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-sky-400 font-bold">S1</td>
-                <td class="py-2.5 px-3 font-bold text-white">S1 - Longo 7km Z2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-950 text-amber-300 border border-amber-600/60">Longo</span></td>
-                <td class="py-2.5 px-3 font-mono font-bold text-white">7,08 km</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-white">6:02 /km</td>
-                <td class="py-2.5 px-3 font-mono">152 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">43</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">13 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-sky-400">S1</td>
-                <td class="py-2.5 px-3 font-bold text-white">S1 - Rodagem 5km Z2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">Z2 Base</span></td>
-                <td class="py-2.5 px-3 font-mono">5,12 km</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">6:02 /km</td>
-                <td class="py-2.5 px-3 font-mono">152 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">31</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">12 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-sky-400">S1</td>
-                <td class="py-2.5 px-3 font-bold text-white">S1 - 20m Ritmo Prova</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-950 text-rose-400 border border-rose-800/60">Ritmo Prova</span></td>
-                <td class="py-2.5 px-3 font-mono">8,07 km</td>
-                <td class="py-2.5 px-3 font-mono text-rose-400 font-bold">5:41 /km</td>
-                <td class="py-2.5 px-3 font-mono">158 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">53</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">10 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-sky-400">S1</td>
-                <td class="py-2.5 px-3 font-bold text-white">S1 - Rodagem 5km Z2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">Z2 Base</span></td>
-                <td class="py-2.5 px-3 font-mono">3,58 km</td>
-                <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">5:07 /km</td>
-                <td class="py-2.5 px-3 font-mono">157 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">27</td>
-                <td class="py-2.5 px-3"><span class="text-amber-400 font-bold font-mono text-[10px]">Ajuste ⚠️</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-400">09 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-sky-400">S1</td>
-                <td class="py-2.5 px-3 font-bold text-white">S1 - 6x400m VO2</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-sky-950 text-sky-400 border border-sky-800/60">VO2 Max</span></td>
-                <td class="py-2.5 px-3 font-mono">6,54 km</td>
-                <td class="py-2.5 px-3 font-mono text-sky-400 font-bold">5:25 /km</td>
-                <td class="py-2.5 px-3 font-mono">158 bpm</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-amber-400">43</td>
-                <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">100% ✅</span></td>
-              </tr>
-              <!-- Base Sem 45 -->
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-500">08 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-slate-500">Base</td>
-                <td class="py-2.5 px-3 text-slate-400">Rodagem 5km Ritmo Calmo</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400 border border-slate-700">Rodagem</span></td>
-                <td class="py-2.5 px-3 font-mono">5,09 km</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">5:37 /km</td>
-                <td class="py-2.5 px-3 font-mono">155 bpm</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">33</td>
-                <td class="py-2.5 px-3"><span class="text-slate-400 font-mono text-[10px]">Base 🏃</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-500">05 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-slate-500">Base</td>
-                <td class="py-2.5 px-3 text-slate-400">Evening Corrida</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400 border border-slate-700">Tempo</span></td>
-                <td class="py-2.5 px-3 font-mono">5,12 km</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">5:00 /km</td>
-                <td class="py-2.5 px-3 font-mono">161 bpm</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">43</td>
-                <td class="py-2.5 px-3"><span class="text-slate-400 font-mono text-[10px]">Base 🏃</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-500">03 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-slate-500">Base</td>
-                <td class="py-2.5 px-3 text-slate-400">Evening Corrida</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400 border border-slate-700">Rodagem</span></td>
-                <td class="py-2.5 px-3 font-mono">5,16 km</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">5:10 /km</td>
-                <td class="py-2.5 px-3 font-mono">160 bpm</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">36</td>
-                <td class="py-2.5 px-3"><span class="text-slate-400 font-mono text-[10px]">Base 🏃</span></td>
-              </tr>
-              <tr class="hover:bg-slate-800/30 transition">
-                <td class="py-2.5 px-3 font-mono text-slate-500">02 Nov</td>
-                <td class="py-2.5 px-3 font-mono text-slate-500">Base</td>
-                <td class="py-2.5 px-3 text-slate-400">Evening Corrida</td>
-                <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400 border border-slate-700">Rodagem</span></td>
-                <td class="py-2.5 px-3 font-mono">5,20 km</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">5:13 /km</td>
-                <td class="py-2.5 px-3 font-mono">156 bpm</td>
-                <td class="py-2.5 px-3 font-mono text-slate-400">39</td>
-                <td class="py-2.5 px-3"><span class="text-slate-400 font-mono text-[10px]">Base 🏃</span></td>
-              </tr>
+              
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">23/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S3 - Rodagem 6km Z2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">6,09 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:24 /km</td>
+        <td class="py-2.5 px-3 font-mono">158 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">42</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">22/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S2 - Longo 8.5km Z2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Longo</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">9,01 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">6:04 /km</td>
+        <td class="py-2.5 px-3 font-mono">157 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">54</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">20/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S2 - 5km Z2 + 4 Retas</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">5,69 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:56 /km</td>
+        <td class="py-2.5 px-3 font-mono">—</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">35</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">19/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S2 - 2x12m Limiar</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Limiar/Prova</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">9,07 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:25 /km</td>
+        <td class="py-2.5 px-3 font-mono">162 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">61</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">17/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S2 - Rodagem 5km Z2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">5,07 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">6:10 /km</td>
+        <td class="py-2.5 px-3 font-mono">151 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">30</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">16/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S2 - 8x400m VO2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">VO2 Max</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">9,28 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:45 /km</td>
+        <td class="py-2.5 px-3 font-mono">160 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">58</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">15/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S1 - Longo 7km Z2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Longo</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">7,08 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">6:03 /km</td>
+        <td class="py-2.5 px-3 font-mono">152 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">43</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">13/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S1 - Rodagem 5km Z2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">5,12 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">6:02 /km</td>
+        <td class="py-2.5 px-3 font-mono">152 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">31</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">12/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S1 - 20m Ritmo Prova</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Limiar/Prova</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">8,07 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:41 /km</td>
+        <td class="py-2.5 px-3 font-mono">158 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">53</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">10/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S1 - Rodagem 5km Z2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">3,58 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:08 /km</td>
+        <td class="py-2.5 px-3 font-mono">157 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">27</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">09/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">S1 - 6x400m VO2</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">VO2 Max</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">6,54 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:26 /km</td>
+        <td class="py-2.5 px-3 font-mono">158 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">43</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">08/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">Rodagem 5km Ritmo Calmo</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">5,09 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:38 /km</td>
+        <td class="py-2.5 px-3 font-mono">155 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">33</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">05/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">Evening Corrida</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">5,13 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:00 /km</td>
+        <td class="py-2.5 px-3 font-mono">161 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">43</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">03/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">Evening Corrida</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">5,16 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:10 /km</td>
+        <td class="py-2.5 px-3 font-mono">160 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">36</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
+      <tr class="hover:bg-slate-800/30 transition">
+        <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">02/11</td>
+        <td class="py-2.5 px-3 font-bold text-white">Evening Corrida</td>
+        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">Z2 Base</span></td>
+        <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">5,20 km</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-white">5:14 /km</td>
+        <td class="py-2.5 px-3 font-mono">156 bpm</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-amber-400">39</td>
+        <td class="py-2.5 px-3"><span class="text-emerald-400 font-bold font-mono text-[10px]">✅ 100%</span></td>
+      </tr>
+    
             </tbody>
           </table>
         </div>
@@ -1284,81 +1323,104 @@
 
     </div>
 
-    <!-- Briefing for Week 3 -->
-    <div class="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-amber-950/40 border border-amber-900/50 p-6 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-      <div class="space-y-1">
-        <div class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400 font-mono">
-          <span>🚀</span> <span>Semana 3 em Andamento</span>
-        </div>
-        <h3 class="text-base sm:text-lg font-extrabold text-white">
-          Hoje a Rodagem de 6 km foi cumprida com brio (5:23/km)! Amanhã: 5x600m VO2 Max.
-        </h3>
-        <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
-          Com a recuperação ativa garantida hoje, as pernas chegam soltas e frescas às séries de amanhã. No próximo domingo (29/11) chega o marco histórico do primeiro longão de dois dígitos (10 km Z2)!
-        </p>
-      </div>
-      <a href="https://intervals.icu/athlete/i470647/activities" target="_blank" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition active:scale-95 shadow-md shrink-0 flex items-center gap-1.5 cursor-pointer">
-        <span>Abrir no Intervals.icu ↗</span>
-      </a>
-    </div>
-
     <!-- Footer -->
-    <footer class="pt-4 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500 font-mono">
-      <div>Relatório gerado automaticamente • Antigravity Coach Engine • v3.0</div>
-      <div>Projeto: Rumo a Fátima 2027 • Meia Maratona 21,1 km</div>
+    <footer class="text-center text-xs text-slate-500 py-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>Relatório Executivo Autónomo • Atualização Automática Diária às 00:00 (Lisboa)</span>
+      </div>
+      <div>
+        Intervals.icu API • Dexcom G7 • Tandem t:slim X2 • Nightscout Runner v2.6
+      </div>
     </footer>
 
   </div>
 
-  <!-- Tab Switch Script & Chart.js Initialization -->
+  <!-- Interactive Scripts & Charts -->
   <script>
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-      document.querySelectorAll('.tab-btn').forEach(el => {
-        el.classList.remove('bg-amber-500', 'text-slate-950', 'shadow-sm', 'font-extrabold');
-        el.classList.add('text-slate-400', 'hover:text-white', 'font-semibold');
+      const activeContent = document.getElementById('tabContent-' + tabId);
+      if (activeContent) activeContent.classList.remove('hidden');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-amber-500', 'text-slate-950', 'font-extrabold');
+        btn.classList.add('text-slate-400', 'hover:text-white', 'font-semibold');
       });
-      const targetContent = document.getElementById('tabContent-' + tabId);
-      const targetBtn = document.getElementById('tabBtn-' + tabId);
-      if (targetContent) targetContent.classList.remove('hidden');
-      if (targetBtn) {
-        targetBtn.classList.add('bg-amber-500', 'text-slate-950', 'shadow-sm', 'font-extrabold');
-        targetBtn.classList.remove('text-slate-400', 'hover:text-white', 'font-semibold');
+
+      const activeBtn = document.getElementById('tabBtn-' + tabId);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-400', 'hover:text-white', 'font-semibold');
+        activeBtn.classList.add('bg-amber-500', 'text-slate-950', 'font-extrabold');
       }
     }
 
-    // 1. Fitness & Fatigue Curve Chart
+    async function manualSyncReport() {
+      const btn = document.getElementById('refreshBtn');
+      const icon = document.getElementById('syncIcon');
+      const text = document.getElementById('syncText');
+      if (icon) icon.classList.add('animate-spin');
+      if (text) text.textContent = 'A atualizar...';
+
+      try {
+        const resp = await fetch('/api/report/refresh', { method: 'POST' });
+        const result = await resp.json();
+        if (result.success) {
+          if (text) text.textContent = 'Atualizado!';
+          setTimeout(() => window.location.reload(), 600);
+        } else {
+          alert('Erro na atualização: ' + (result.error || 'Falha de comunicação'));
+          if (icon) icon.classList.remove('animate-spin');
+          if (text) text.textContent = 'Sincronizar';
+        }
+      } catch (err) {
+        alert('Erro ao contactar o servidor: ' + err.message);
+        if (icon) icon.classList.remove('animate-spin');
+        if (text) text.textContent = 'Sincronizar';
+      }
+    }
+
+    let lastKnownDay = new Date().getDate();
+    setInterval(() => {
+      const currentDay = new Date().getDate();
+      if (currentDay !== lastKnownDay) {
+        lastKnownDay = currentDay;
+        console.log('⏰ Meia-noite detetada! A atualizar relatório...');
+        manualSyncReport();
+      }
+    }, 30000);
+
     const ctx1 = document.getElementById('chartFitnessFatigue').getContext('2d');
     new Chart(ctx1, {
       type: 'line',
       data: {
-        labels: ["11/11", "12/11", "13/11", "14/11", "15/11", "16/11", "17/11", "18/11", "19/11", "20/11", "21/11", "22/11", "23/11", "24/11"],
+        labels: ["11/11","12/11","13/11","14/11","15/11","16/11","17/11","18/11","19/11","20/11","21/11","22/11","23/11","24/11"],
         datasets: [
           {
             label: 'Fitness (CTL)',
-            data: [4.6, 5.8, 6.4, 6.2, 7.1, 8.3, 8.8, 8.6, 9.8, 10.4, 10.2, 11.2, 11.9, 13.0],
+            data: [4.6,5.8,6.4,6.2,7.1,8.3,8.8,8.6,9.8,10.4,10.2,11.2,11.9,13],
             borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
             fill: true,
-            borderWidth: 3,
+            borderWidth: 2.5,
             tension: 0.35,
-            pointRadius: 3,
+            pointRadius: 4,
             pointBackgroundColor: '#10b981'
           },
           {
             label: 'Fadiga (ATL)',
-            data: [15.7, 20.6, 22.0, 19.1, 22.3, 27.0, 27.4, 23.8, 28.7, 29.6, 25.6, 29.4, 31.1, 34.7],
+            data: [15.7,20.6,22,19.1,22.3,27,27.4,23.8,28.7,29.6,25.6,29.4,31.1,34.7],
             borderColor: '#f43f5e',
             backgroundColor: 'transparent',
             borderWidth: 2,
             borderDash: [4, 4],
             tension: 0.35,
-            pointRadius: 2,
+            pointRadius: 3,
             pointBackgroundColor: '#f43f5e'
           },
           {
             label: 'Forma (TSB)',
-            data: [-11.0, -14.9, -15.7, -12.9, -15.2, -18.7, -18.6, -15.2, -18.9, -19.2, -15.5, -18.2, -19.2, -21.7],
+            data: [-11,-14.9,-15.7,-12.9,-15.2,-18.7,-18.6,-15.2,-18.9,-19.2,-15.5,-18.2,-19.2,-21.7],
             borderColor: '#f59e0b',
             backgroundColor: 'transparent',
             borderWidth: 2,
@@ -1392,15 +1454,14 @@
       }
     });
 
-    // 2. Weekly Volume Chart
     const ctx2 = document.getElementById('chartWeeklyVolume').getContext('2d');
     new Chart(ctx2, {
       type: 'bar',
       data: {
-        labels: ["Sem 45 (Base)", "Sem 46 (S1)", "Sem 47 (S2)", "Sem 48 (S3 - Atual)", "Sem 49 (S4 - Prev)", "Sem 50 (S5 - Prev)"],
+        labels: ["Sem 45 (Base)","Sem 46 (S1)","Sem 47 (S2)","Sem 48 (S3 - Atual)","Sem 49 (S4 - Prev)","Sem 50 (S5 - Prev)"],
         datasets: [{
           label: 'Quilómetros (km)',
-          data: [20.6, 30.4, 38.1, 6.1, 41.0, 44.0],
+          data: [20.6,30.4,38.1,6.1,41,44],
           backgroundColor: [
             '#334155',
             '#0284c7',
@@ -1440,7 +1501,6 @@
       }
     });
 
-    // 3. Heart Rate Zones Doughnut
     const ctx3 = document.getElementById('chartZonesDoughnut').getContext('2d');
     new Chart(ctx3, {
       type: 'doughnut',
@@ -1463,7 +1523,6 @@
       }
     });
 
-    // 4. Radar Capabilities
     const ctx4 = document.getElementById('chartRadarCapabilities').getContext('2d');
     new Chart(ctx4, {
       type: 'radar',

@@ -7,7 +7,7 @@ RUN apk add --no-cache python3 py3-pip ca-certificates && \
     pip install --no-cache-dir --break-system-packages edge-tts certifi
 
 COPY package.json ./
-COPY server.js tts_worker.py ./
+COPY server.js report_generator.js tts_worker.py ./
 COPY public/ ./public/
 
 ENV PORT=3000
