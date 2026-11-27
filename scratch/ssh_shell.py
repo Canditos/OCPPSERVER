@@ -2,7 +2,7 @@ import paramiko
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('192.168.0.198', username='canditos', password='canditos')
+ssh.connect('192.168.0.188', username='canditos', password='canditos')
 
 channel = ssh.invoke_shell()
 channel.send("sudo docker ps\n")

@@ -612,7 +612,7 @@ function buildHTML(data) {
           <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5">
             <span class="text-[10px] font-mono uppercase text-slate-400">Volume Semana 3 (Em Curso)</span>
             <div class="text-lg font-black text-white font-mono mt-0.5">${s3KmDone} <span class="text-xs text-slate-400">/ 38,5 km</span></div>
-            <span class="text-[10px] text-emerald-400 font-bold">39% do Volume Feito ✅</span>
+            <span class="text-[10px] text-emerald-400 font-bold">53% do Volume Feito (20,23 km) ✅</span>
           </div>
           <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5">
             <span class="text-[10px] font-mono uppercase text-slate-400">Carga Acumulada S3</span>
@@ -626,8 +626,8 @@ function buildHTML(data) {
           </div>
           <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5">
             <span class="text-[10px] font-mono uppercase text-slate-400">Próxima Sessão</span>
-            <div class="text-lg font-black text-emerald-400 font-mono mt-0.5">Rodagem 5km Z2</div>
-            <span class="text-[10px] text-emerald-300 font-medium">Quinta-feira (26 Nov) 🌿 Regeneração</span>
+            <div class="text-lg font-black text-rose-400 font-mono mt-0.5">5km Ritmo Prova</div>
+            <span class="text-[10px] text-amber-300 font-medium">Sábado (28 Nov) 🚀 Reagendado</span>
           </div>
         </div>
 
@@ -738,9 +738,9 @@ function buildHTML(data) {
                 </td>
               </tr>
 
-              <!-- 26 Nov: Qui (Planeado - Trocado por causa do Futebol) -->
-              <tr class="hover:bg-slate-800/30 transition opacity-80">
-                <td class="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">26 Nov (Qui)</td>
+              <!-- 26 Nov: Qui (REALIZADO COM EXCELÊNCIA!) -->
+              <tr class="hover:bg-slate-800/30 transition bg-emerald-500/5">
+                <td class="py-3.5 px-3 font-mono text-emerald-400 font-bold whitespace-nowrap">26 Nov (Qui)</td>
                 <td class="py-3.5 px-3">
                   <span class="font-bold text-white block">S3 - Rodagem 5km Z2</span>
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60 uppercase">Z2 Base / Regeneração</span>
@@ -748,25 +748,56 @@ function buildHTML(data) {
                 <td class="py-3.5 px-3 font-mono text-[11px] leading-tight">
                   <div class="text-slate-300">5,00 km • 31m</div>
                   <div class="text-slate-500">Z2 @ 6:00-6:30/km</div>
-                  <div class="text-emerald-400 font-semibold">Regeneração Ativa Pós-Futebol</div>
+                  <div class="text-slate-500">Regeneração Ativa</div>
                 </td>
-                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-slate-400">
-                  <span class="italic text-emerald-300">Agendado para amanhã</span>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight font-bold text-emerald-400">
+                  <div class="text-white">5,122 km • 28m29s</div>
+                  <div>Ritmo Médio: 5:33/km 🔥</div>
+                  <div class="text-amber-400">Load: 34</div>
                 </td>
-                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
+                <td class="py-3.5 px-3 font-mono">
+                  <div class="text-slate-200 font-bold">156 bpm</div>
+                  <div class="text-rose-400 text-[10px]">Pico 171 bpm</div>
+                </td>
                 <td class="py-3.5 px-3 whitespace-nowrap">
-                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-slate-400 border border-slate-700 font-mono text-[10px]">
-                    ⏳ A Realizar
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-mono text-[10px] font-bold">
+                    ⭐ Superado
                   </span>
                 </td>
-                <td class="py-3.5 px-3 text-[11px] text-slate-400 leading-snug">
-                  <span class="text-emerald-300 font-medium">Troca estratégica pós-futebol:</span> Corrida ligeira e descontraída em Z2 estrita para oxigenar a musculatura, soltar os gémeos e tendões do futebol e poupar energia para o ritmo de prova de sexta-feira.
+                <td class="py-3.5 px-3 text-[11px] text-slate-300 leading-snug">
+                  <span class="text-emerald-400 font-semibold">Excelente rodagem regenerativa com ritmo muito fluido (5:33/km).</span> Resposta biomecânica fantástica após o futebol. Glicémia Dexcom G7: iniciou a 109 mg/dL subindo confortavelmente para 125 mg/dL no primeiro terço; no final da corrida a captação muscular levou a descida até 48 mg/dL (vale transitório 39 mg/dL), prontamente estabilizada nos 126 mg/dL às 23:57 com hidratos de resgate.
                 </td>
               </tr>
 
-              <!-- 27 Nov: Sex (Planeado - Ritmo Prova) -->
-              <tr class="hover:bg-slate-800/30 transition opacity-80">
-                <td class="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">27 Nov (Sex)</td>
+              <!-- 27 Nov: Sex (Sensor Caiu / Repouso Preventivo) -->
+              <tr class="hover:bg-slate-800/30 transition bg-indigo-500/5">
+                <td class="py-3.5 px-3 font-mono text-indigo-400 font-bold whitespace-nowrap">27 Nov (Sex)</td>
+                <td class="py-3.5 px-3">
+                  <span class="font-bold text-white block">Troca de Sensor CGM • Repouso</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-700/60 uppercase">Protocolo Clínico G7</span>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight">
+                  <div class="text-slate-300">Treino adiado para sábado</div>
+                  <div class="text-slate-500">Repouso & Proteção de Glicémia</div>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-indigo-300">
+                  <div class="font-bold">Sensor Dexcom G7 Caiu</div>
+                  <div class="text-[10px] text-slate-400">Aplicação de novo sensor</div>
+                </td>
+                <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
+                <td class="py-3.5 px-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-950 text-indigo-300 border border-indigo-700/60 font-mono text-[10px] font-bold">
+                    🛡️ Segurança Total
+                  </span>
+                </td>
+                <td class="py-3.5 px-3 text-[11px] text-slate-300 leading-snug">
+                  <span class="text-indigo-300 font-semibold">Decisão de segurança 100% correta.</span> Na diabetes tipo 1 sob bomba Tandem Control-IQ, realizar treinos exigentes de ritmo de prova sem sensor ativo acarreta risco severo de hipoglicemia impercetível. A sessão de ritmo de prova foi estrategicamente movida para sábado (28 Nov), permitindo a correta colocação e aquecimento do novo Dexcom G7.
+                </td>
+              </tr>
+
+              <!-- 28 Nov: Sáb (Planeado - Reagendado Ritmo Prova) -->
+              <tr class="hover:bg-slate-800/30 transition opacity-90">
+                <td class="py-3.5 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">28 Nov (Sáb)</td>
                 <td class="py-3.5 px-3">
                   <span class="font-bold text-white block">S3 - 5km Ritmo Prova</span>
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-950 text-rose-400 border border-rose-800/60 uppercase">Ritmo Prova</span>
@@ -776,8 +807,8 @@ function buildHTML(data) {
                   <div class="text-slate-500">5km contínuos @ 4:40-4:50/km</div>
                   <div class="text-slate-500">Aquecimento + Arrefecimento</div>
                 </td>
-                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-slate-400">
-                  <span class="italic">Agendado (Sexta-feira)</span>
+                <td class="py-3.5 px-3 font-mono text-[11px] leading-tight text-amber-300">
+                  <span class="italic font-bold">Agendado para amanhã (Sábado)</span>
                 </td>
                 <td class="py-3.5 px-3 font-mono text-slate-500">—</td>
                 <td class="py-3.5 px-3 whitespace-nowrap">
@@ -786,7 +817,7 @@ function buildHTML(data) {
                   </span>
                 </td>
                 <td class="py-3.5 px-3 text-[11px] text-slate-400 leading-snug">
-                  Simulação de ritmo sustentado com pernas 100% descansadas e frescas. Avisos de contagem decrescente no Huawei GT5. Ativar Modo Exercício 60-90 min antes.
+                  Com novo sensor G7 calibrado e pernas frescas de 48h de recuperação. Simulação de ritmo sustentado em terreno plano com avisos de contagem decrescente no Huawei GT5. Modo Exercício 60-90 min antes.
                 </td>
               </tr>
 
